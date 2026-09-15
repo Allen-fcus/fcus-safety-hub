@@ -46,6 +46,28 @@ function getPrivateKey() {
   return `-----BEGIN ${keyType}PRIVATE KEY-----\n${wrapped}\n-----END ${keyType}PRIVATE KEY-----\n`;
 }
 
+// Safe diagnostic snapshot — reports shape/structure of the env var WITHOUT
+// ever exposing the actual secret material, so we can see what's actually
+// there without printing anything sensitive anywhere.
+function diagnosePrivateKeyEnv() {
+  const raw = process.env.GOOGLE_WALLET_PRIVATE_KEY;
+  if (raw === undefined) return { present: false, note: "GOOGLE_WALLET_PRIVATE_KEY is not set at all in this environment." };
+  const trimmed = raw.trim();
+  return {
+    present: true,
+    length: raw.length,
+    startsWithQuote: trimmed.startsWith('"') || trimmed.startsWith("'"),
+    containsLiteralBackslashN: raw.includes("\\n"),
+    containsRealNewline: raw.includes("\n"),
+    lineCount: raw.split("\n").length,
+    hasBeginMarker: raw.includes("BEGIN PRIVATE KEY") || raw.includes("BEGIN RSA PRIVATE KEY"),
+    hasEndMarker: raw.includes("END PRIVATE KEY") || raw.includes("END RSA PRIVATE KEY"),
+    first25: raw.slice(0, 25),
+    last25: raw.slice(-25),
+  };
+}
+
+
 async function getAccessToken() {
   const privateKey = getPrivateKey();
   const now = Math.floor(Date.now() / 1000);
@@ -108,6 +130,13 @@ async function ensureClassExists(accessToken) {
 }
 
 export default async function handler(req, res) {
+  // Visit /api/wallet-pass?diagnose=1 directly in a browser (GET request) to
+  // see a safe, redacted snapshot of the private key env var's shape —
+  // no secret material is ever exposed, just its structure.
+  if (req.method === "GET" && req.query && req.query.diagnose) {
+    return res.status(200).json({ privateKeyDiagnosis: diagnosePrivateKeyEnv() });
+  }
+
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
@@ -202,6 +231,10 @@ export default async function handler(req, res) {
     return res.status(200).json({ saveUrl: `https://pay.google.com/gp/v/save/${saveToken}` });
   } catch (e) {
     console.error(e);
-    return res.status(500).json({ error: e.message || "Unknown error" });
+    const isKeyError = /asymmetric key|secretOrPrivateKey|PRIVATE KEY/i.test(e.message || "");
+    return res.status(500).json({
+      error: e.message || "Unknown error",
+      ...(isKeyError ? { privateKeyDiagnosis: diagnosePrivateKeyEnv() } : {}),
+    });
   }
 }
