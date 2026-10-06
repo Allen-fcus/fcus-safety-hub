@@ -15,6 +15,13 @@ const CLASS_ID = `${ISSUER_ID}.safety_hub_badge`;
 const WALLET_API_BASE = "https://walletobjects.googleapis.com/walletobjects/v1";
 const HUB_URL = "https://fcus-safety-hub.vercel.app";
 
+// Matches the display names used in the app itself.
+const PROJECT_NAMES_BY_SLUG = {
+  "nti-sylvania": "NTI - Sylvania",
+  "sh99-houston": "SH-99 Houston",
+  "nashville": "DriveTN",
+};
+
 // Vercel env vars get pasted in all sorts of ways — sometimes with the
 // surrounding quotes from the JSON file still attached, sometimes with
 // literal \n sequences instead of real line breaks. This normalizes
@@ -163,12 +170,30 @@ export default async function handler(req, res) {
     const person = await sessionRes.json();
     if (!person || !person.id) return res.status(401).json({ error: "Session lookup succeeded but returned no matching person — the badge session itself may actually be expired. Try logging out and back in." });
 
+    // Resolve the project's slug (get_session only returns its UUID) so
+    // the pass can show the right project name and link back to the
+    // correct one specifically — otherwise a multi-project account
+    // could get routed to the wrong project's Hub.
+    let projectSlug = null;
+    if (person.project_id) {
+      const projRes = await fetch(
+        `${process.env.SUPABASE_URL}/rest/v1/projects?id=eq.${person.project_id}&select=slug`,
+        { headers: { apikey: process.env.SUPABASE_ANON_KEY, Authorization: `Bearer ${process.env.SUPABASE_ANON_KEY}` } }
+      );
+      if (projRes.ok) {
+        const rows = await projRes.json();
+        if (rows && rows[0]) projectSlug = rows[0].slug;
+      }
+    }
+    const projectName = (projectSlug && PROJECT_NAMES_BY_SLUG[projectSlug]) || "Safety Hub";
+    const hubLink = projectSlug ? `${HUB_URL}/?project=${projectSlug}&screen=home` : `${HUB_URL}/?screen=home`;
+
     const accessToken = await getAccessToken();
     await ensureClassExists(accessToken);
 
     const objectId = `${ISSUER_ID}.badge_${person.id}`;
-    const qualCount = (person.qualifications || []).length;
-    const expiredCount = (person.qualifications || []).filter((q) => q.status === "expired").length;
+    const qualNames = (person.qualifications || []).map((q) => q.status === "expired" ? `${q.label} (expired)` : q.label);
+    const qualsText = qualNames.length ? qualNames.join(", ") : "None on file";
 
     const genericObject = {
       id: objectId,
@@ -181,17 +206,18 @@ export default async function handler(req, res) {
       subheader: { defaultValue: { language: "en-US", value: person.name || "" } },
       header: { defaultValue: { language: "en-US", value: person.role || "Crew Member" } },
       textModulesData: [
+        { id: "project", header: "PROJECT", body: projectName },
         { id: "employer", header: "EMPLOYER", body: person.employer || "—" },
         { id: "badge", header: "BADGE #", body: person.badge_number || "—" },
-        { id: "quals", header: "DESIGNATIONS", body: `${qualCount} on file${expiredCount ? ` (${expiredCount} expired)` : ""}` },
+        { id: "quals", header: "DESIGNATIONS", body: qualsText },
       ],
       hexBackgroundColor: "#101010",
       ...(person.photo_url ? { heroImage: { sourceUri: { uri: person.photo_url } } } : {}),
       linksModuleData: {
         uris: [
           {
-            uri: `${HUB_URL}/?screen=home`,
-            description: "Open Safety Hub",
+            uri: hubLink,
+            description: `Open ${projectName} Safety Hub`,
           },
         ],
       },
