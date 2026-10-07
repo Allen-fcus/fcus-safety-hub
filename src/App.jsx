@@ -4653,8 +4653,8 @@ function CourseDonut({ assigned, completed }) {
         </div>
       </div>
       <div className="text-left">
-        <div className="text-[28px] leading-none" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 700, color: INK }}>{pct}%</div>
-        <div className="text-[10px] uppercase mt-1" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{a} enrolled</div>
+        <div className="text-[46px] leading-none" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 700, color: INK }}>{pct}%</div>
+        <div className="text-[16px] uppercase font-bold mt-1.5" style={{ color: INK, fontFamily: "IBM Plex Mono, monospace" }}>{a} enrolled</div>
       </div>
     </div>
   );
