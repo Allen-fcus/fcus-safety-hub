@@ -4,6 +4,7 @@ import { Home, BookOpen, PlayCircle, ClipboardCheck, FileText, ChevronRight, Dow
 import { supabase, loadProjectMap, projectIdForSlug, projectSlugForId } from "./supabaseClient.js";
 import { PDFDocument } from "pdf-lib";
 import QRCode from "qrcode";
+import { LOGO_DRIVETN, LOGO_WEBBER, LOGO_NTA } from "./projectLogos.js";
 
 // ============================================================
 // CONTENT SOURCE CONFIG
@@ -476,6 +477,26 @@ function QuarterlyMonthlyScreen({ user }) {
 
 
 // ---- Screen: Home ----
+// Project logos. "plate" = show on a white rounded card (for logos with dark text);
+// NTI's logo is yellow/white lettering made for dark backgrounds, so it sits directly on the dark panel.
+const PROJECT_LOGOS = {
+  "nti-sylvania": { src: LOGO_NTA, plate: false, alt: "North Tarrant Infrastructure" },
+  "sh99-houston": { src: LOGO_WEBBER, plate: true, alt: "Ferrovial Webber Joint Venture" },
+  "nashville": { src: LOGO_DRIVETN, plate: true, alt: "driveTN" },
+};
+
+function ProjectLogo({ projectId, maxHeight = 44, fallback = null }) {
+  const logo = PROJECT_LOGOS[projectId];
+  if (!logo) return fallback;
+  const img = (
+    <img src={logo.src} alt={logo.alt} style={{ display: "block", maxWidth: "100%", maxHeight, width: "auto", height: "auto", objectFit: "contain" }} />
+  );
+  if (!logo.plate) return <div style={{ display: "inline-block", maxWidth: "100%" }}>{img}</div>;
+  return (
+    <div style={{ display: "inline-block", maxWidth: "100%", background: "white", borderRadius: 6, padding: "6px 10px" }}>{img}</div>
+  );
+}
+
 function HomeScreen({ go, user, activeProjectId }) {
   const { fallbacks, name: projectName } = useContext(ProjectContext);
   const { t } = useTranslation();
@@ -571,8 +592,16 @@ function HomeScreen({ go, user, activeProjectId }) {
               ALWAYS<br/>READY.
             </div>
           </div>
-          <div className="mt-3 inline-block text-[10px] uppercase font-bold px-2 py-1 rounded-sm" style={{ background: AMBER, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>
-            {projectName}
+          <div className="mt-3">
+            <ProjectLogo
+              projectId={activeProjectId}
+              maxHeight={46}
+              fallback={
+                <div className="inline-block text-[10px] uppercase font-bold px-2 py-1 rounded-sm" style={{ background: AMBER, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>
+                  {projectName}
+                </div>
+              }
+            />
           </div>
         </div>
         <img
@@ -10172,8 +10201,12 @@ export default function SafetyHubPrototype() {
       {/* Desktop / tablet sidebar */}
       <div className="hidden md:flex md:flex-col md:w-64 flex-shrink-0" style={{ background: INK }}>
         <div className="p-5 border-b" style={{ borderColor: "#2A2A2A" }}>
-          <div className="text-[10px] uppercase font-bold" style={{ color: GOLD, fontFamily: "IBM Plex Mono, monospace" }}>{PROJECTS[activeProjectId].name}</div>
-          <div className="text-white text-[16px] mt-1" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>Safety Hub</div>
+          <ProjectLogo
+            projectId={activeProjectId}
+            maxHeight={52}
+            fallback={<div className="text-[10px] uppercase font-bold" style={{ color: GOLD, fontFamily: "IBM Plex Mono, monospace" }}>{PROJECTS[activeProjectId].name}</div>}
+          />
+          <div className="text-white text-[16px] mt-2" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>Safety Hub</div>
         </div>
         <div className="flex-1 py-3">
           {sidebarItems.map((t) => {
