@@ -7698,6 +7698,16 @@ function RosterRow({ person, user, onChanged }) {
   const [isAdmin, setIsAdmin] = useState(person.can_add_personnel || false);
   const [isRepAccount, setIsRepAccount] = useState(person.is_rep_account || false);
   const [savingRepFlag, setSavingRepFlag] = useState(false);
+  const [isHubAdmin, setIsHubAdmin] = useState(false);
+  const [savingHub, setSavingHub] = useState(false);
+  useEffect(() => {
+    if (!editing || !user?.isHubAdmin) return;
+    let cancelled = false;
+    supabase.rpc("hub_admin_person_ids", { p_token: user.sessionToken }).then(({ data }) => {
+      if (!cancelled && Array.isArray(data)) setIsHubAdmin(data.includes(person.id));
+    });
+    return () => { cancelled = true; };
+  }, [editing, user?.isHubAdmin, user?.sessionToken, person.id]);
   const [saving, setSaving] = useState(false);
   const [pinResult, setPinResult] = useState(null);
   const [photoFile, setPhotoFile] = useState(null);
@@ -7879,6 +7889,29 @@ function RosterRow({ person, user, onChanged }) {
               <div className="w-4 h-4 rounded-full bg-white" />
             </div>
           </button>
+
+          {user?.isHubAdmin && (
+            <button
+              onClick={async () => {
+                const next = !isHubAdmin;
+                setSavingHub(true);
+                const { data } = await supabase.rpc("set_hub_admin", { p_token: user.sessionToken, p_person_id: person.id, p_value: next });
+                setSavingHub(false);
+                if (data) { setIsHubAdmin(next); if (next) setIsAdmin(true); onChanged(); }
+              }}
+              disabled={savingHub}
+              className="w-full flex items-center justify-between rounded-md p-2 border mb-3 disabled:opacity-60"
+              style={{ borderColor: isHubAdmin ? GOLD : "#E4E2DA", background: isHubAdmin ? "#FFF8E1" : "#FCFCFA" }}
+            >
+              <div>
+                <div className="text-[12px] font-bold">Safety Hub Admin</div>
+                <div className="text-[10px]" style={{ color: STEEL }}>Admin on ALL projects and can switch between them. Keep this to a handful of people.</div>
+              </div>
+              <div className="w-9 h-5 rounded-full flex items-center px-0.5 flex-shrink-0 ml-2" style={{ background: isHubAdmin ? GOLD : "#E4E2DA", justifyContent: isHubAdmin ? "flex-end" : "flex-start" }}>
+                <div className="w-4 h-4 rounded-full bg-white" />
+              </div>
+            </button>
+          )}
 
           <button
             onClick={async () => {
@@ -9435,7 +9468,7 @@ function ManageWeeklyReportScreen({ user }) {
 
 // ---- Login (modal, only needed to claim/view a badge) ----
 // ---- Project Switcher ----
-function ProjectSwitcherModal({ activeProjectId, onSelect, onClose }) {
+function ProjectSwitcherModal({ activeProjectId, onSelect, onClose, keepsLogin }) {
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/85 px-6">
       <div className="w-full max-w-xs rounded-xl overflow-hidden" style={{ background: "white", boxShadow: "0 10px 40px rgba(0,0,0,0.4)" }}>
@@ -9461,7 +9494,7 @@ function ProjectSwitcherModal({ activeProjectId, onSelect, onClose }) {
           })}
         </div>
         <div className="px-3 pb-3 text-[10px]" style={{ color: STEEL }}>
-          Switching projects logs you out — badges, forms, and personnel are specific to each project.
+          {keepsLogin ? "Safety Hub Admin — you stay logged in when you switch." : "Switching projects logs you out — badges, forms, and personnel are specific to each project."}
         </div>
       </div>
     </div>
@@ -9469,19 +9502,40 @@ function ProjectSwitcherModal({ activeProjectId, onSelect, onClose }) {
 }
 
 function LoginModal({ onLogin, onClose, activeProjectId }) {
-  const { name: projectName } = useContext(ProjectContext);
   const [badge, setBadge] = useState("");
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [projectChoices, setProjectChoices] = useState(null);
 
-  const submit = async () => {
+  const finishLogin = async (data) => {
+    await loadProjectMap();
+    const matchedSlug = projectSlugForId(data.project_id) || (activeProjectId !== "safety-hub" ? activeProjectId : null);
+    const user = {
+      sessionToken: data.session_token,
+      name: data.name,
+      empId: data.employee_id,
+      badge: data.badge_number,
+      role: data.role,
+      employer: data.employer,
+      orientationDate: data.orientation_date,
+      trainingAccess: data.training_access,
+      multiSiteAccess: data.multi_site_access,
+      isHubAdmin: !!data.is_hub_admin,
+      canAddPersonnel: data.can_add_personnel,
+      isRepAccount: data.is_rep_account,
+      photoUrl: data.photo_url,
+      quals: data.qualifications || [],
+    };
+    onLogin(user, matchedSlug);
+  };
+
+  // No project is chosen up front: the badge + PIN find the person's project.
+  // projectUuid is only set when the person picked one from the "Which project?" list.
+  const submit = async (projectUuid = null) => {
     if (!badge.trim() || !pin.trim()) { setError("Enter your badge number and PIN"); return; }
     setLoading(true);
     setError("");
-
-    await loadProjectMap();
-    const projectUuid = activeProjectId === "safety-hub" ? null : projectIdForSlug(activeProjectId);
 
     const { data, error: rpcError } = await supabase.rpc("authenticate", {
       p_badge: badge.trim(),
@@ -9499,24 +9553,11 @@ function LoginModal({ onLogin, onClose, activeProjectId }) {
       setError("Badge number or PIN not recognized.");
       return;
     }
-
-    const matchedSlug = projectSlugForId(data.project_id) || (activeProjectId !== "safety-hub" ? activeProjectId : null);
-    const user = {
-      sessionToken: data.session_token,
-      name: data.name,
-      empId: data.employee_id,
-      badge: data.badge_number,
-      role: data.role,
-      employer: data.employer,
-      orientationDate: data.orientation_date,
-      trainingAccess: data.training_access,
-      multiSiteAccess: data.multi_site_access,
-      canAddPersonnel: data.can_add_personnel,
-      isRepAccount: data.is_rep_account,
-      photoUrl: data.photo_url,
-      quals: data.qualifications || [],
-    };
-    onLogin(user, matchedSlug);
+    if (data.choose_project) {
+      setProjectChoices(data.projects || []);
+      return;
+    }
+    await finishLogin(data);
   };
 
   return (
@@ -9524,43 +9565,70 @@ function LoginModal({ onLogin, onClose, activeProjectId }) {
       <div className="w-full max-w-xs rounded-xl overflow-hidden" style={{ background: "white", boxShadow: "0 10px 40px rgba(0,0,0,0.4)" }}>
         <div style={{ background: INK }} className="p-4 flex items-center justify-between">
           <div>
-            <div className="text-[9px] uppercase font-bold" style={{ color: AMBER, fontFamily: "IBM Plex Mono, monospace" }}>{projectName}</div>
-            <div className="text-white text-[13px]" style={{ fontFamily: "Oswald, sans-serif" }}>Log In Required</div>
+            <div className="text-[9px] uppercase font-bold" style={{ color: AMBER, fontFamily: "IBM Plex Mono, monospace" }}>Safety Hub</div>
+            <div className="text-white text-[13px]" style={{ fontFamily: "Oswald, sans-serif" }}>{projectChoices ? "Which Project?" : "Log In"}</div>
           </div>
           <button onClick={onClose}><X size={18} color="white" /></button>
         </div>
         <HazardRule height={4} />
         <div className="p-5">
-          <div className="text-[12px] mb-4" style={{ color: STEEL }}>
-            Enter your badge number and PIN to access this section and get your digital badge.
-          </div>
-          <label className="text-[10px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Badge Number</label>
-          <input
-            value={badge}
-            onChange={(e) => { setBadge(e.target.value); setError(""); }}
-            className="w-full rounded-md border px-3 py-2.5 text-[14px] mt-1 mb-3"
-            style={{ borderColor: "#C9C6BC" }}
-            onKeyDown={(e) => e.key === "Enter" && submit()}
-          />
-          <label className="text-[10px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>PIN</label>
-          <input
-            type="password"
-            inputMode="numeric"
-            value={pin}
-            onChange={(e) => { setPin(e.target.value); setError(""); }}
-            className="w-full rounded-md border px-3 py-2.5 text-[14px] mt-1"
-            style={{ borderColor: "#C9C6BC" }}
-            onKeyDown={(e) => e.key === "Enter" && submit()}
-          />
-          {error && <div className="text-[11px] mt-1.5" style={{ color: ALERT }}>{error}</div>}
-          <button
-            onClick={submit}
-            disabled={loading}
-            className="w-full mt-4 rounded-md py-2.5 text-sm font-bold disabled:opacity-50"
-            style={{ background: GOLD, color: INK, fontFamily: "Oswald, sans-serif" }}
-          >
-            {loading ? "Checking…" : "Log In"}
-          </button>
+          {projectChoices ? (
+            <>
+              <div className="text-[12px] mb-3" style={{ color: STEEL }}>
+                Your badge is on more than one project. Choose where you want to go.
+              </div>
+              <div className="space-y-2">
+                {projectChoices.map((p) => (
+                  <button
+                    key={p.project_id}
+                    onClick={() => submit(p.project_id)}
+                    disabled={loading}
+                    className="w-full text-left rounded-md p-3 border flex items-center justify-between disabled:opacity-50"
+                    style={{ borderColor: "#E4E2DA" }}
+                  >
+                    <span className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{p.name}</span>
+                    <ChevronRight size={16} color={STEEL} />
+                  </button>
+                ))}
+              </div>
+              {error && <div className="text-[11px] mt-2" style={{ color: ALERT }}>{error}</div>}
+              <button onClick={() => { setProjectChoices(null); setPin(""); }} className="mt-3 text-[11px]" style={{ color: STEEL }}>Back</button>
+            </>
+          ) : (
+            <>
+              <div className="text-[12px] mb-4" style={{ color: STEEL }}>
+                Enter your badge number and PIN. We'll take you to your project automatically.
+              </div>
+              <label className="text-[10px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Badge Number</label>
+              <input
+                value={badge}
+                onChange={(e) => { setBadge(e.target.value); setError(""); }}
+                className="w-full rounded-md border px-3 py-2.5 text-[14px] mt-1 mb-3"
+                style={{ borderColor: "#C9C6BC" }}
+                autoCapitalize="characters"
+                onKeyDown={(e) => e.key === "Enter" && submit()}
+              />
+              <label className="text-[10px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>PIN</label>
+              <input
+                type="password"
+                inputMode="numeric"
+                value={pin}
+                onChange={(e) => { setPin(e.target.value); setError(""); }}
+                className="w-full rounded-md border px-3 py-2.5 text-[14px] mt-1"
+                style={{ borderColor: "#C9C6BC" }}
+                onKeyDown={(e) => e.key === "Enter" && submit()}
+              />
+              {error && <div className="text-[11px] mt-1.5" style={{ color: ALERT }}>{error}</div>}
+              <button
+                onClick={() => submit()}
+                disabled={loading}
+                className="w-full mt-4 rounded-md py-2.5 text-sm font-bold disabled:opacity-50"
+                style={{ background: GOLD, color: INK, fontFamily: "Oswald, sans-serif" }}
+              >
+                {loading ? "Checking…" : "Log In"}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -9860,6 +9928,7 @@ export default function SafetyHubPrototype() {
         orientationDate: data.orientation_date,
         trainingAccess: data.training_access,
         multiSiteAccess: data.multi_site_access,
+        isHubAdmin: !!data.is_hub_admin,
         canAddPersonnel: data.can_add_personnel,
         isRepAccount: data.is_rep_account,
         photoUrl: data.photo_url,
@@ -9895,7 +9964,41 @@ export default function SafetyHubPrototype() {
     setScreen("home");
   };
 
-  const handleSwitchProject = (projectId) => {
+  const handleSwitchProject = async (projectId) => {
+    // Safety Hub Admins stay logged in and jump straight to the project.
+    if (user && user.isHubAdmin && user.sessionToken) {
+      await loadProjectMap();
+      const projectUuid = projectIdForSlug(projectId);
+      if (projectUuid) {
+        const { data, error } = await supabase.rpc("switch_project", { p_token: user.sessionToken, p_project_id: projectUuid });
+        if (!error && data) {
+          localStorage.setItem("safetyhub_session_token", data.session_token);
+          setActiveProjectId(projectId);
+          try { localStorage.setItem("safetyhub_last_project", projectId); } catch (e) { /* ignore */ }
+          setUser({
+            sessionToken: data.session_token,
+            name: data.name,
+            empId: data.employee_id,
+            badge: data.badge_number,
+            role: data.role,
+            employer: data.employer,
+            orientationDate: data.orientation_date,
+            trainingAccess: data.training_access,
+            multiSiteAccess: data.multi_site_access,
+            isHubAdmin: !!data.is_hub_admin,
+            canAddPersonnel: data.can_add_personnel,
+            isRepAccount: data.is_rep_account,
+            photoUrl: data.photo_url,
+            quals: data.qualifications || [],
+          });
+          setShowProjectSwitcher(false);
+          setConcernReports([]);
+          setScreen("home");
+          return;
+        }
+      }
+      // If the switch call failed, fall through to the normal behavior below.
+    }
     localStorage.removeItem("safetyhub_session_token");
     setActiveProjectId(projectId);
     try { localStorage.setItem("safetyhub_last_project", projectId); } catch (e) { /* ignore */ }
@@ -10202,6 +10305,7 @@ export default function SafetyHubPrototype() {
       {showProjectSwitcher && (
         <ProjectSwitcherModal
           activeProjectId={activeProjectId}
+          keepsLogin={!!(user && user.isHubAdmin)}
           onSelect={handleSwitchProject}
           onClose={() => setShowProjectSwitcher(false)}
         />
