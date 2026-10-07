@@ -1604,12 +1604,14 @@ function PreOrientationFormStep({ form, projectId, activeProjectId, scheduleId, 
     <div className="bg-white rounded-md p-3 border" style={{ borderColor: "#E4E2DA" }}>
       <div className="text-[10px] uppercase font-bold mb-1" style={{ color: GOLD, fontFamily: "IBM Plex Mono, monospace" }}>{stepLabel}</div>
       <div className="text-[15px] mb-3" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{form.title}</div>
+      <AboutForm form={form} />
 
       {(form.fields || []).map((label, i) => {
         if ((form.trailingFieldLabels || []).includes(label)) return null;
         return (
           <div key={i} className="mb-3">
             <label className="text-[10px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{label}</label>
+            <FieldHint label={label} />
             <textarea
               rows={label.toLowerCase().includes("one per line") ? 3 : 1}
               value={values[i]}
@@ -1638,6 +1640,7 @@ function PreOrientationFormStep({ form, projectId, activeProjectId, scheduleId, 
         return (
           <div key={`trailing-${i}`} className="mb-3">
             <label className="text-[10px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{label}</label>
+            <FieldHint label={label} />
             <textarea
               rows={1}
               value={values[i]}
@@ -5551,11 +5554,153 @@ function SignaturePad({ onChange, canvasRef: externalCanvasRef }) {
   );
 }
 
+// ---------- FIELD HINTS ----------
+// Short "what goes here" lines shown under each field. Worded from the forms' own
+// descriptions, labels and notes so people know what to enter or select.
+const FIELD_HINTS = {
+  "competent person": "Full name of the Competent Person completing this verification.",
+  "competent person(s)": "Full name(s) of the Competent Person(s) evaluating this area.",
+  "period": "The quarter or month this verification covers.",
+  "month": "The month this report covers.",
+  "task": "The specific job or activity being analyzed (what work is about to be done).",
+  "certified fa/cpr person name": "Name of the crew member who holds a current First Aid/CPR certification.",
+  "certified flagger name": "Name of the crew member who holds a current flagger certification.",
+  "machinery to be used": "List the machinery that will be used for this task.",
+  "tools to be used": "List the tools that will be used for this task.",
+  "special ppe required": "PPE needed beyond the standard (hard hat, vest, glasses, boots, gloves).",
+  "crew members involved (list names)": "Everyone working on this task — one name per line.",
+  "company": "Your company name.",
+  "operator": "Name of the person operating the equipment.",
+  "equipment type": "The kind of equipment being inspected (e.g., excavator, lift, loader).",
+  "project location": "Where on the project the equipment is being used.",
+  "supervisor": "Name of the supervisor responsible for this work.",
+  "requested by": "Name of the person requesting this permit.",
+  "start date": "The first day the work begins.",
+  "completion date": "The day the work is expected to be finished.",
+  "purpose of excavation / drilling / boring": "Why the ground is being opened (e.g., install conduit, pole foundation).",
+  "location of excavation / drilling / boring": "Where on site the digging, drilling or boring will happen.",
+  "depth": "How deep, in feet.",
+  "width / diameter": "How wide (or the diameter), in feet or inches.",
+  "length": "How long, in feet.",
+  "utility locate reference #": "The reference number from the utility locate request.",
+  "have locates been documented with video/photos?": "Answer Yes or No — locate marks should be recorded with video or photos before digging.",
+  "ticket refresh date 1": "Date the first locate ticket must be refreshed.",
+  "ticket number 1": "Number on the first locate ticket.",
+  "ticket refresh date 2": "Date the second locate ticket must be refreshed (if there is one).",
+  "ticket number 2": "Number on the second locate ticket (if there is one).",
+  "site location": "Where on the site this excavation is located.",
+  "soil type": "Soil classification as determined by the Competent Person (e.g., Type A, B or C).",
+  "excavation depth": "Depth of the excavation, in feet.",
+  "excavation width": "Width of the excavation, in feet.",
+  "type of protective system used": "Sloping, shoring, shielding, etc. — whatever protects workers in the trench.",
+  "purpose of entry": "Why someone needs to go into the confined space.",
+  "location / description of work area": "Where the space is and what it looks like (tank, vault, manhole, etc.).",
+  "comments": "Anything else the reviewer should know. Leave blank if nothing to add.",
+  "contractor performing work": "Company that will perform the work.",
+  "contact name": "Person to call about this work.",
+  "contact tel": "Phone number for the contact person.",
+  "location of work": "Exactly where the work will be done.",
+  "description of work": "Briefly describe the work (e.g., welding handrail, cutting rebar).",
+  "equipment to be used": "List the equipment that will be used.",
+  "permit begins (date/time)": "Date and time the permit starts.",
+  "permit expires (date/time)": "Date and time the permit ends.",
+  "special conditions (if any)": "Extra conditions for this work. Leave blank if none.",
+  "start time": "Time the activity starts.",
+  "end time": "Time the activity ends.",
+  "purpose of activity": "What the work near the power line is for.",
+  "location of activity": "Where the work near the power line will take place.",
+  "supervisor completing the form": "Name of the supervisor filling out this permit.",
+  "height of power line (ft)": "Height of the line above ground, in feet. Use this to find the clearance distance in Table A.",
+  "voltage (kv)": "Line voltage in kilovolts. Use it with Table A to find the minimum clearance distance.",
+  "owner of utility & point of contact": "Utility company that owns the line and the person to contact there.",
+  "equipment to be used": "List the equipment that will be used.",
+  "equipment to be used ": "List the equipment that will be used.",
+  "unit no.": "The crane's unit/fleet number.",
+  "make": "Manufacturer of the crane.",
+  "model": "Model of the crane.",
+  "serial no.": "Serial number on the crane's data plate.",
+  "hours": "Hour-meter reading at inspection.",
+  "company address": "Street address of your company.",
+  "company city, state, zip": "City, state and ZIP of your company.",
+  "recipient name": "Person who will receive this affidavit.",
+  "employee names passing drug screen (one per line)": "Everyone who passed the drug screen (within the last 30 days) — one name per line.",
+  "contact phone": "Phone number where this person can be reached.",
+  "employee name": "Full name of the employee being designated.",
+  "authorized representative name": "Name of your company's authorized representative signing this designation.",
+  "other equipment (if applicable)": "Equipment the employee operates that is not already listed above.",
+  "name of accredited crane organization (if applicable)": "The accredited organization that issued the certification, if that is how they were certified.",
+  "name of third party (if applicable)": "Third party that evaluated the employee, if that applies.",
+  "name of third party qualified evaluator (if applicable)": "Qualified evaluator from the third party, if that applies.",
+  "name of contractor qualified evaluator (if applicable)": "Qualified evaluator from your company, if that applies.",
+  "other organization name (if applicable)": "Any other organization that certified the employee.",
+  "flagging instructor name (if applicable)": "Name of the certified flagging instructor, if the employee was certified by an instructor.",
+  "instructor's certifying organization (if applicable)": "TX DOT-approved organization that certified the instructor.",
+  "onsite superintendent name": "Your company's superintendent on this project.",
+  "onsite superintendent phone": "Superintendent's phone number.",
+  "onsite superintendent email": "Superintendent's email address.",
+  "safety representative name": "Your company's safety representative for this project.",
+  "supervisor name (pm/engineer)": "Project manager or engineer who supervises this work.",
+  "emergency contact name": "Person to call in an emergency.",
+  "emergency contact phone": "Emergency contact's phone number.",
+  "emergency contact email": "Emergency contact's email address.",
+  "project manager name": "Your company's project manager.",
+  "project manager phone": "Project manager's phone number.",
+  "project manager email": "Project manager's email address.",
+  "mailing address": "Where mail should be sent to your company.",
+  "number of male employees": "Count of male employees on the project this month.",
+  "number of female employees": "Count of female employees on the project this month.",
+  "male hours worked": "Total hours worked by male employees this month.",
+  "female hours worked": "Total hours worked by female employees this month.",
+};
+
+function getFieldHint(label) {
+  if (!label) return null;
+  const key = String(label).trim().toLowerCase();
+  if (FIELD_HINTS[key]) return FIELD_HINTS[key];
+  if (key.includes("(if applicable)") || key.includes("(if any)")) return "Only fill this in if it applies. Otherwise leave it blank.";
+  if (key.includes("one per line")) return "Enter one name per line.";
+  if (key.includes("phone") || key.includes("tel")) return "Best phone number to reach this person.";
+  if (key.includes("email")) return "Email address.";
+  if (key.includes("date")) return "Pick or enter the date.";
+  if (key.includes("name")) return "Full name.";
+  return null;
+}
+
+// Plain-language legend for status/choice buttons, built from the button labels themselves.
+const OPTION_MEANINGS = {
+  "Y": "Yes", "N": "No", "Yes": "Yes", "No": "No",
+  "N/A": "Not applicable to this job",
+  "S": "Satisfactory", "U": "Unsatisfactory — needs correction",
+  "OK": "OK — in good condition", "Bad": "Bad — needs repair/correction",
+  "Confirmed": "Confirmed in place",
+};
+function optionLegend(options) {
+  const parts = (options || []).map((o) => OPTION_MEANINGS[o] ? `${o} = ${OPTION_MEANINGS[o]}` : null).filter(Boolean);
+  return parts.length ? `Tap one for each line: ${parts.join(" · ")}.` : null;
+}
+
+function FieldHint({ label }) {
+  const h = getFieldHint(label);
+  if (!h) return null;
+  return <div className="text-[11px] mt-0.5 leading-snug" style={{ color: STEEL }}>{h}</div>;
+}
+
+function AboutForm({ form }) {
+  if (!form || !form.description) return null;
+  return (
+    <div className="rounded-md px-3 py-2 mb-3 text-[12px] leading-snug" style={{ background: "#FFF8E1", border: "1px solid #F0DFA0", color: INK }}>
+      <div className="text-[10px] uppercase font-bold mb-0.5" style={{ color: GOLD, fontFamily: "IBM Plex Mono, monospace" }}>About this form</div>
+      {form.description}
+    </div>
+  );
+}
+
 function StatusGroup({ group, values, onChange }) {
   return (
     <div>
       <div className="text-[11px] uppercase font-bold mb-1.5" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{group.label}</div>
       {group.note && <div className="text-[10px] mb-1.5" style={{ color: STEEL }}>{group.note}</div>}
+      {optionLegend(group.options) && <div className="text-[11px] mb-1.5 leading-snug" style={{ color: STEEL }}>{optionLegend(group.options)}</div>}
       <div className="space-y-1.5">
         {group.items.map((item, i) => (
           <div key={i} className="flex items-center justify-between gap-2 bg-[#FCFCFA] rounded-sm px-2 py-1.5 border" style={{ borderColor: "#E4E2DA" }}>
@@ -5590,6 +5735,7 @@ function ChoiceGroup({ group, value, onChange }) {
   return (
     <div>
       <div className="text-[11px] uppercase font-bold mb-1.5" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{group.label}</div>
+      <div className="text-[11px] mb-1.5 leading-snug" style={{ color: STEEL }}>Select the one answer that applies.</div>
       <div className="space-y-1.5">
         {group.items.map((item, i) => {
           const active = value === i;
@@ -6600,6 +6746,7 @@ function FillFormModal({ form, onClose, user }) {
           <button onClick={onClose} className="flex-shrink-0"><X size={18} color={STEEL} /></button>
         </div>
         <div className="p-4 space-y-4 overflow-y-auto">
+          <AboutForm form={form} />
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="text-[10px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Name</label>
@@ -6649,6 +6796,7 @@ function FillFormModal({ form, onClose, user }) {
             return (
               <div key={i}>
                 <label className="text-[11px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{f}</label>
+                <FieldHint label={f} />
                 <textarea
                   rows={f.length > 30 ? 2 : 1}
                   value={values[i] || ""}
@@ -6740,6 +6888,7 @@ function FillFormModal({ form, onClose, user }) {
             return (
               <div key={`trailing-${i}`}>
                 <label className="text-[11px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{f}</label>
+                <FieldHint label={f} />
                 <textarea
                   rows={f.length > 30 ? 2 : 1}
                   value={values[i] || ""}
