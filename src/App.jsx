@@ -4647,14 +4647,27 @@ function CourseDonut({ assigned, completed }) {
               strokeDasharray={`${done} ${circ - done}`} strokeLinecap="butt" />
           )}
         </svg>
+        {(() => {
+          // tiny percentage sitting on the ring itself, at the middle of the gold arc
+          const frac = a > 0 ? Math.max(c / a, 0.001) : 0;
+          const mid = pct >= 12 ? frac / 2 : frac + 0.04;
+          const ang = mid * 2 * Math.PI - Math.PI / 2;
+          const tx = size / 2 + r * Math.cos(ang);
+          const ty = size / 2 + r * Math.sin(ang);
+          return (
+            <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="absolute inset-0" style={{ pointerEvents: "none" }}>
+              <text x={tx} y={ty} textAnchor="middle" dominantBaseline="central" fontSize="8" fontWeight="700" fill={INK} style={{ fontFamily: "IBM Plex Mono, monospace" }}>{pct}%</text>
+            </svg>
+          );
+        })()}
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <div className="text-[26px] leading-none" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 700, color: INK }}>{c}<span className="text-[15px]" style={{ color: STEEL }}>/{a}</span></div>
           <div className="text-[9px] uppercase mt-1" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>completed</div>
         </div>
       </div>
       <div className="text-left">
-        <div className="text-[46px] leading-none" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 700, color: INK }}>{pct}%</div>
-        <div className="text-[16px] uppercase font-bold mt-1.5" style={{ color: INK, fontFamily: "IBM Plex Mono, monospace" }}>{a} enrolled</div>
+        <div className="text-[46px] leading-none" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 700, color: INK }}>{a}</div>
+        <div className="text-[16px] uppercase font-bold mt-1.5" style={{ color: INK, fontFamily: "IBM Plex Mono, monospace" }}>enrolled</div>
       </div>
     </div>
   );
