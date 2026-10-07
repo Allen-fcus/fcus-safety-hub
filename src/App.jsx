@@ -4635,7 +4635,7 @@ function CourseDonut({ assigned, completed }) {
   const a = Number(assigned) || 0;
   const c = Math.min(Number(completed) || 0, a);
   const pct = a > 0 ? Math.round((c / a) * 100) : 0;
-  const size = 120, stroke = 16, r = (size - stroke) / 2, circ = 2 * Math.PI * r;
+  const size = 124, stroke = 24, r = (size - stroke) / 2, circ = 2 * Math.PI * r;
   const done = a > 0 ? (c / a) * circ : 0;
   return (
     <div className="flex items-center justify-center gap-4">
@@ -4656,7 +4656,7 @@ function CourseDonut({ assigned, completed }) {
           const ty = size / 2 + r * Math.sin(ang);
           return (
             <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="absolute inset-0" style={{ pointerEvents: "none" }}>
-              <text x={tx} y={ty} textAnchor="middle" dominantBaseline="central" fontSize="8" fontWeight="700" fill={INK} style={{ fontFamily: "IBM Plex Mono, monospace" }}>{pct}%</text>
+              <text x={tx} y={ty} textAnchor="middle" dominantBaseline="central" fontSize="13" fontWeight="700" fill={INK} style={{ fontFamily: "IBM Plex Mono, monospace" }}>{pct}%</text>
             </svg>
           );
         })()}
