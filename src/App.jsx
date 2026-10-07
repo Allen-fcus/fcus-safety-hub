@@ -391,11 +391,11 @@ const LABOR_LAWS_PROJECTS = ["sh99-houston"];
 
 // Projects where Quarterly/Monthly Inspections is shown — Sylvania only
 // for now; other projects will get their own versions later.
-const QUARTERLY_MONTHLY_PROJECTS = ["nti-sylvania"];
+const QUARTERLY_MONTHLY_PROJECTS = ["nti-sylvania", "nti-golden-triangle"];
 // The six designation forms (Competent Person, Equipment Operator, Crane Operator,
 // A/D Director, Crane Qualified Person, Flagger) carry the Sylvania project logo.
 // Add "sh99-houston" here once the Houston versions of the templates are uploaded.
-const DESIGNATION_FORM_PROJECTS = ["nti-sylvania"];
+const DESIGNATION_FORM_PROJECTS = ["nti-sylvania", "nti-golden-triangle"];
 
 const QUARTERLY_MONTHLY_FORMS_DEFAULT = [
   {
@@ -481,6 +481,7 @@ function QuarterlyMonthlyScreen({ user }) {
 // NTI's logo is yellow/white lettering made for dark backgrounds, so it sits directly on the dark panel.
 const PROJECT_LOGOS = {
   "nti-sylvania": { src: LOGO_NTA, plate: false, alt: "North Tarrant Infrastructure" },
+  "nti-golden-triangle": { src: LOGO_NTA, plate: false, alt: "North Tarrant Infrastructure" },
   "sh99-houston": { src: LOGO_WEBBER, plate: true, alt: "Ferrovial Webber Joint Venture" },
   "nashville": { src: LOGO_DRIVETN, plate: true, alt: "driveTN" },
 };
@@ -4954,7 +4955,7 @@ const FORMS_DEFAULT = [
     description: "Confirms underground or overhead utilities have been located and marked before excavation, drilling, or boring begins.",
     pdfLink: "https://drive.google.com/file/d/1e-gtaeZ4mZge8_-Tqkkl6tpgQyFOqhR-/preview",
     pdfFillTemplate: "utility-locate-permit",
-    projects: ["nti-sylvania"],
+    projects: ["nti-sylvania", "nti-golden-triangle"],
     requiresTwoSignatures: true,
     signatureLabels: ["Equipment Operator Signature", "Foreman/Supervisor Signature"],
     fields: [
@@ -5756,7 +5757,7 @@ function ChoiceGroup({ group, value, onChange }) {
   );
 }
 
-const BADGE_ID_PREFIXES = { "nti-sylvania": "SYL", "sh99-houston": "HOU", "nashville": "TN" };
+const BADGE_ID_PREFIXES = { "nti-sylvania": "SYL", "nti-golden-triangle": "GT", "sh99-houston": "HOU", "nashville": "TN" };
 
 // Known certification validity periods — matched by checking if the
 // entered label contains any of these keywords (case-insensitive).
@@ -5778,7 +5779,7 @@ function suggestedExpiryFor(label, issuedDateStr) {
   issued.setFullYear(issued.getFullYear() + rule.years);
   return issued.toISOString().slice(0, 10);
 }
-const DRUG_SCREEN_RECIPIENT_BY_PROJECT = { "nti-sylvania": "North Tarrant Infrastructure", "sh99-houston": "FCW99", "nashville": "DriveTN" };
+const DRUG_SCREEN_RECIPIENT_BY_PROJECT = { "nti-sylvania": "North Tarrant Infrastructure", "nti-golden-triangle": "North Tarrant Infrastructure", "sh99-houston": "FCW99", "nashville": "DriveTN" };
 
 // ------------------------------------------------------------
 // Fills the real "Drug Screen Affidavit" PDF — mapped by exact
@@ -8429,7 +8430,7 @@ function BulletinPostEditor({ post, user, onDone }) {
         <button onClick={() => setBroadcast((b) => !b)} className="w-full flex items-center justify-between rounded-md p-2 border mb-3" style={{ borderColor: broadcast ? GOLD : "#E4E2DA", background: broadcast ? "#FFF8E1" : "#FCFCFA" }}>
           <div>
             <div className="text-[12px] font-bold">Post to All Projects</div>
-            <div className="text-[10px]" style={{ color: STEEL }}>Sylvania, Houston, and DriveTN all at once</div>
+            <div className="text-[10px]" style={{ color: STEEL }}>Sylvania, Golden Triangle, Houston, and DriveTN all at once</div>
           </div>
           <div className="w-9 h-5 rounded-full flex items-center px-0.5 flex-shrink-0 ml-2" style={{ background: broadcast ? GOLD : "#E4E2DA", justifyContent: broadcast ? "flex-end" : "flex-start" }}>
             <div className="w-4 h-4 rounded-full bg-white" />
@@ -8710,7 +8711,7 @@ const PROJECTS = {
   },
   "nti-sylvania": {
     id: "nti-sylvania",
-    name: "NTI - Sylvania",
+    name: "NTI - Sylvania - Fort Worth",
     notifyEmail: "ntisafety@ferrovial.us",
     sheetUrls: { ...EMPTY_SHEET_URLS },
     fallbacks: {
@@ -8722,6 +8723,13 @@ const PROJECTS = {
       orientation: ORIENTATION_SESSIONS_DEFAULT,
     },
   },
+  "nti-golden-triangle": {
+    id: "nti-golden-triangle",
+    name: "NTI - CO - Golden Triangle - Fort Worth",
+    notifyEmail: "ntisafety@ferrovial.us",
+    sheetUrls: { ...EMPTY_SHEET_URLS },
+    fallbacks: { personnel: [], workPlans: [], safetyPlan: [], bulletin: [], emergencyContacts: EMERGENCY_CONTACTS_TBD, orientation: ORIENTATION_SESSIONS_TBD },
+  },
   "sh99-houston": {
     id: "sh99-houston",
     name: "SH-99 - Houston",
@@ -8731,7 +8739,7 @@ const PROJECTS = {
   },
   "nashville": {
     id: "nashville",
-    name: "DriveTN",
+    name: "DriveTN - Tennessee",
     notifyEmail: "", // set this once you have Nashville's designated recipient
     sheetUrls: { ...EMPTY_SHEET_URLS },
     fallbacks: { personnel: [], workPlans: [], safetyPlan: [], bulletin: [], emergencyContacts: EMERGENCY_CONTACTS_TBD, orientation: ORIENTATION_SESSIONS_TBD },
@@ -9011,7 +9019,7 @@ const PRECONSTRUCTION_FILLABLE_FORMS = {
     requiresProof: false,
     // Sylvania only for now — other projects will get their own
     // Man Hour report template later.
-    projects: ["nti-sylvania"],
+    projects: ["nti-sylvania", "nti-golden-triangle"],
     fields: ["Month", "Number of Male Employees", "Number of Female Employees", "Male Hours Worked", "Female Hours Worked"],
   },
 };
