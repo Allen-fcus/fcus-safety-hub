@@ -5293,6 +5293,45 @@ const ORIENTATION_FORMS_DEFAULT = [
   },
 ];
 
+// Crop a signature PNG to its ink, then draw it inside a box at its natural proportions (never stretched).
+async function drawSignatureInBox(pdfDoc, page, dataUrl, box) {
+  const img = await new Promise((resolve, reject) => {
+    const im = new Image();
+    im.onload = () => resolve(im);
+    im.onerror = reject;
+    im.src = dataUrl;
+  });
+  const c = document.createElement("canvas");
+  c.width = img.width; c.height = img.height;
+  const cx = c.getContext("2d");
+  cx.drawImage(img, 0, 0);
+  const { data } = cx.getImageData(0, 0, c.width, c.height);
+  let minX = c.width, minY = c.height, maxX = -1, maxY = -1;
+  for (let y = 0; y < c.height; y++) {
+    for (let x = 0; x < c.width; x++) {
+      if (data[(y * c.width + x) * 4 + 3] > 20) {
+        if (x < minX) minX = x; if (x > maxX) maxX = x;
+        if (y < minY) minY = y; if (y > maxY) maxY = y;
+      }
+    }
+  }
+  if (maxX < 0) return;
+  const pad = 4;
+  minX = Math.max(0, minX - pad); minY = Math.max(0, minY - pad);
+  maxX = Math.min(c.width - 1, maxX + pad); maxY = Math.min(c.height - 1, maxY + pad);
+  const cw = maxX - minX + 1, ch = maxY - minY + 1;
+  const out = document.createElement("canvas");
+  out.width = cw; out.height = ch;
+  out.getContext("2d").drawImage(c, minX, minY, cw, ch, 0, 0, cw, ch);
+  const blob = await new Promise((r) => out.toBlob(r, "image/png"));
+  const png = await pdfDoc.embedPng(new Uint8Array(await blob.arrayBuffer()));
+  // Let the signature rise a bit above a short box so it stays readable, but keep proportions.
+  const maxH = Math.max(box.height * 1.6, 30);
+  const scale = Math.min(box.width / cw, maxH / ch);
+  const w = cw * scale, h = ch * scale;
+  page.drawImage(png, { x: box.x + 4, y: box.y + 1, width: Math.min(w, box.width - 4), height: h * Math.min(1, (box.width - 4) / w) });
+}
+
 function SignaturePad({ onChange, canvasRef: externalCanvasRef }) {
   const { t } = useTranslation();
   const internalCanvasRef = useRef(null);
@@ -5337,12 +5376,6 @@ function SignaturePad({ onChange, canvasRef: externalCanvasRef }) {
     ctx.textBaseline = "middle";
     ctx.textAlign = "center";
     ctx.fillText(trimmed, canvas.width / 2, canvas.height / 2);
-    ctx.strokeStyle = "#C9C6BC";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(30, canvas.height - 40);
-    ctx.lineTo(canvas.width - 30, canvas.height - 40);
-    ctx.stroke();
     empty.current = false;
     onChange(false);
   };
@@ -5634,9 +5667,7 @@ async function fillDesignationPdf({ templateUrl, textFields, checkboxFields, dro
     for (const sig of signatures) {
       if (!sig || !sig.dataUrl || !sig.rect) continue;
       try {
-        const buf = await fetch(sig.dataUrl).then((r) => r.arrayBuffer());
-        const sigImage = await pdfDoc.embedPng(new Uint8Array(buf));
-        page.drawImage(sigImage, { x: sig.rect.x, y: sig.rect.y, width: sig.rect.width, height: sig.rect.height });
+        await drawSignatureInBox(pdfDoc, page, sig.dataUrl, sig.rect);
       } catch (e) { /* couldn't embed this one signature — continue with the rest */ }
     }
   }
@@ -6136,18 +6167,14 @@ async function fillCompetentPersonPdf({ templateUrl, subcontractor, date, employ
   }
 
   if (signatureDataUrl) {
-    const pngBytes = new Uint8Array(await fetch(signatureDataUrl).then((r) => r.arrayBuffer()));
-    const pngImage = await pdfDoc.embedPng(pngBytes);
     const b = employeeSignBox;
-    pdfDoc.getPage(b.pageIdx).drawImage(pngImage, { x: b.x, y: b.y, width: b.width, height: b.height });
+    await drawSignatureInBox(pdfDoc, pdfDoc.getPage(b.pageIdx), signatureDataUrl, b);
   }
 
   // Authorized Representative's signature goes in the Sign row under their Print cell.
   if (authRepSignatureDataUrl) {
-    const pngBytes2 = new Uint8Array(await fetch(authRepSignatureDataUrl).then((r) => r.arrayBuffer()));
-    const pngImage2 = await pdfDoc.embedPng(pngBytes2);
     const b2 = authRepSignBox;
-    pdfDoc.getPage(b2.pageIdx).drawImage(pngImage2, { x: b2.x, y: b2.y, width: b2.width, height: b2.height });
+    await drawSignatureInBox(pdfDoc, pdfDoc.getPage(b2.pageIdx), authRepSignatureDataUrl, b2);
   }
 
   return pdfDoc.save({ useObjectStreams: false });
