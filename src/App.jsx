@@ -3685,7 +3685,7 @@ function CoursePlayer({ course, attemptId, initialStepIndex, initialStepsProgres
                     />
                   ) : (
                     <div className="mb-3 rounded-md p-4 border text-[12px] text-center" style={{ borderColor: ALERT, background: "#FCEFEF", color: ALERT }}>
-                      Slide {step.slide} image didn't load. The slide images need to be uploaded to the <b>training-images</b> storage bucket (folder <b>fall-protection</b>). Tell your administrator.
+                      Slide {step.slide} image didn't load. The slide images need to be uploaded to the <b>training-images</b> storage bucket (the course's folder). Tell your administrator.
                       <div className="mt-1 break-all" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace", fontSize: 10 }}>{step.image}</div>
                     </div>
                   )}
