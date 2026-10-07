@@ -4631,6 +4631,35 @@ function TrainingScreen({ user, go }) {
 }
 
 // ---- Screen: Manage Training (admin) ----
+function CourseDonut({ assigned, completed }) {
+  const a = Number(assigned) || 0;
+  const c = Math.min(Number(completed) || 0, a);
+  const pct = a > 0 ? Math.round((c / a) * 100) : 0;
+  const size = 120, stroke = 16, r = (size - stroke) / 2, circ = 2 * Math.PI * r;
+  const done = a > 0 ? (c / a) * circ : 0;
+  return (
+    <div className="flex items-center justify-center gap-4">
+      <div className="relative flex-shrink-0" style={{ width: size, height: size }}>
+        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: "rotate(-90deg)" }}>
+          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#E4E2DA" strokeWidth={stroke} />
+          {a > 0 && (
+            <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={GOLD} strokeWidth={stroke}
+              strokeDasharray={`${done} ${circ - done}`} strokeLinecap="butt" />
+          )}
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <div className="text-[26px] leading-none" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 700, color: INK }}>{c}<span className="text-[15px]" style={{ color: STEEL }}>/{a}</span></div>
+          <div className="text-[9px] uppercase mt-1" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>completed</div>
+        </div>
+      </div>
+      <div className="text-left">
+        <div className="text-[28px] leading-none" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 700, color: INK }}>{pct}%</div>
+        <div className="text-[10px] uppercase mt-1" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{a} enrolled</div>
+      </div>
+    </div>
+  );
+}
+
 function ManageTrainingScreen({ user }) {
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -4771,18 +4800,25 @@ function ManageTrainingScreen({ user }) {
         Every training course, who it's assigned to, and who's completed it. Tap a course to manage assignments.
       </div>
       {loading && <div className="text-[12px] mb-2" style={{ color: STEEL }}>Loading…</div>}
-      <div className="space-y-2">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
         {courses.map((c) => (
-          <button key={c.id} onClick={() => openCourse(c.id)} className="w-full text-left bg-white rounded-md p-3 border flex items-center justify-between" style={{ borderColor: "#E4E2DA" }}>
-            <div className="min-w-0">
-              <div className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{c.title}</div>
-              <div className="text-[11px]" style={{ color: STEEL }}>{c.step_count} steps · {c.assigned_count} assigned · {c.completed_count} completed</div>
+          <button key={c.id} onClick={() => openCourse(c.id)} className="text-left bg-white rounded-md p-4 border" style={{ borderColor: "#E4E2DA" }}>
+            <div className="flex items-start justify-between gap-2 mb-3">
+              <div className="min-w-0">
+                <div className="text-[14px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{c.title}</div>
+                <div className="text-[11px]" style={{ color: STEEL }}>{c.step_count} steps</div>
+              </div>
+              <ChevronRight size={18} color={STEEL} className="flex-shrink-0 mt-0.5" />
             </div>
-            <ChevronRight size={18} color={STEEL} className="flex-shrink-0" />
+            <CourseDonut assigned={c.assigned_count} completed={c.completed_count} />
+            <div className="flex items-center justify-center gap-4 mt-3 text-[10px]" style={{ color: STEEL }}>
+              <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: GOLD }} /> Completed</span>
+              <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: "#E4E2DA" }} /> Not yet</span>
+            </div>
           </button>
         ))}
         {!loading && courses.length === 0 && (
-          <div className="text-[12px] text-center py-6" style={{ color: STEEL }}>No courses yet.</div>
+          <div className="text-[12px] text-center py-6 col-span-full" style={{ color: STEEL }}>No courses yet.</div>
         )}
       </div>
 
