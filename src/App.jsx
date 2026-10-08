@@ -10434,6 +10434,7 @@ function LoginModal({ onLogin, onClose, activeProjectId }) {
       isHubAdmin: !!data.is_hub_admin,
       canAddPersonnel: data.can_add_personnel,
       canViewMeetings: !!data.can_view_meetings,
+      verifyToken: data.verify_token || null,
       isRepAccount: data.is_rep_account,
       photoUrl: data.photo_url,
       quals: data.qualifications || [],
@@ -10548,15 +10549,128 @@ function LoginModal({ onLogin, onClose, activeProjectId }) {
 
 // ---- Digital Badge ----
 const QR_PATTERN = [1,1,1,0,1, 1,0,0,0,1, 1,0,1,0,0, 0,0,1,1,1, 1,1,0,1,0].map(Boolean);
+
+function badgeVerifyLink(slug, token) {
+  const base = `${window.location.origin}${window.location.pathname}?project=${slug}`;
+  return token ? `${base}&screen=verifybadge&v=${token}` : base;
+}
+function useBadgeQr(link, width = 360) {
+  const [qr, setQr] = useState(null);
+  useEffect(() => {
+    QRCode.toDataURL(link, { width, margin: 1 }).then(setQr).catch(() => setQr(null));
+  }, [link, width]);
+  return qr;
+}
+function useProjectEmergencyContacts(slug) {
+  const [groups, setGroups] = useState([]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      await loadProjectMap();
+      const pid = projectIdForSlug(slug);
+      if (!pid) return;
+      const { data, error } = await supabase.from("emergency_contacts").select("*").eq("project_id", pid);
+      if (cancelled || error || !data) return;
+      const g = {};
+      data.forEach((c) => { (g[c.department] = g[c.department] || []).push(c); });
+      setGroups(Object.keys(g).map((d) => ({ department: d, people: g[d] })));
+    })();
+    return () => { cancelled = true; };
+  }, [slug]);
+  return groups;
+}
+function BadgeEmergencyBlock({ slug, dark }) {
+  const groups = useProjectEmergencyContacts(slug);
+  if (groups.length === 0) return null;
+  const line = dark ? "#2b2b2b" : "#E4E2DA";
+  const txt = dark ? "white" : INK;
+  const sub = dark ? "#B7B3A6" : STEEL;
+  return (
+    <div className="w-full mb-4">
+      <div className="text-[10px] uppercase font-bold mb-1.5 text-center" style={{ color: dark ? GOLD : ALERT, fontFamily: "IBM Plex Mono, monospace" }}>Emergency Contacts</div>
+      {groups.map((g) => (
+        <div key={g.department} className="py-1.5" style={{ borderTop: `1px solid ${line}` }}>
+          <div className="text-[10px] uppercase font-bold" style={{ color: sub, fontFamily: "IBM Plex Mono, monospace" }}>{g.department}</div>
+          {g.people.map((p, i) => (
+            <div key={i} className="flex justify-between gap-2 text-[12px]" style={{ color: txt }}>
+              <span>{p.name || "—"}</span>
+              {p.phone ? <a href={`tel:${String(p.phone).replace(/[^0-9+]/g, "")}`} className="font-bold underline flex-shrink-0">{p.phone}</a> : <span style={{ color: sub }}>pending</span>}
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Public page opened by scanning a badge QR (no login)
+function BadgeVerifyScreen() {
+  const [info, setInfo] = useState(undefined);
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get("v");
+  const slug = params.get("project");
+  useEffect(() => {
+    if (!token) { setInfo(null); return; }
+    supabase.rpc("verify_badge", { p_verify: token }).then(({ data, error }) => setInfo(error || !data ? null : data));
+  }, [token]);
+  const groups = useProjectEmergencyContacts(info ? info.project_slug : slug);
+  const home = `${window.location.origin}${window.location.pathname}?project=${slug || (info && info.project_slug) || ""}`;
+  return (
+    <div className="px-4 pt-5 pb-10" style={{ background: "#F4F3EF", minHeight: "100%" }}>
+      <div className="max-w-sm mx-auto">
+        {info === undefined && <div className="text-center text-[13px]" style={{ color: STEEL }}>Loading badge…</div>}
+        {info === null && <div className="text-center text-[13px]" style={{ color: ALERT }}>This badge link isn't valid. Ask the badge holder to open their badge in the Safety Hub.</div>}
+        {info && (
+          <div className="rounded-md p-4 text-center" style={{ background: "white", border: "1px solid #E4E2DA" }}>
+            <div className="flex justify-center mb-3"><ProjectLogo projectId={info.project_slug} maxHeight={34} fallback={<div className="text-[12px] font-bold">{info.project_name}</div>} /></div>
+            <div className="inline-block text-[10px] font-bold uppercase px-2 py-1 rounded-sm mb-3" style={{ background: info.active ? "#2E7D32" : ALERT, color: "white", fontFamily: "IBM Plex Mono, monospace" }}>{info.active ? "Active badge" : "Inactive"}</div>
+            {info.photo_url
+              ? <img src={info.photo_url} alt="" className="mx-auto rounded-full object-cover mb-2" style={{ width: 96, height: 96 }} />
+              : <div className="mx-auto rounded-full flex items-center justify-center mb-2 text-[28px] font-bold" style={{ width: 96, height: 96, background: INK, color: GOLD }}>{(info.name || "?").split(" ").map((w) => w[0]).slice(0, 2).join("")}</div>}
+            <div className="text-[20px] font-bold" style={{ fontFamily: "Oswald, sans-serif" }}>{info.name}</div>
+            {info.role && <div className="text-[12px]" style={{ color: STEEL }}>{info.role}</div>}
+            <div className="grid grid-cols-2 gap-2 text-left mt-3 mb-3">
+              <div><div className="text-[9px] uppercase" style={{ color: STEEL }}>Badge</div><div className="text-[13px] font-bold">{info.badge_number || "—"}</div></div>
+              <div><div className="text-[9px] uppercase" style={{ color: STEEL }}>Employer</div><div className="text-[13px] font-bold">{info.employer || "—"}</div></div>
+              <div><div className="text-[9px] uppercase" style={{ color: STEEL }}>Orientation</div><div className="text-[13px] font-bold">{info.orientation_date || "—"}</div></div>
+              <div><div className="text-[9px] uppercase" style={{ color: STEEL }}>Project</div><div className="text-[13px] font-bold">{info.project_name}</div></div>
+            </div>
+            {(info.qualifications || []).length > 0 && (
+              <div className="text-left mb-3">
+                <div className="text-[10px] uppercase font-bold mb-1" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Qualifications</div>
+                {info.qualifications.map((q, i) => (
+                  <div key={i} className="flex justify-between gap-2 py-1 text-[12px]" style={{ borderTop: "1px solid #E4E2DA" }}>
+                    <span>{q.label}</span>
+                    <span className="flex-shrink-0 font-bold" style={{ color: q.status === "expired" ? ALERT : q.status === "expiring" ? "#B7791F" : "#2E7D32" }}>{q.expires_at ? `Exp ${String(q.expires_at).slice(0, 10)}` : q.status}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {groups.length > 0 && (
+              <div className="text-left mb-3">
+                <div className="text-[10px] uppercase font-bold mb-1" style={{ color: ALERT, fontFamily: "IBM Plex Mono, monospace" }}>Emergency Contacts</div>
+                {groups.map((g) => (
+                  <div key={g.department} className="py-1" style={{ borderTop: "1px solid #E4E2DA" }}>
+                    <div className="text-[10px] uppercase font-bold" style={{ color: STEEL }}>{g.department}</div>
+                    {g.people.map((p, i) => (
+                      <div key={i} className="flex justify-between gap-2 text-[12px]"><span>{p.name || "—"}</span>{p.phone ? <a href={`tel:${String(p.phone).replace(/[^0-9+]/g, "")}`} className="font-bold underline">{p.phone}</a> : <span style={{ color: STEEL }}>pending</span>}</div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+            <a href={home} className="block w-full py-2.5 rounded-sm text-[12px] font-bold" style={{ background: GOLD, color: INK, fontFamily: "Oswald, sans-serif" }}>Open Safety Hub</a>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 // Preview of the Apple Wallet pass (real passes switch on once Apple approves the developer account)
 function AppleWalletPreviewModal({ user, onClose }) {
   const proj = useContext(ProjectContext) || {};
   const [back, setBack] = useState(false);
-  const [qr, setQr] = useState(null);
-  const payload = `FCUS Safety Hub | ${user.name} | Badge ${user.badge} | ${user.employer || ""} | ${proj.name || ""}`;
-  useEffect(() => {
-    QRCode.toDataURL(payload, { width: 360, margin: 1 }).then(setQr).catch(() => setQr(null));
-  }, [payload]);
+  const qr = useBadgeQr(badgeVerifyLink(proj.id, user.verifyToken));
   const lab = { color: "#B7B3A6", fontFamily: "IBM Plex Mono, monospace", fontSize: 8.5, letterSpacing: "0.06em", textTransform: "uppercase" };
   const val = { color: "white", fontFamily: "Oswald, sans-serif", fontWeight: 500, fontSize: 15 };
   const quals = user.quals || [];
@@ -10574,8 +10688,12 @@ function AppleWalletPreviewModal({ user, onClose }) {
                 <ProjectLogo projectId={proj.id} maxHeight={30} fallback={<div className="text-white text-[12px]">{proj.name}</div>} />
                 <div style={{ ...lab, textAlign: "right" }}>Crew Badge<div style={{ color: GOLD, fontSize: 14, fontFamily: "Oswald, sans-serif", textTransform: "none", letterSpacing: 0 }}>{user.badge}</div></div>
               </div>
-              <div style={lab}>Name</div>
-              <div style={{ ...val, fontSize: 24, marginBottom: 14 }}>{user.name}</div>
+              <div className="flex items-center gap-3 mb-3">
+                {user.photoUrl
+                  ? <img src={user.photoUrl} alt="" className="rounded-full object-cover flex-shrink-0" style={{ width: 64, height: 64, border: "2px solid #444" }} />
+                  : <div className="rounded-full flex items-center justify-center flex-shrink-0 font-bold" style={{ width: 64, height: 64, background: "#2b2b2b", color: GOLD, fontSize: 22 }}>{(user.name || "?").split(" ").map((w) => w[0]).slice(0, 2).join("")}</div>}
+                <div><div style={lab}>Name</div><div style={{ ...val, fontSize: 22 }}>{user.name}</div></div>
+              </div>
               <div className="flex gap-6 mb-3">
                 <div><div style={lab}>Employer</div><div style={val}>{user.employer || "—"}</div></div>
                 <div><div style={lab}>Orientation</div><div style={val}>{user.orientationDate || "—"}</div></div>
@@ -10588,6 +10706,7 @@ function AppleWalletPreviewModal({ user, onClose }) {
             </div>
           ) : (
             <div className="p-4" style={{ minHeight: 330 }}>
+              <BadgeEmergencyBlock slug={proj.id} dark />
               <div className="text-white text-[15px] mb-3" style={{ fontFamily: "Oswald, sans-serif" }}>Qualifications</div>
               {quals.length === 0 && <div className="text-[12px]" style={{ color: "#B7B3A6" }}>No qualifications on file.</div>}
               {quals.map((q, i) => (
@@ -10596,7 +10715,7 @@ function AppleWalletPreviewModal({ user, onClose }) {
                   <span className="text-[11px] flex-shrink-0" style={{ color: q.status === "expired" ? "#FF8A80" : q.status === "expiring" ? GOLD : "#9AD29A" }}>{q.expires_at ? `Exp ${String(q.expires_at).slice(0, 10)}` : q.status}</span>
                 </div>
               ))}
-              <div className="text-[10px] mt-4" style={{ color: "#8A8678" }}>Crew Badge issued through the FCUS Safety Hub. Present the QR code on the front to verify on site.</div>
+              <div className="text-[10px] mt-4" style={{ color: "#8A8678" }}>Crew Badge issued through the FCUS Safety Hub. Scan the QR code on the front to open this badge online.</div>
             </div>
           )}
         </div>
@@ -10612,7 +10731,8 @@ function AppleWalletPreviewModal({ user, onClose }) {
 }
 
 function BadgeModal({ user, onClose, onLogout }) {
-  const { name: projectName } = useContext(ProjectContext);
+  const { name: projectName, id: projectIdForBadge } = useContext(ProjectContext);
+  const badgeQr = useBadgeQr(badgeVerifyLink(projectIdForBadge, user.verifyToken));
   const initials = user.name.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase();
   const [myRecords, setMyRecords] = useState([]);
   const [myCerts, setMyCerts] = useState([]);
@@ -10756,18 +10876,11 @@ function BadgeModal({ user, onClose, onLogout }) {
           )}
           {!user.isRepAccount && (
             <>
-              <div
-                className="w-24 h-24 grid grid-cols-5 gap-[2px] p-2 rounded-sm"
-                style={{ background: INK }}
-              >
-                {QR_PATTERN.map((on, i) => (
-                  <div key={i} style={{ background: on ? AMBER : INK }} />
-                ))}
+              <BadgeEmergencyBlock slug={projectIdForBadge} />
+              <div className="rounded-sm p-2 bg-white" style={{ border: "1px solid #E4E2DA" }}>
+                {badgeQr ? <img src={badgeQr} alt="Badge QR" style={{ width: 132, height: 132 }} /> : <div style={{ width: 132, height: 132 }} />}
               </div>
-              <div className="text-[9px] uppercase mt-2 text-center" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Scan to verify on site</div>
-              <div className="text-[9px] mt-1 text-center max-w-[220px]" style={{ color: "#9AA0A6" }}>
-                Encodes: {user.name}, Badge {user.badge}, {user.employer || "—"}, Orientation {user.orientationDate || "—"}{user.quals.length > 0 ? `, ${user.quals.map((q) => q.label).join("; ")}` : ""}
-              </div>
+              <div className="text-[9px] uppercase mt-2 text-center" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Scan to open this badge</div>
               <button
                 onClick={addToGoogleWallet}
                 disabled={addingToWallet}
@@ -10805,7 +10918,7 @@ function BadgeModal({ user, onClose, onLogout }) {
 // Screens that stay public everywhere, on purpose — blocking these
 // would defeat the reason they exist (emergency info, anonymous
 // reporting, and the Labor Law QR code that anyone can scan).
-const ALWAYS_PUBLIC_SCREENS = ["emergency", "concern", "laborlaws", "trafficcontrol", "meetingsignin", "orientationsignin", "hsstandards", "orientationschedule"];
+const ALWAYS_PUBLIC_SCREENS = ["emergency", "concern", "laborlaws", "trafficcontrol", "meetingsignin", "orientationsignin", "hsstandards", "orientationschedule", "verifybadge"];
 // Normally-gated screens for every project.
 const BASE_GATED_SCREENS = ["forms", "safetyplan", "toolbox", "workplans", "mysubmissions", "preconstruction", "quarterlymonthly", "training", "meetings"];
 // Projects where EVERYTHING (except the always-public screens above)
@@ -10914,6 +11027,7 @@ export default function SafetyHubPrototype() {
         isHubAdmin: !!data.is_hub_admin,
         canAddPersonnel: data.can_add_personnel,
       canViewMeetings: !!data.can_view_meetings,
+      verifyToken: data.verify_token || null,
         isRepAccount: data.is_rep_account,
         photoUrl: data.photo_url,
         quals: data.qualifications || [],
@@ -10972,6 +11086,7 @@ export default function SafetyHubPrototype() {
             isHubAdmin: !!data.is_hub_admin,
             canAddPersonnel: data.can_add_personnel,
       canViewMeetings: !!data.can_view_meetings,
+      verifyToken: data.verify_token || null,
             isRepAccount: data.is_rep_account,
             photoUrl: data.photo_url,
             quals: data.qualifications || [],
@@ -11018,6 +11133,7 @@ export default function SafetyHubPrototype() {
     trafficcontrol: "Traffic Control",
     meetings: "Sign In Sheets",
     meetingsignin: "Meeting Sign-In",
+    verifybadge: "Badge",
     managelaborlaw: "Manage Labor Law Postings",
     manageemergency: "Manage Emergency Contacts",
     manageweeklyreport: "Manage Weekly Report",
@@ -11220,6 +11336,7 @@ export default function SafetyHubPrototype() {
             {screen === "managetoolbox" && <ManageToolboxScreen user={user} />}
             {screen === "meetings" && <MeetingsScreen user={user} activeProjectId={activeProjectId} />}
             {screen === "meetingsignin" && <MeetingSignInScreen />}
+            {screen === "verifybadge" && <BadgeVerifyScreen />}
             {screen === "trafficcontrol" && <TrafficControlScreen user={user} activeProjectId={activeProjectId} />}
             {screen === "laborlaws" && <LaborLawScreen user={user} go={go} activeProjectId={activeProjectId} />}
             {screen === "managelaborlaw" && <ManageLaborLawScreen user={user} activeProjectId={activeProjectId} />}
