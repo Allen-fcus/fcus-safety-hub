@@ -388,6 +388,12 @@ const HERO_IMAGE = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAoHC
 
 // Projects where TX & Federal Labor Laws is shown — Houston only for now.
 const LABOR_LAWS_PROJECTS = ["sh99-houston"];
+// Traffic Control tab: DriveTN only. The PDF lives in the Supabase "documents" bucket.
+const TRAFFIC_CONTROL_PROJECTS = ["nashville"];
+const CLEAR_ZONE_DOC = {
+  title: "Clear Zone Criteria: S-CZ-1",
+  url: "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/clear-zone-criteria-s-cz-1.pdf",
+};
 
 // Projects where Quarterly/Monthly Inspections is shown — Sylvania only
 // for now; other projects will get their own versions later.
@@ -515,6 +521,7 @@ function HomeScreen({ go, user, activeProjectId }) {
     { key: "personnel", label: t("personnelLookup"), desc: t("personnelDesc"), icon: Users, count: `${fallbacks.personnel.length} on file` },
     { key: "emergency", label: t("emergencyContacts"), desc: t("emergencyDesc"), icon: Phone, count: t("alwaysAvailable") },
     ...(LABOR_LAWS_PROJECTS.includes(activeProjectId) ? [{ key: "laborlaws", label: t("laborLaws"), desc: t("laborLawsDesc"), icon: ShieldAlert, count: t("alwaysAvailable") }] : []),
+    ...(TRAFFIC_CONTROL_PROJECTS.includes(activeProjectId) ? [{ key: "trafficcontrol", label: "Traffic Control", desc: "Clear Zone Criteria and other traffic control standards", icon: ShieldAlert, count: "1 document" }] : []),
     { key: "concern", label: t("reportConcern"), desc: t("reportConcernDesc"), icon: MessageSquare, count: t("alwaysAvailable") },
   ];
 
@@ -953,6 +960,92 @@ function ManageEmergencyContactsScreen({ user }) {
 
 // ---- Screen: Texas & Federal Labor Law Postings (never gated — a
 // scanned QR code should work instantly, no login required) ----
+// ---- Screen: Traffic Control (DriveTN only) ----
+function TrafficControlScreen({ user, activeProjectId }) {
+  const [viewing, setViewing] = useState(false);
+  const [qrUrl, setQrUrl] = useState(null);
+  const deepLink = `${window.location.origin}${window.location.pathname}?project=${activeProjectId}&screen=trafficcontrol`;
+  const isAdmin = !!(user && user.canAddPersonnel);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    QRCode.toDataURL(deepLink, { width: 800, margin: 2 }).then(setQrUrl).catch(() => setQrUrl(null));
+  }, [deepLink, isAdmin]);
+
+  if (!TRAFFIC_CONTROL_PROJECTS.includes(activeProjectId)) {
+    return <div className="px-4 pt-6 text-[12px] text-center" style={{ color: STEEL }}>Traffic Control is only available on the DriveTN project.</div>;
+  }
+
+  const downloadDoc = async () => {
+    try {
+      const res = await fetch(CLEAR_ZONE_DOC.url);
+      if (!res.ok) throw new Error("fetch failed");
+      const blob = await res.blob();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "Clear-Zone-Criteria-S-CZ-1.pdf";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    } catch (e) {
+      window.open(CLEAR_ZONE_DOC.url, "_blank");
+    }
+  };
+
+  return (
+    <div className="px-4 pt-4 pb-8" style={{ background: "#F4F3EF", minHeight: "100%" }}>
+      <div className="text-[12px] mb-3" style={{ color: STEEL }}>Traffic control standards for the DriveTN project. View on screen or download a copy.</div>
+      <div className="bg-white rounded-md p-3 border" style={{ borderColor: "#E4E2DA" }}>
+        <div className="text-[13px] mb-2" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{CLEAR_ZONE_DOC.title}</div>
+        <div className="flex gap-2">
+          <button onClick={() => setViewing(true)} className="flex-1 flex items-center justify-center gap-1 text-[10px] font-bold uppercase px-2 py-1.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>
+            <Eye size={12} /> View
+          </button>
+          <button onClick={downloadDoc} className="flex-1 flex items-center justify-center gap-1 text-[10px] font-bold uppercase px-2 py-1.5 rounded-sm" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>
+            <Download size={12} /> Download
+          </button>
+        </div>
+      </div>
+
+      {isAdmin && (
+        <div className="bg-white rounded-md p-3 border mt-3 text-center" style={{ borderColor: "#E4E2DA" }}>
+          <div className="text-[12px] mb-2" style={{ color: STEEL }}>
+            QR code for this Traffic Control section. Print it and post it on-site. Scanning it opens this page directly, no login needed.
+          </div>
+          {qrUrl ? (
+            <img src={qrUrl} alt="QR code" className="mx-auto" style={{ width: 200, height: 200 }} />
+          ) : (
+            <div className="text-[11px]" style={{ color: STEEL }}>Generating…</div>
+          )}
+          <div className="text-[10px] mt-2 break-all" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{deepLink}</div>
+          {qrUrl && (
+            <a href={qrUrl} download="traffic-control-qr-code.png" className="inline-block mt-2 text-[11px] font-bold uppercase px-3 py-2 rounded-sm" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>
+              Download QR Code
+            </a>
+          )}
+        </div>
+      )}
+
+      {viewing && (
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/80 px-4">
+          <div className="bg-white rounded-md w-full max-w-sm md:max-w-5xl md:w-[92vw] h-[80%] md:h-[92vh] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between p-3 border-b flex-shrink-0" style={{ borderColor: "#E4E2DA" }}>
+              <div className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{CLEAR_ZONE_DOC.title}</div>
+              <button onClick={() => setViewing(false)}><X size={18} color={STEEL} /></button>
+            </div>
+            <iframe src={CLEAR_ZONE_DOC.url} className="flex-1 w-full" style={{ border: "none" }} title={CLEAR_ZONE_DOC.title} />
+            <div className="p-2 flex-shrink-0">
+              <button onClick={downloadDoc} className="w-full flex items-center justify-center gap-1 text-[11px] font-bold uppercase py-2 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>
+                <Download size={13} /> Download
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 function LaborLawScreen({ user, go, activeProjectId }) {
   const { t } = useTranslation();
   const [docs, setDocs] = useState([]);
@@ -10057,7 +10150,7 @@ function BadgeModal({ user, onClose, onLogout }) {
 // Screens that stay public everywhere, on purpose — blocking these
 // would defeat the reason they exist (emergency info, anonymous
 // reporting, and the Labor Law QR code that anyone can scan).
-const ALWAYS_PUBLIC_SCREENS = ["emergency", "concern", "laborlaws", "orientationsignin", "hsstandards", "orientationschedule"];
+const ALWAYS_PUBLIC_SCREENS = ["emergency", "concern", "laborlaws", "trafficcontrol", "orientationsignin", "hsstandards", "orientationschedule"];
 // Normally-gated screens for every project.
 const BASE_GATED_SCREENS = ["forms", "safetyplan", "toolbox", "workplans", "mysubmissions", "preconstruction", "quarterlymonthly", "training"];
 // Projects where EVERYTHING (except the always-public screens above)
@@ -10265,6 +10358,7 @@ export default function SafetyHubPrototype() {
     manageworkplans: "Manage Work Plans",
     managetoolbox: "Manage Toolbox Talks",
     laborlaws: t("laborLaws"),
+    trafficcontrol: "Traffic Control",
     managelaborlaw: "Manage Labor Law Postings",
     manageemergency: "Manage Emergency Contacts",
     manageweeklyreport: "Manage Weekly Report",
@@ -10343,6 +10437,7 @@ export default function SafetyHubPrototype() {
     { key: "personnel", icon: Users, label: t("personnelLookup") },
     { key: "emergency", icon: Phone, label: t("emergencyContacts") },
     ...(LABOR_LAWS_PROJECTS.includes(activeProjectId) ? [{ key: "laborlaws", icon: ShieldAlert, label: t("laborLaws") }] : []),
+    ...(TRAFFIC_CONTROL_PROJECTS.includes(activeProjectId) ? [{ key: "trafficcontrol", icon: ShieldAlert, label: "Traffic Control" }] : []),
   ];
 
   return (
@@ -10463,6 +10558,7 @@ export default function SafetyHubPrototype() {
             {screen === "safetyplan" && <SafetyPlanScreen />}
             {screen === "toolbox" && <ToolboxScreen user={user} go={go} activeProjectId={activeProjectId} />}
             {screen === "managetoolbox" && <ManageToolboxScreen user={user} />}
+            {screen === "trafficcontrol" && <TrafficControlScreen user={user} activeProjectId={activeProjectId} />}
             {screen === "laborlaws" && <LaborLawScreen user={user} go={go} activeProjectId={activeProjectId} />}
             {screen === "managelaborlaw" && <ManageLaborLawScreen user={user} activeProjectId={activeProjectId} />}
             {screen === "reports" && <WeeklyReportScreen user={user} go={go} activeProjectId={activeProjectId} />}
