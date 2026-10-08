@@ -504,6 +504,112 @@ function ProjectLogo({ projectId, maxHeight = 44, fallback = null }) {
   );
 }
 
+// ---- Site weather (Open-Meteo for conditions, NWS for alerts; both free, no key) ----
+const PROJECT_WEATHER = {
+  "nti-sylvania": { lat: 32.767181, lon: -97.30887, label: "Fort Worth, TX" },
+};
+const WMO_TEXT = {
+  0: "Clear", 1: "Mostly clear", 2: "Partly cloudy", 3: "Overcast", 45: "Fog", 48: "Fog",
+  51: "Light drizzle", 53: "Drizzle", 55: "Heavy drizzle", 56: "Freezing drizzle", 57: "Freezing drizzle",
+  61: "Light rain", 63: "Rain", 65: "Heavy rain", 66: "Freezing rain", 67: "Freezing rain",
+  71: "Light snow", 73: "Snow", 75: "Heavy snow", 77: "Snow grains",
+  80: "Rain showers", 81: "Rain showers", 82: "Heavy showers", 85: "Snow showers", 86: "Snow showers",
+  95: "Thunderstorm", 96: "Thunderstorm, hail", 99: "Thunderstorm, hail",
+};
+function weatherWarnings(w) {
+  const out = [];
+  if (!w) return out;
+  const feels = w.apparent_temperature, gust = w.wind_gusts_10m, code = w.weather_code;
+  if (feels >= 105) out.push({ level: "danger", text: `Extreme heat: feels like ${Math.round(feels)}°F. Water, shade and rest breaks on a tight schedule.` });
+  else if (feels >= 95) out.push({ level: "warn", text: `Heat caution: feels like ${Math.round(feels)}°F. Frequent water and shade breaks.` });
+  if (w.temperature_2m <= 32) out.push({ level: "warn", text: "Freezing conditions: watch for ice and slick surfaces." });
+  if (code >= 95) out.push({ level: "danger", text: "Thunderstorm: lightning risk. Stop work outdoors and seek shelter." });
+  if (gust >= 30) out.push({ level: "danger", text: `Gusts to ${Math.round(gust)} mph: review crane and lifting limits.` });
+  else if (gust >= 20) out.push({ level: "warn", text: `Gusts to ${Math.round(gust)} mph: secure loose materials.` });
+  return out;
+}
+function SiteWeatherCard({ projectId }) {
+  const cfg = PROJECT_WEATHER[projectId];
+  const [w, setW] = useState(null);
+  const [daily, setDaily] = useState(null);
+  const [alerts, setAlerts] = useState([]);
+  const [failed, setFailed] = useState(false);
+  const [updated, setUpdated] = useState(null);
+  useEffect(() => {
+    if (!cfg) return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${cfg.lat}&longitude=${cfg.lon}`
+          + "&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m"
+          + "&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max"
+          + "&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto&forecast_days=1";
+        const r = await fetch(url);
+        if (!r.ok) throw new Error("bad");
+        const j = await r.json();
+        if (cancelled) return;
+        setW(j.current); setDaily(j.daily); setFailed(false); setUpdated(new Date());
+      } catch (e) { if (!cancelled) setFailed(true); }
+      try {
+        const r = await fetch(`https://api.weather.gov/alerts/active?point=${cfg.lat},${cfg.lon}`, { headers: { Accept: "application/geo+json" } });
+        if (r.ok) {
+          const j = await r.json();
+          if (!cancelled) setAlerts((j.features || []).map((f) => f.properties).filter(Boolean).slice(0, 3));
+        }
+      } catch (e) { /* alerts are optional */ }
+    };
+    load();
+    const id = setInterval(load, 10 * 60 * 1000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [projectId]);
+  if (!cfg) return null;
+  const warnings = weatherWarnings(w);
+  const dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+  const dir = w ? dirs[Math.round(w.wind_direction_10m / 45) % 8] : "";
+  return (
+    <div className="rounded-md p-3 mb-4" style={{ background: INK }}>
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-[11px] uppercase font-bold" style={{ color: AMBER, fontFamily: "IBM Plex Mono, monospace", letterSpacing: "0.04em" }}>Site Weather · {cfg.label}</span>
+        {updated && <span className="text-[9px]" style={{ color: "#9AA0A6" }}>{updated.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>}
+      </div>
+      {!w && !failed && <div className="text-[11px]" style={{ color: "#9AA0A6" }}>Loading weather…</div>}
+      {failed && !w && <div className="text-[11px]" style={{ color: "#9AA0A6" }}>Weather isn't available right now.</div>}
+      {w && (
+        <>
+          <div className="flex items-end gap-3 text-white">
+            <div style={{ fontFamily: "Oswald, sans-serif", fontWeight: 700, fontSize: 40, lineHeight: 1 }}>{Math.round(w.temperature_2m)}°</div>
+            <div className="pb-1">
+              <div className="text-[13px] font-bold">{WMO_TEXT[w.weather_code] || "Current conditions"}</div>
+              <div className="text-[11px]" style={{ color: "#C9C6BC" }}>Feels like {Math.round(w.apparent_temperature)}°F · Humidity {Math.round(w.relative_humidity_2m)}%</div>
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-1.5 mt-2.5 text-center">
+            {[
+              ["Wind", `${Math.round(w.wind_speed_10m)} mph ${dir}`],
+              ["Gusts", `${Math.round(w.wind_gusts_10m)} mph`],
+              ["Rain chance", daily ? `${daily.precipitation_probability_max[0] ?? 0}%` : "—"],
+            ].map(([k, v]) => (
+              <div key={k} className="rounded-sm py-1.5" style={{ background: "#2a2a2a" }}>
+                <div className="text-[9px] uppercase" style={{ color: "#9AA0A6", fontFamily: "IBM Plex Mono, monospace" }}>{k}</div>
+                <div className="text-[12px] font-bold text-white">{v}</div>
+              </div>
+            ))}
+          </div>
+          {daily && <div className="text-[10px] mt-1.5" style={{ color: "#9AA0A6" }}>Today: high {Math.round(daily.temperature_2m_max[0])}° / low {Math.round(daily.temperature_2m_min[0])}°</div>}
+        </>
+      )}
+      {warnings.map((x, i) => (
+        <div key={i} className="mt-2 rounded-sm px-2 py-1.5 text-[11px] font-bold" style={{ background: x.level === "danger" ? ALERT : AMBER, color: x.level === "danger" ? "white" : INK }}>{x.text}</div>
+      ))}
+      {alerts.map((a, i) => (
+        <div key={i} className="mt-2 rounded-sm px-2 py-1.5 text-[11px]" style={{ background: "#3a1f1f", color: "#FFB4A8", border: "1px solid #7a2e2e" }}>
+          <b>{a.event}</b>{a.headline ? ` — ${a.headline}` : ""}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function HomeScreen({ go, user, activeProjectId }) {
   const { fallbacks, name: projectName } = useContext(ProjectContext);
   const { t } = useTranslation();
@@ -620,6 +726,8 @@ function HomeScreen({ go, user, activeProjectId }) {
           style={{ width: 128, height: "100%" }}
         />
       </div>
+
+      <SiteWeatherCard projectId={activeProjectId} />
 
       <div className="rounded-md p-3 mb-4" style={{ background: INK }}>
         <div className="flex items-center gap-1.5 mb-2">
