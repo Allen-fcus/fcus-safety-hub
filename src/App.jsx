@@ -1198,7 +1198,9 @@ async function buildMeetingPdf(meeting, attendees, slug) {
       page.drawImage(logo, { x: M, y: H - bandH + (bandH - logo.height * s) / 2, width: logo.width * s, height: logo.height * s });
     }
     const t = `${typeLabel} SIGN-IN SHEET`;
-    page.drawText(t, { x: W - M - sansB.widthOfTextAtSize(t, first ? 16 : 11), y: H - bandH + (bandH - (first ? 12 : 8)) / 2, size: first ? 16 : 11, font: sansB, color: gold });
+    page.drawText(t, { x: W - M - sansB.widthOfTextAtSize(t, first ? 16 : 11), y: H - bandH + (bandH - (first ? 12 : 8)) / 2 - 4, size: first ? 16 : 11, font: sansB, color: gold });
+    const cc = "Center Code: CEC22";
+    page.drawText(cc, { x: W - M - sans.widthOfTextAtSize(cc, 7), y: H - 11, size: 7, font: sans, color: rgb(0.85, 0.84, 0.8) });
     return H - bandH;
   };
 
