@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo, createContext, useContext } from "react";
 import Papa from "papaparse";
-import { Home, BookOpen, PlayCircle, ClipboardCheck, FileText, ChevronRight, Download, CheckCircle2, Circle, X, Play, ShieldAlert, Clock, Eraser, Send, PenLine, Users, Eye, BadgeCheck, LogOut, Loader2, CalendarDays, MapPin, Megaphone, Pin, ExternalLink, Lock, AlertTriangle, Camera, Phone, MessageSquare, ImagePlus, Volume2, VolumeX, Pause } from "lucide-react";
+import { Wallet, Home, BookOpen, PlayCircle, ClipboardCheck, FileText, ChevronRight, Download, CheckCircle2, Circle, X, Play, ShieldAlert, Clock, Eraser, Send, PenLine, Users, Eye, BadgeCheck, LogOut, Loader2, CalendarDays, MapPin, Megaphone, Pin, ExternalLink, Lock, AlertTriangle, Camera, Phone, MessageSquare, ImagePlus, Volume2, VolumeX, Pause } from "lucide-react";
 import { supabase, loadProjectMap, projectIdForSlug, projectSlugForId } from "./supabaseClient.js";
 import { PDFDocument } from "pdf-lib";
 import QRCode from "qrcode";
@@ -10548,6 +10548,69 @@ function LoginModal({ onLogin, onClose, activeProjectId }) {
 
 // ---- Digital Badge ----
 const QR_PATTERN = [1,1,1,0,1, 1,0,0,0,1, 1,0,1,0,0, 0,0,1,1,1, 1,1,0,1,0].map(Boolean);
+// Preview of the Apple Wallet pass (real passes switch on once Apple approves the developer account)
+function AppleWalletPreviewModal({ user, onClose }) {
+  const proj = useContext(ProjectContext) || {};
+  const [back, setBack] = useState(false);
+  const [qr, setQr] = useState(null);
+  const payload = `FCUS Safety Hub | ${user.name} | Badge ${user.badge} | ${user.employer || ""} | ${proj.name || ""}`;
+  useEffect(() => {
+    QRCode.toDataURL(payload, { width: 360, margin: 1 }).then(setQr).catch(() => setQr(null));
+  }, [payload]);
+  const lab = { color: "#B7B3A6", fontFamily: "IBM Plex Mono, monospace", fontSize: 8.5, letterSpacing: "0.06em", textTransform: "uppercase" };
+  const val = { color: "white", fontFamily: "Oswald, sans-serif", fontWeight: 500, fontSize: 15 };
+  const quals = user.quals || [];
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-5" style={{ background: "rgba(0,0,0,0.88)" }}>
+      <div className="w-full max-w-xs">
+        <div className="flex justify-between items-center mb-3">
+          <div className="text-white text-[12px]" style={{ fontFamily: "Oswald, sans-serif" }}>Apple Wallet preview</div>
+          <button onClick={onClose}><X size={20} color="white" /></button>
+        </div>
+        <div className="rounded-2xl overflow-hidden" style={{ background: "linear-gradient(160deg,#1c1c1c 0%,#0b0b0b 100%)", boxShadow: "0 14px 40px rgba(0,0,0,0.6)", border: "1px solid #2b2b2b" }}>
+          {!back ? (
+            <div className="p-4">
+              <div className="flex items-center justify-between mb-4">
+                <ProjectLogo projectId={proj.id} maxHeight={30} fallback={<div className="text-white text-[12px]">{proj.name}</div>} />
+                <div style={{ ...lab, textAlign: "right" }}>Crew Badge<div style={{ color: GOLD, fontSize: 14, fontFamily: "Oswald, sans-serif", textTransform: "none", letterSpacing: 0 }}>{user.badge}</div></div>
+              </div>
+              <div style={lab}>Name</div>
+              <div style={{ ...val, fontSize: 24, marginBottom: 14 }}>{user.name}</div>
+              <div className="flex gap-6 mb-3">
+                <div><div style={lab}>Employer</div><div style={val}>{user.employer || "—"}</div></div>
+                <div><div style={lab}>Orientation</div><div style={val}>{user.orientationDate || "—"}</div></div>
+              </div>
+              <div className="mb-4"><div style={lab}>Project</div><div style={val}>{proj.name}</div></div>
+              <div className="mx-auto rounded-lg flex items-center justify-center" style={{ background: "white", width: 156, height: 156 }}>
+                {qr ? <img src={qr} alt="QR" style={{ width: 140, height: 140 }} /> : null}
+              </div>
+              <div className="text-center mt-2" style={{ ...lab, color: "#8A8678" }}>{user.name}</div>
+            </div>
+          ) : (
+            <div className="p-4" style={{ minHeight: 330 }}>
+              <div className="text-white text-[15px] mb-3" style={{ fontFamily: "Oswald, sans-serif" }}>Qualifications</div>
+              {quals.length === 0 && <div className="text-[12px]" style={{ color: "#B7B3A6" }}>No qualifications on file.</div>}
+              {quals.map((q, i) => (
+                <div key={i} className="py-2 flex justify-between gap-3" style={{ borderTop: "1px solid #2b2b2b" }}>
+                  <span className="text-[12px] text-white">{q.label}</span>
+                  <span className="text-[11px] flex-shrink-0" style={{ color: q.status === "expired" ? "#FF8A80" : q.status === "expiring" ? GOLD : "#9AD29A" }}>{q.expires_at ? `Exp ${String(q.expires_at).slice(0, 10)}` : q.status}</span>
+                </div>
+              ))}
+              <div className="text-[10px] mt-4" style={{ color: "#8A8678" }}>Crew Badge issued through the FCUS Safety Hub. Present the QR code on the front to verify on site.</div>
+            </div>
+          )}
+        </div>
+        <div className="flex gap-2 mt-3">
+          <button onClick={() => setBack((v) => !v)} className="flex-1 py-2 rounded-md text-[11px] font-bold uppercase" style={{ background: "#2b2b2b", color: "white", fontFamily: "IBM Plex Mono, monospace" }}>{back ? "Show front" : "Show back"}</button>
+        </div>
+        <div className="text-[11px] text-center mt-3 px-2" style={{ color: "#D7D5CC" }}>
+          This is a preview of how your badge will look in Apple Wallet. The real "Add" button turns on as soon as Apple approves our developer account.
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function BadgeModal({ user, onClose, onLogout }) {
   const { name: projectName } = useContext(ProjectContext);
   const initials = user.name.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase();
@@ -10563,6 +10626,7 @@ function BadgeModal({ user, onClose, onLogout }) {
       setMyRecords(error || !data ? [] : data);
     });
   }, [user?.sessionToken]);
+  const [showAppleWallet, setShowAppleWallet] = useState(false);
   const [addingToWallet, setAddingToWallet] = useState(false);
   const [walletError, setWalletError] = useState("");
 
@@ -10589,6 +10653,7 @@ function BadgeModal({ user, onClose, onLogout }) {
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/85 px-6">
+      {showAppleWallet && <AppleWalletPreviewModal user={user} onClose={() => setShowAppleWallet(false)} />}
       <div className="w-full max-w-xs rounded-xl overflow-hidden max-h-[90vh] flex flex-col" style={{ background: "white", boxShadow: "0 10px 40px rgba(0,0,0,0.4)" }}>
         <div style={{ background: INK }} className="p-4 flex items-center justify-between flex-shrink-0">
           <div>
@@ -10710,6 +10775,13 @@ function BadgeModal({ user, onClose, onLogout }) {
                 style={{ background: "#1A73E8", color: "white", fontFamily: "Oswald, sans-serif" }}
               >
                 <BadgeCheck size={15} /> {addingToWallet ? "Adding…" : "Add to Google Wallet"}
+              </button>
+              <button
+                onClick={() => setShowAppleWallet(true)}
+                className="mt-2 w-full flex items-center justify-center gap-2 rounded-sm py-2.5 text-[12px] font-bold"
+                style={{ background: "black", color: "white", fontFamily: "Oswald, sans-serif", border: "1px solid #444" }}
+              >
+                <Wallet size={15} /> Add to Apple Wallet
               </button>
               {walletError && <div className="text-[10px] mt-1.5 text-center px-2 whitespace-pre-wrap break-words" style={{ color: ALERT }}>{walletError}</div>}
             </>
