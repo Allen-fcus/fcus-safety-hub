@@ -522,6 +522,7 @@ function HomeScreen({ go, user, activeProjectId }) {
     { key: "emergency", label: t("emergencyContacts"), desc: t("emergencyDesc"), icon: Phone, count: t("alwaysAvailable") },
     ...(LABOR_LAWS_PROJECTS.includes(activeProjectId) ? [{ key: "laborlaws", label: t("laborLaws"), desc: t("laborLawsDesc"), icon: ShieldAlert, count: t("alwaysAvailable") }] : []),
     ...(TRAFFIC_CONTROL_PROJECTS.includes(activeProjectId) ? [{ key: "trafficcontrol", label: "Traffic Control", desc: "Clear Zone Criteria and other traffic control standards", icon: ShieldAlert, count: "1 document" }] : []),
+    ...(user && user.canViewMeetings ? [{ key: "meetings", label: "Meetings & Training", desc: "Sign-in sheets with QR code, for GC and Ferrovial staff", icon: Users, count: "Sign-ins" }] : []),
     { key: "concern", label: t("reportConcern"), desc: t("reportConcernDesc"), icon: MessageSquare, count: t("alwaysAvailable") },
   ];
 
@@ -960,6 +961,591 @@ function ManageEmergencyContactsScreen({ user }) {
 
 // ---- Screen: Texas & Federal Labor Law Postings (never gated — a
 // scanned QR code should work instantly, no login required) ----
+// ---- Meetings & Training sign-in ----
+function fmtMeetingDate(d) {
+  if (!d) return "";
+  const [y, m, day] = String(d).slice(0, 10).split("-").map(Number);
+  if (!y) return String(d);
+  return new Date(y, m - 1, day).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+function todayISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+function nowTimeLabel() {
+  return new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
+function meetingSignInLink(slug, meetingId) {
+  return `${window.location.origin}${window.location.pathname}?project=${slug}&screen=meetingsignin&meeting=${meetingId}`;
+}
+
+// Typed signature: type your name, see it in script. Stored as the typed name.
+function TypedSignatureField({ value, onChange }) {
+  return (
+    <div>
+      <div className="text-[9.5px] leading-snug mb-1.5 px-0.5" style={{ color: STEEL }}>
+        By typing your name below, you agree it is your electronic signature and the legal equivalent of your handwritten signature (U.S. ESIGN Act).
+      </div>
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="Type your full name to sign"
+        autoComplete="name"
+        className="w-full rounded-md border px-3 py-2.5 mb-2 text-[14px]"
+        style={{ borderColor: "#C9C6BC" }}
+      />
+      <div className="w-full rounded-md border flex items-center justify-center overflow-hidden" style={{ borderColor: "#C9C6BC", background: "#FCFCFA", height: 90 }}>
+        {value.trim() ? (
+          <span style={{ fontFamily: '"Dancing Script", "Brush Script MT", cursive', fontWeight: 600, fontSize: 38, color: INK, whiteSpace: "nowrap" }}>{value.trim()}</span>
+        ) : (
+          <span className="text-[11px]" style={{ color: STEEL }}>Your signature appears here</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Public page opened by the QR code (no login)
+function MeetingSignInScreen() {
+  const meetingId = (() => { try { return new URLSearchParams(window.location.search).get("meeting") || ""; } catch (e) { return ""; } })();
+  const [meeting, setMeeting] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [first, setFirst] = useState("");
+  const [last, setLast] = useState("");
+  const [org, setOrg] = useState("");
+  const [title, setTitle] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [sig, setSig] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const [done, setDone] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      if (!meetingId) { setLoading(false); return; }
+      const { data } = await supabase.rpc("get_meeting_public", { p_meeting_id: meetingId });
+      if (cancelled) return;
+      setMeeting(data || null);
+      setLoading(false);
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [meetingId]);
+
+  const canSubmit = first.trim() && last.trim() && org.trim() && sig.trim();
+
+  const submit = async () => {
+    setSubmitting(true); setError("");
+    const { data, error: rpcError } = await supabase.rpc("submit_meeting_signin", {
+      p_meeting_id: meetingId, p_first: first, p_last: last, p_org: org, p_title: title,
+      p_email: email, p_phone: phone, p_signature: sig.trim(),
+    });
+    setSubmitting(false);
+    if (rpcError || !data) { setError("Something went wrong submitting. Please try again."); return; }
+    if (!data.ok) {
+      setError(data.error === "closed" ? "This sign-in has been closed." : "Please fill in the required fields.");
+      if (data.error === "closed") setMeeting((m) => (m ? { ...m, status: "closed" } : m));
+      return;
+    }
+    setDone(true);
+  };
+
+  const logoSlug = meeting && meeting.project_slug;
+  const Header = (
+    <div style={{ background: INK }} className="px-4 py-4">
+      {logoSlug && <ProjectLogo projectId={logoSlug} maxHeight={44} />}
+      {meeting && (
+        <>
+          <div className="text-[10px] uppercase font-bold mt-3" style={{ color: GOLD, fontFamily: "IBM Plex Mono, monospace" }}>{meeting.meeting_type} Sign-In</div>
+          <div className="text-[18px] text-white" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{meeting.topic}</div>
+          <div className="text-[11px] mt-1" style={{ color: "#D7D5CC" }}>
+            {[fmtMeetingDate(meeting.meeting_date), meeting.meeting_time, meeting.location].filter(Boolean).join(" · ")}
+          </div>
+          {meeting.run_by && <div className="text-[11px]" style={{ color: "#D7D5CC" }}>Led by {meeting.run_by}</div>}
+        </>
+      )}
+    </div>
+  );
+
+  if (loading) return <div className="px-4 pt-16 text-center text-[12px]" style={{ color: STEEL }}>Loading…</div>;
+  if (!meeting) {
+    return <div className="px-4 pt-16 text-center" style={{ background: "#F4F3EF", minHeight: "100%" }}>
+      <div className="text-[14px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>Sign-in not found</div>
+      <div className="text-[12px] mt-1" style={{ color: STEEL }}>This link isn't valid. Please scan the QR code again or ask the meeting leader.</div>
+    </div>;
+  }
+  if (done) {
+    return <div style={{ background: "#F4F3EF", minHeight: "100%" }}>{Header}
+      <div className="px-4 pt-12 text-center">
+        <CheckCircle2 size={40} color={GOLD} className="mx-auto" />
+        <div className="text-[16px] mt-3" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>You're Signed In</div>
+        <div className="text-[12px] mt-1" style={{ color: STEEL }}>Thank you. Your attendance has been recorded.</div>
+      </div></div>;
+  }
+  if (meeting.status === "closed") {
+    return <div style={{ background: "#F4F3EF", minHeight: "100%" }}>{Header}
+      <div className="px-4 pt-12 text-center">
+        <div className="text-[14px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>This sign-in is closed</div>
+        <div className="text-[12px] mt-1" style={{ color: STEEL }}>If you attended and didn't sign in, please see the meeting leader.</div>
+      </div></div>;
+  }
+
+  const inp = "w-full mt-1 rounded-md border px-2.5 py-2 text-[14px]";
+  const lab = { color: STEEL, fontFamily: "IBM Plex Mono, monospace" };
+  return (
+    <div style={{ background: "#F4F3EF", minHeight: "100%" }}>
+      {Header}
+      <div className="px-4 pt-4 pb-10 space-y-3">
+        <div className="grid grid-cols-2 gap-2">
+          <div><label className="text-[10px] uppercase font-bold" style={lab}>First Name *</label>
+            <input value={first} onChange={(e) => setFirst(e.target.value)} autoComplete="given-name" className={inp} style={{ borderColor: "#C9C6BC" }} /></div>
+          <div><label className="text-[10px] uppercase font-bold" style={lab}>Last Name *</label>
+            <input value={last} onChange={(e) => setLast(e.target.value)} autoComplete="family-name" className={inp} style={{ borderColor: "#C9C6BC" }} /></div>
+        </div>
+        <div><label className="text-[10px] uppercase font-bold" style={lab}>Organization / Company *</label>
+          <input value={org} onChange={(e) => setOrg(e.target.value)} autoComplete="organization" className={inp} style={{ borderColor: "#C9C6BC" }} /></div>
+        <div><label className="text-[10px] uppercase font-bold" style={lab}>Title</label>
+          <input value={title} onChange={(e) => setTitle(e.target.value)} autoComplete="organization-title" className={inp} style={{ borderColor: "#C9C6BC" }} /></div>
+        <div><label className="text-[10px] uppercase font-bold" style={lab}>Email</label>
+          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" className={inp} style={{ borderColor: "#C9C6BC" }} /></div>
+        <div><label className="text-[10px] uppercase font-bold" style={lab}>Phone</label>
+          <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} autoComplete="tel" className={inp} style={{ borderColor: "#C9C6BC" }} /></div>
+        <div><label className="text-[10px] uppercase font-bold" style={lab}>Signature *</label>
+          <div className="mt-1"><TypedSignatureField value={sig} onChange={setSig} /></div></div>
+        {error && <div className="text-[12px]" style={{ color: ALERT }}>{error}</div>}
+        <button
+          onClick={submit}
+          disabled={!canSubmit || submitting}
+          className="w-full py-3 rounded-md text-[13px] font-bold uppercase disabled:opacity-40"
+          style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}
+        >
+          {submitting ? "Submitting…" : "Sign In"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Typed signature -> PNG bytes (script font), for the PDF
+async function typedSignaturePng(text) {
+  try { await document.fonts.load('600 80px "Dancing Script"', text); } catch (e) { /* fall back */ }
+  const c = document.createElement("canvas");
+  c.width = 620; c.height = 200;
+  const ctx = c.getContext("2d");
+  let size = 96;
+  const family = '"Dancing Script", "Brush Script MT", cursive';
+  ctx.font = `600 ${size}px ${family}`;
+  while (ctx.measureText(text).width > c.width - 40 && size > 20) { size -= 4; ctx.font = `600 ${size}px ${family}`; }
+  ctx.fillStyle = "#111";
+  ctx.textBaseline = "middle"; ctx.textAlign = "center";
+  ctx.fillText(text, c.width / 2, c.height / 2);
+  const { data } = ctx.getImageData(0, 0, c.width, c.height);
+  let minX = c.width, minY = c.height, maxX = -1, maxY = -1;
+  for (let y = 0; y < c.height; y++) for (let x = 0; x < c.width; x++) {
+    if (data[(y * c.width + x) * 4 + 3] > 20) { if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; }
+  }
+  if (maxX < 0) return null;
+  const cw = maxX - minX + 1, ch = maxY - minY + 1;
+  const out = document.createElement("canvas");
+  out.width = cw; out.height = ch;
+  out.getContext("2d").drawImage(c, minX, minY, cw, ch, 0, 0, cw, ch);
+  const blob = await new Promise((r) => out.toBlob(r, "image/png"));
+  return { bytes: new Uint8Array(await blob.arrayBuffer()), w: cw, h: ch };
+}
+
+async function buildMeetingPdf(meeting, attendees, slug) {
+  const { StandardFonts, rgb } = await import("pdf-lib");
+  const doc = await PDFDocument.create();
+  const sans = await doc.embedFont(StandardFonts.Helvetica);
+  const sansB = await doc.embedFont(StandardFonts.HelveticaBold);
+  const clean = (s) => String(s == null ? "" : s).replace(/[^ -ÿ]/g, "?");
+  const ink = rgb(0.1, 0.1, 0.1), gold = rgb(0.98, 0.78, 0.02), grey = rgb(0.4, 0.42, 0.45), line = rgb(0.8, 0.79, 0.75);
+  const W = 792, H = 612, M = 30;
+  const fit = (text, font, size, max) => {
+    let t = clean(text);
+    if (font.widthOfTextAtSize(t, size) <= max) return t;
+    while (t.length > 1 && font.widthOfTextAtSize(t + "...", size) > max) t = t.slice(0, -1);
+    return t + "...";
+  };
+
+  let logo = null;
+  const logoInfo = PROJECT_LOGOS[slug];
+  if (logoInfo) {
+    try {
+      const b64 = logoInfo.src.split(",")[1];
+      const bin = atob(b64); const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      logo = await doc.embedPng(bytes);
+    } catch (e) { logo = null; }
+  }
+
+  const cols = [
+    { k: "#", w: 22 }, { k: "Name", w: 118 }, { k: "Organization", w: 112 }, { k: "Title", w: 90 },
+    { k: "Email", w: 140 }, { k: "Phone", w: 78 }, { k: "Signature", w: 172 },
+  ];
+  const rowH = 30;
+  const typeLabel = meeting.meeting_type === "Training" ? "TRAINING" : "MEETING";
+
+  const header = (page, first) => {
+    const bandH = first ? 62 : 36;
+    page.drawRectangle({ x: 0, y: H - bandH, width: W, height: bandH, color: ink });
+    if (logo) {
+      const maxW = first ? 190 : 110, maxH = first ? 40 : 22;
+      const s = Math.min(maxW / logo.width, maxH / logo.height);
+      page.drawImage(logo, { x: M, y: H - bandH + (bandH - logo.height * s) / 2, width: logo.width * s, height: logo.height * s });
+    }
+    const t = `${typeLabel} SIGN-IN SHEET`;
+    page.drawText(t, { x: W - M - sansB.widthOfTextAtSize(t, first ? 16 : 11), y: H - bandH + (bandH - (first ? 12 : 8)) / 2, size: first ? 16 : 11, font: sansB, color: gold });
+    return H - bandH;
+  };
+
+  const drawInfo = (page, top) => {
+    const info = [
+      ["Topic", meeting.topic], ["Date", fmtMeetingDate(meeting.meeting_date)],
+      ["Time", meeting.meeting_time || ""], ["Location", meeting.location || ""],
+      ["Led by", meeting.run_by || ""], ["Type", meeting.meeting_type],
+    ];
+    let y = top - 22;
+    info.forEach(([label, val], i) => {
+      const col = i % 2, row = Math.floor(i / 2);
+      const x = M + col * 372;
+      const yy = y - row * 20;
+      page.drawText(label.toUpperCase(), { x, y: yy, size: 8, font: sansB, color: grey });
+      page.drawText(fit(val, sans, 11, 300), { x: x + 52, y: yy, size: 11, font: sansB, color: ink });
+    });
+    return y - 3 * 20 - 4;
+  };
+
+  const drawTableHeader = (page, y) => {
+    page.drawRectangle({ x: M, y: y - 18, width: W - 2 * M, height: 18, color: gold });
+    let x = M;
+    cols.forEach((c) => { page.drawText(c.k.toUpperCase(), { x: x + 4, y: y - 12.5, size: 8, font: sansB, color: ink }); x += c.w; });
+    return y - 18;
+  };
+
+  let page = doc.addPage([W, H]);
+  let y = header(page, true);
+  y = drawInfo(page, y);
+  y = drawTableHeader(page, y);
+  const pages = [page];
+
+  const rows = attendees.length ? attendees : [];
+  for (let i = 0; i < rows.length; i++) {
+    if (y - rowH < 44) {
+      page = doc.addPage([W, H]); pages.push(page);
+      y = header(page, false) - 10;
+      y = drawTableHeader(page, y);
+    }
+    const a = rows[i];
+    const top = y;
+    page.drawLine({ start: { x: M, y: top - rowH }, end: { x: W - M, y: top - rowH }, thickness: 0.5, color: line });
+    const vals = [String(i + 1), `${a.first_name} ${a.last_name}`, a.organization, a.title, a.email, a.phone];
+    let x = M;
+    cols.slice(0, 6).forEach((c, ci) => {
+      page.drawText(fit(vals[ci] || "", sans, 8.5, c.w - 8), { x: x + 4, y: top - rowH / 2 - 3, size: 8.5, font: ci === 1 ? sansB : sans, color: ink });
+      x += c.w;
+    });
+    const sigText = (a.signature || "").trim();
+    if (sigText) {
+      const png = await typedSignaturePng(sigText);
+      if (png) {
+        const img = await doc.embedPng(png.bytes);
+        const sc = Math.min((cols[6].w - 12) / png.w, 20 / png.h);
+        page.drawImage(img, { x: x + 6, y: top - rowH + 5, width: png.w * sc, height: png.h * sc });
+      }
+    }
+    y -= rowH;
+  }
+  if (rows.length === 0) {
+    page.drawText("No attendees recorded.", { x: M + 4, y: y - 20, size: 10, font: sans, color: grey });
+  }
+
+  const total = pages.length;
+  pages.forEach((p, i) => {
+    p.drawText(`${rows.length} attendee${rows.length === 1 ? "" : "s"}  |  Page ${i + 1} of ${total}  |  Signatures are typed electronic signatures (U.S. ESIGN Act)`, { x: M, y: 20, size: 7.5, font: sans, color: grey });
+  });
+  return await doc.save();
+}
+
+function saveBlobAs(blob, filename) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+const safeFile = (s) => String(s || "meeting").replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 50);
+
+function MeetingFormCard({ initial, onSave, onCancel, saving }) {
+  const [type, setType] = useState(initial?.meeting_type || "Meeting");
+  const [topic, setTopic] = useState(initial?.topic || "");
+  const [date, setDate] = useState(initial?.meeting_date ? String(initial.meeting_date).slice(0, 10) : todayISO());
+  const [time, setTime] = useState(initial?.meeting_time ?? nowTimeLabel());
+  const [location, setLocation] = useState(initial?.location || "");
+  const [runBy, setRunBy] = useState(initial?.run_by || "");
+  const lab = { color: STEEL, fontFamily: "IBM Plex Mono, monospace" };
+  const inp = "w-full mt-1 rounded-md border px-2.5 py-1.5 text-[13px]";
+  return (
+    <div className="bg-white rounded-md p-3 border mb-3 space-y-2.5" style={{ borderColor: "#E4E2DA" }}>
+      <div className="flex rounded-md overflow-hidden border" style={{ borderColor: "#C9C6BC" }}>
+        {["Meeting", "Training"].map((m) => (
+          <button key={m} type="button" onClick={() => setType(m)} className="flex-1 py-1.5 text-[11px] font-bold uppercase"
+            style={{ background: type === m ? GOLD : "white", color: type === m ? INK : STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{m}</button>
+        ))}
+      </div>
+      <div><label className="text-[10px] uppercase font-bold" style={lab}>Topic *</label>
+        <input value={topic} onChange={(e) => setTopic(e.target.value)} className={inp} style={{ borderColor: "#C9C6BC" }} /></div>
+      <div className="grid grid-cols-2 gap-2">
+        <div><label className="text-[10px] uppercase font-bold" style={lab}>Date</label>
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inp} style={{ borderColor: "#C9C6BC" }} /></div>
+        <div><label className="text-[10px] uppercase font-bold" style={lab}>Time</label>
+          <input value={time} onChange={(e) => setTime(e.target.value)} placeholder="9:00 AM" className={inp} style={{ borderColor: "#C9C6BC" }} /></div>
+      </div>
+      <div><label className="text-[10px] uppercase font-bold" style={lab}>Location</label>
+        <input value={location} onChange={(e) => setLocation(e.target.value)} className={inp} style={{ borderColor: "#C9C6BC" }} /></div>
+      <div><label className="text-[10px] uppercase font-bold" style={lab}>Who is running it</label>
+        <input value={runBy} onChange={(e) => setRunBy(e.target.value)} className={inp} style={{ borderColor: "#C9C6BC" }} /></div>
+      <div className="flex gap-2">
+        <button onClick={onCancel} className="flex-1 py-2 text-[11px] font-bold uppercase rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Cancel</button>
+        <button disabled={!topic.trim() || saving} onClick={() => onSave({ type, topic, date, time, location, runBy })}
+          className="flex-1 py-2 text-[11px] font-bold uppercase rounded-sm disabled:opacity-40" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>
+          {saving ? "Saving…" : "Save"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function MeetingsScreen({ user, activeProjectId }) {
+  const token = user && user.sessionToken;
+  const [list, setList] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [openId, setOpenId] = useState(null);
+  const [detail, setDetail] = useState(null);
+  const [showNew, setShowNew] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [filter, setFilter] = useState("All");
+  const [search, setSearch] = useState("");
+  const [qrUrl, setQrUrl] = useState(null);
+  const [showQr, setShowQr] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [add, setAdd] = useState({ first: "", last: "", org: "", title: "", email: "", phone: "", sig: "" });
+  const [err, setErr] = useState("");
+
+  const loadList = async () => {
+    setLoading(true);
+    const { data } = await supabase.rpc("list_meetings", { p_token: token });
+    setList(Array.isArray(data) ? data : []);
+    setLoading(false);
+  };
+  const loadDetail = async (id) => {
+    const { data } = await supabase.rpc("get_meeting_admin", { p_token: token, p_meeting_id: id });
+    setDetail(data || null);
+  };
+  useEffect(() => { if (token) loadList(); }, [token, activeProjectId]);
+  useEffect(() => { if (openId) { setShowQr(false); setQrUrl(null); setEditing(false); setAddOpen(false); loadDetail(openId); } else setDetail(null); }, [openId]);
+  useEffect(() => {
+    if (!showQr || !detail) return;
+    QRCode.toDataURL(meetingSignInLink(activeProjectId, detail.id), { width: 900, margin: 2 }).then(setQrUrl).catch(() => setQrUrl(null));
+  }, [showQr, detail && detail.id, activeProjectId]);
+
+  if (!user || !user.canViewMeetings) {
+    return <div className="px-4 pt-10 text-center text-[12px]" style={{ color: STEEL }}>Meetings are only available to Ferrovial and general contractor staff on this project.</div>;
+  }
+
+  const createMeeting = async (f) => {
+    setSaving(true);
+    const { data } = await supabase.rpc("create_meeting", { p_token: token, p_type: f.type, p_topic: f.topic, p_date: f.date, p_time: f.time, p_location: f.location, p_run_by: f.runBy });
+    setSaving(false);
+    if (data && data.id) { setShowNew(false); await loadList(); setOpenId(data.id); } else setErr("Couldn't create the meeting.");
+  };
+  const saveEdit = async (f) => {
+    setSaving(true);
+    await supabase.rpc("update_meeting", { p_token: token, p_meeting_id: detail.id, p_type: f.type, p_topic: f.topic, p_date: f.date, p_time: f.time, p_location: f.location, p_run_by: f.runBy });
+    setSaving(false); setEditing(false); await loadDetail(detail.id); loadList();
+  };
+  const setStatus = async (status) => {
+    await supabase.rpc("set_meeting_status", { p_token: token, p_meeting_id: detail.id, p_status: status });
+    await loadDetail(detail.id); loadList();
+  };
+  const removeMeeting = async () => {
+    if (!window.confirm("Delete this meeting and all of its sign-ins? This can't be undone.")) return;
+    await supabase.rpc("delete_meeting", { p_token: token, p_meeting_id: detail.id });
+    setOpenId(null); loadList();
+  };
+  const removeAttendee = async (a) => {
+    if (!window.confirm(`Remove ${a.first_name} ${a.last_name} from this sign-in?`)) return;
+    await supabase.rpc("delete_meeting_attendee", { p_token: token, p_attendee_id: a.id });
+    loadDetail(detail.id); loadList();
+  };
+  const addAttendee = async () => {
+    const full = `${add.first} ${add.last}`.trim();
+    await supabase.rpc("add_meeting_attendee", {
+      p_token: token, p_meeting_id: detail.id, p_first: add.first, p_last: add.last, p_org: add.org,
+      p_title: add.title, p_email: add.email, p_phone: add.phone, p_signature: add.sig.trim() || full,
+    });
+    setAdd({ first: "", last: "", org: "", title: "", email: "", phone: "", sig: "" });
+    setAddOpen(false); loadDetail(detail.id); loadList();
+  };
+  const downloadPdf = async () => {
+    setBusy(true);
+    try {
+      const bytes = await buildMeetingPdf(detail, detail.attendees || [], activeProjectId);
+      saveBlobAs(new Blob([bytes], { type: "application/pdf" }), `${safeFile(detail.topic)}-${String(detail.meeting_date).slice(0, 10)}-sign-in.pdf`);
+    } catch (e) { setErr("Couldn't build the PDF. Please try again."); }
+    setBusy(false);
+  };
+  const downloadCsv = () => {
+    const rows = (detail.attendees || []).map((a) => ({
+      "First Name": a.first_name, "Last Name": a.last_name, Organization: a.organization, Title: a.title,
+      Email: a.email, Phone: a.phone, Signature: a.signature, "Signed At": a.signed_at,
+    }));
+    saveBlobAs(new Blob([Papa.unparse(rows)], { type: "text/csv" }), `${safeFile(detail.topic)}-${String(detail.meeting_date).slice(0, 10)}-attendees.csv`);
+  };
+
+  const lab = { color: STEEL, fontFamily: "IBM Plex Mono, monospace" };
+  const inp = "w-full mt-1 rounded-md border px-2.5 py-1.5 text-[13px]";
+
+  // ---------- detail view ----------
+  if (openId) {
+    return (
+      <div className="px-4 pt-4 pb-10" style={{ background: "#F4F3EF", minHeight: "100%" }}>
+        <button onClick={() => { setOpenId(null); loadList(); }} className="text-[11px] font-bold uppercase mb-3" style={lab}>← All meetings</button>
+        {!detail && <div className="text-[12px]" style={{ color: STEEL }}>Loading…</div>}
+        {detail && (editing ? (
+          <MeetingFormCard initial={detail} saving={saving} onSave={saveEdit} onCancel={() => setEditing(false)} />
+        ) : (
+          <div className="bg-white rounded-md p-3 border mb-3" style={{ borderColor: "#E4E2DA" }}>
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <div className="text-[10px] uppercase font-bold" style={{ color: GOLD, fontFamily: "IBM Plex Mono, monospace" }}>{detail.meeting_type}</div>
+                <div className="text-[16px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{detail.topic}</div>
+                <div className="text-[11px] mt-0.5" style={{ color: STEEL }}>{[fmtMeetingDate(detail.meeting_date), detail.meeting_time, detail.location].filter(Boolean).join(" · ")}</div>
+                {detail.run_by && <div className="text-[11px]" style={{ color: STEEL }}>Led by {detail.run_by}</div>}
+              </div>
+              <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-sm flex-shrink-0" style={{ background: detail.status === "open" ? "#E7F4E4" : "#E4E2DA", color: detail.status === "open" ? "#2F6B2A" : STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{detail.status}</span>
+            </div>
+            <div className="flex flex-wrap gap-2 mt-3">
+              <button onClick={() => setEditing(true)} className="text-[10px] font-bold uppercase px-2.5 py-1.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Edit details</button>
+              {detail.status === "open"
+                ? <button onClick={() => setStatus("closed")} className="text-[10px] font-bold uppercase px-2.5 py-1.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Close sign-in</button>
+                : <button onClick={() => setStatus("open")} className="text-[10px] font-bold uppercase px-2.5 py-1.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Reopen sign-in</button>}
+              <button onClick={removeMeeting} className="text-[10px] font-bold uppercase px-2.5 py-1.5 rounded-sm border" style={{ borderColor: ALERT, color: ALERT, fontFamily: "IBM Plex Mono, monospace" }}>Delete</button>
+            </div>
+          </div>
+        ))}
+
+        {detail && !editing && (
+          <>
+            <div className="bg-white rounded-md p-3 border mb-3 text-center" style={{ borderColor: "#E4E2DA" }}>
+              {showQr ? (
+                <>
+                  <div className="text-[12px] mb-2" style={{ color: STEEL }}>Show this on a screen or print it. Scanning opens the sign-in page. No login needed.</div>
+                  {qrUrl ? <img src={qrUrl} alt="QR code" className="mx-auto" style={{ width: 240, height: 240 }} /> : <div className="text-[11px]" style={{ color: STEEL }}>Generating…</div>}
+                  <div className="text-[10px] mt-2 break-all" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{meetingSignInLink(activeProjectId, detail.id)}</div>
+                  {qrUrl && <a href={qrUrl} download={`${safeFile(detail.topic)}-qr.png`} className="inline-block mt-2 text-[11px] font-bold uppercase px-3 py-2 rounded-sm" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>Download QR Code</a>}
+                </>
+              ) : (
+                <button onClick={() => setShowQr(true)} className="w-full text-[11px] font-bold uppercase py-2 rounded-sm" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>Generate QR Code</button>
+              )}
+            </div>
+
+            <div className="flex gap-2 mb-3">
+              <button onClick={downloadPdf} disabled={busy} className="flex-1 flex items-center justify-center gap-1 text-[11px] font-bold uppercase py-2.5 rounded-sm disabled:opacity-50" style={{ background: INK, color: "white", fontFamily: "IBM Plex Mono, monospace" }}>
+                <Download size={13} /> {busy ? "Building…" : "PDF"}
+              </button>
+              <button onClick={downloadCsv} className="flex-1 flex items-center justify-center gap-1 text-[11px] font-bold uppercase py-2.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>
+                <Download size={13} /> Spreadsheet
+              </button>
+            </div>
+            {err && <div className="text-[12px] mb-2" style={{ color: ALERT }}>{err}</div>}
+
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-[12px] font-bold uppercase" style={lab}>{(detail.attendees || []).length} signed in</div>
+              <button onClick={() => setAddOpen((v) => !v)} className="text-[10px] font-bold uppercase px-2.5 py-1.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{addOpen ? "Cancel" : "+ Add attendee"}</button>
+            </div>
+
+            {addOpen && (
+              <div className="bg-white rounded-md p-3 border mb-3 space-y-2" style={{ borderColor: "#E4E2DA" }}>
+                <div className="grid grid-cols-2 gap-2">
+                  <div><label className="text-[10px] uppercase font-bold" style={lab}>First *</label><input value={add.first} onChange={(e) => setAdd({ ...add, first: e.target.value })} className={inp} style={{ borderColor: "#C9C6BC" }} /></div>
+                  <div><label className="text-[10px] uppercase font-bold" style={lab}>Last *</label><input value={add.last} onChange={(e) => setAdd({ ...add, last: e.target.value })} className={inp} style={{ borderColor: "#C9C6BC" }} /></div>
+                </div>
+                <div><label className="text-[10px] uppercase font-bold" style={lab}>Organization</label><input value={add.org} onChange={(e) => setAdd({ ...add, org: e.target.value })} className={inp} style={{ borderColor: "#C9C6BC" }} /></div>
+                <div><label className="text-[10px] uppercase font-bold" style={lab}>Title</label><input value={add.title} onChange={(e) => setAdd({ ...add, title: e.target.value })} className={inp} style={{ borderColor: "#C9C6BC" }} /></div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div><label className="text-[10px] uppercase font-bold" style={lab}>Email</label><input value={add.email} onChange={(e) => setAdd({ ...add, email: e.target.value })} className={inp} style={{ borderColor: "#C9C6BC" }} /></div>
+                  <div><label className="text-[10px] uppercase font-bold" style={lab}>Phone</label><input value={add.phone} onChange={(e) => setAdd({ ...add, phone: e.target.value })} className={inp} style={{ borderColor: "#C9C6BC" }} /></div>
+                </div>
+                <div className="text-[10px]" style={{ color: STEEL }}>Signature will be their typed name unless you enter something different.</div>
+                <button disabled={!add.first.trim() || !add.last.trim()} onClick={addAttendee} className="w-full py-2 text-[11px] font-bold uppercase rounded-sm disabled:opacity-40" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>Add</button>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              {(detail.attendees || []).map((a) => (
+                <div key={a.id} className="bg-white rounded-md p-2.5 border flex items-start gap-2" style={{ borderColor: "#E4E2DA" }}>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[13px] font-bold">{a.first_name} {a.last_name}</div>
+                    <div className="text-[11px]" style={{ color: STEEL }}>{[a.title, a.organization].filter(Boolean).join(" · ")}</div>
+                    <div className="text-[11px] break-all" style={{ color: STEEL }}>{[a.email, a.phone].filter(Boolean).join(" · ")}</div>
+                    {a.signature && <div style={{ fontFamily: '"Dancing Script", cursive', fontWeight: 600, fontSize: 22, color: INK }}>{a.signature}</div>}
+                  </div>
+                  <button onClick={() => removeAttendee(a)} className="flex-shrink-0 p-1"><X size={15} color={STEEL} /></button>
+                </div>
+              ))}
+              {(detail.attendees || []).length === 0 && <div className="text-[12px] text-center py-6" style={{ color: STEEL }}>No one has signed in yet.</div>}
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  // ---------- list view ----------
+  const shown = list.filter((m) => (filter === "All" || m.meeting_type === filter) && (!search.trim() || `${m.topic} ${m.location} ${m.run_by}`.toLowerCase().includes(search.trim().toLowerCase())));
+  return (
+    <div className="px-4 pt-4 pb-10" style={{ background: "#F4F3EF", minHeight: "100%" }}>
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-[12px]" style={{ color: STEEL }}>Sign-in sheets for meetings and trainings. Visible to GC and Ferrovial staff only.</div>
+        <button onClick={() => setShowNew(true)} className="text-[10px] font-bold uppercase px-2.5 py-1.5 rounded-sm flex-shrink-0 ml-2" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>+ New</button>
+      </div>
+      {showNew && <MeetingFormCard saving={saving} onSave={createMeeting} onCancel={() => setShowNew(false)} />}
+      {err && <div className="text-[12px] mb-2" style={{ color: ALERT }}>{err}</div>}
+      <div className="flex gap-2 mb-2">
+        {["All", "Meeting", "Training"].map((f) => (
+          <button key={f} onClick={() => setFilter(f)} className="flex-1 py-1.5 text-[10px] font-bold uppercase rounded-sm border"
+            style={{ background: filter === f ? GOLD : "white", color: filter === f ? INK : STEEL, borderColor: filter === f ? GOLD : "#C9C6BC", fontFamily: "IBM Plex Mono, monospace" }}>{f}</button>
+        ))}
+      </div>
+      <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search topic, location or leader" className="w-full mb-3 rounded-md border px-2.5 py-1.5 text-[13px]" style={{ borderColor: "#C9C6BC" }} />
+      {loading && <div className="text-[12px]" style={{ color: STEEL }}>Loading…</div>}
+      <div className="space-y-2">
+        {shown.map((m) => (
+          <button key={m.id} onClick={() => setOpenId(m.id)} className="w-full text-left bg-white rounded-md p-3 border flex items-center gap-2" style={{ borderColor: "#E4E2DA" }}>
+            <div className="flex-1 min-w-0">
+              <div className="text-[10px] uppercase font-bold" style={{ color: GOLD, fontFamily: "IBM Plex Mono, monospace" }}>{m.meeting_type} · {m.status}</div>
+              <div className="text-[14px] truncate" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{m.topic}</div>
+              <div className="text-[11px]" style={{ color: STEEL }}>{[fmtMeetingDate(m.meeting_date), m.location].filter(Boolean).join(" · ")}</div>
+            </div>
+            <div className="text-center flex-shrink-0">
+              <div className="text-[18px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{m.attendee_count}</div>
+              <div className="text-[9px] uppercase" style={{ color: STEEL }}>signed</div>
+            </div>
+            <ChevronRight size={16} color={STEEL} />
+          </button>
+        ))}
+        {!loading && shown.length === 0 && <div className="text-[12px] text-center py-8" style={{ color: STEEL }}>No meetings yet. Tap + New to create one.</div>}
+      </div>
+    </div>
+  );
+}
+
 // ---- Screen: Traffic Control (DriveTN only) ----
 // Same layout as H&S Minimum Standards: the document is always open on the page.
 function TrafficControlScreen({ user, activeProjectId }) {
@@ -9845,6 +10431,7 @@ function LoginModal({ onLogin, onClose, activeProjectId }) {
       multiSiteAccess: data.multi_site_access,
       isHubAdmin: !!data.is_hub_admin,
       canAddPersonnel: data.can_add_personnel,
+      canViewMeetings: !!data.can_view_meetings,
       isRepAccount: data.is_rep_account,
       photoUrl: data.photo_url,
       quals: data.qualifications || [],
@@ -10144,9 +10731,9 @@ function BadgeModal({ user, onClose, onLogout }) {
 // Screens that stay public everywhere, on purpose — blocking these
 // would defeat the reason they exist (emergency info, anonymous
 // reporting, and the Labor Law QR code that anyone can scan).
-const ALWAYS_PUBLIC_SCREENS = ["emergency", "concern", "laborlaws", "trafficcontrol", "orientationsignin", "hsstandards", "orientationschedule"];
+const ALWAYS_PUBLIC_SCREENS = ["emergency", "concern", "laborlaws", "trafficcontrol", "meetingsignin", "orientationsignin", "hsstandards", "orientationschedule"];
 // Normally-gated screens for every project.
-const BASE_GATED_SCREENS = ["forms", "safetyplan", "toolbox", "workplans", "mysubmissions", "preconstruction", "quarterlymonthly", "training"];
+const BASE_GATED_SCREENS = ["forms", "safetyplan", "toolbox", "workplans", "mysubmissions", "preconstruction", "quarterlymonthly", "training", "meetings"];
 // Projects where EVERYTHING (except the always-public screens above)
 // requires a badge — including Home itself.
 const FULLY_GATED_PROJECTS = ["sh99-houston"];
@@ -10252,6 +10839,7 @@ export default function SafetyHubPrototype() {
         multiSiteAccess: data.multi_site_access,
         isHubAdmin: !!data.is_hub_admin,
         canAddPersonnel: data.can_add_personnel,
+      canViewMeetings: !!data.can_view_meetings,
         isRepAccount: data.is_rep_account,
         photoUrl: data.photo_url,
         quals: data.qualifications || [],
@@ -10309,6 +10897,7 @@ export default function SafetyHubPrototype() {
             multiSiteAccess: data.multi_site_access,
             isHubAdmin: !!data.is_hub_admin,
             canAddPersonnel: data.can_add_personnel,
+      canViewMeetings: !!data.can_view_meetings,
             isRepAccount: data.is_rep_account,
             photoUrl: data.photo_url,
             quals: data.qualifications || [],
@@ -10353,6 +10942,8 @@ export default function SafetyHubPrototype() {
     managetoolbox: "Manage Toolbox Talks",
     laborlaws: t("laborLaws"),
     trafficcontrol: "Traffic Control",
+    meetings: "Meetings & Training",
+    meetingsignin: "Meeting Sign-In",
     managelaborlaw: "Manage Labor Law Postings",
     manageemergency: "Manage Emergency Contacts",
     manageweeklyreport: "Manage Weekly Report",
@@ -10432,6 +11023,7 @@ export default function SafetyHubPrototype() {
     { key: "emergency", icon: Phone, label: t("emergencyContacts") },
     ...(LABOR_LAWS_PROJECTS.includes(activeProjectId) ? [{ key: "laborlaws", icon: ShieldAlert, label: t("laborLaws") }] : []),
     ...(TRAFFIC_CONTROL_PROJECTS.includes(activeProjectId) ? [{ key: "trafficcontrol", icon: ShieldAlert, label: "Traffic Control" }] : []),
+    ...(user && user.canViewMeetings ? [{ key: "meetings", icon: Users, label: "Meetings & Training" }] : []),
   ];
 
   return (
@@ -10552,6 +11144,8 @@ export default function SafetyHubPrototype() {
             {screen === "safetyplan" && <SafetyPlanScreen />}
             {screen === "toolbox" && <ToolboxScreen user={user} go={go} activeProjectId={activeProjectId} />}
             {screen === "managetoolbox" && <ManageToolboxScreen user={user} />}
+            {screen === "meetings" && <MeetingsScreen user={user} activeProjectId={activeProjectId} />}
+            {screen === "meetingsignin" && <MeetingSignInScreen />}
             {screen === "trafficcontrol" && <TrafficControlScreen user={user} activeProjectId={activeProjectId} />}
             {screen === "laborlaws" && <LaborLawScreen user={user} go={go} activeProjectId={activeProjectId} />}
             {screen === "managelaborlaw" && <ManageLaborLawScreen user={user} activeProjectId={activeProjectId} />}
