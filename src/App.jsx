@@ -961,16 +961,17 @@ function ManageEmergencyContactsScreen({ user }) {
 // ---- Screen: Texas & Federal Labor Law Postings (never gated — a
 // scanned QR code should work instantly, no login required) ----
 // ---- Screen: Traffic Control (DriveTN only) ----
+// Same layout as H&S Minimum Standards: the document is always open on the page.
 function TrafficControlScreen({ user, activeProjectId }) {
-  const [viewing, setViewing] = useState(false);
+  const [showQr, setShowQr] = useState(false);
   const [qrUrl, setQrUrl] = useState(null);
   const deepLink = `${window.location.origin}${window.location.pathname}?project=${activeProjectId}&screen=trafficcontrol`;
   const isAdmin = !!(user && user.canAddPersonnel);
 
   useEffect(() => {
-    if (!isAdmin) return;
+    if (!isAdmin || !showQr) return;
     QRCode.toDataURL(deepLink, { width: 800, margin: 2 }).then(setQrUrl).catch(() => setQrUrl(null));
-  }, [deepLink, isAdmin]);
+  }, [deepLink, isAdmin, showQr]);
 
   if (!TRAFFIC_CONTROL_PROJECTS.includes(activeProjectId)) {
     return <div className="px-4 pt-6 text-[12px] text-center" style={{ color: STEEL }}>Traffic Control is only available on the DriveTN project.</div>;
@@ -992,59 +993,52 @@ function TrafficControlScreen({ user, activeProjectId }) {
   };
 
   return (
-    <div className="px-4 pt-4 pb-8" style={{ background: "#F4F3EF", minHeight: "100%" }}>
-      <div className="text-[12px] mb-3" style={{ color: STEEL }}>Traffic control standards for the DriveTN project. View on screen or download a copy.</div>
-      <div className="bg-white rounded-md p-3 border" style={{ borderColor: "#E4E2DA" }}>
-        <div className="text-[13px] mb-2" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{CLEAR_ZONE_DOC.title}</div>
-        <div className="flex gap-2">
-          <button onClick={() => setViewing(true)} className="flex-1 flex items-center justify-center gap-1 text-[10px] font-bold uppercase px-2 py-1.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>
-            <Eye size={12} /> View
-          </button>
-          <button onClick={downloadDoc} className="flex-1 flex items-center justify-center gap-1 text-[10px] font-bold uppercase px-2 py-1.5 rounded-sm" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>
-            <Download size={12} /> Download
-          </button>
-        </div>
-      </div>
-
+    <div className="px-4 pt-4 pb-8 flex flex-col" style={{ background: "#F4F3EF", minHeight: "100%" }}>
       {isAdmin && (
-        <div className="bg-white rounded-md p-3 border mt-3 text-center" style={{ borderColor: "#E4E2DA" }}>
-          <div className="text-[12px] mb-2" style={{ color: STEEL }}>
-            QR code for this Traffic Control section. Print it and post it on-site. Scanning it opens this page directly, no login needed.
-          </div>
-          {qrUrl ? (
-            <img src={qrUrl} alt="QR code" className="mx-auto" style={{ width: 200, height: 200 }} />
-          ) : (
-            <div className="text-[11px]" style={{ color: STEEL }}>Generating…</div>
-          )}
-          <div className="text-[10px] mt-2 break-all" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{deepLink}</div>
-          {qrUrl && (
-            <a href={qrUrl} download="traffic-control-qr-code.png" className="inline-block mt-2 text-[11px] font-bold uppercase px-3 py-2 rounded-sm" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>
-              Download QR Code
-            </a>
-          )}
-        </div>
-      )}
-
-      {viewing && (
-        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/80 px-4">
-          <div className="bg-white rounded-md w-full max-w-sm md:max-w-5xl md:w-[92vw] h-[80%] md:h-[92vh] overflow-hidden flex flex-col">
-            <div className="flex items-center justify-between p-3 border-b flex-shrink-0" style={{ borderColor: "#E4E2DA" }}>
-              <div className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{CLEAR_ZONE_DOC.title}</div>
-              <button onClick={() => setViewing(false)}><X size={18} color={STEEL} /></button>
+        showQr ? (
+          <div className="bg-white rounded-md p-3 border mb-3 text-center" style={{ borderColor: "#E4E2DA" }}>
+            <div className="text-[12px] mb-2" style={{ color: STEEL }}>
+              Print this and post it on-site. Scanning it opens this exact section directly — no login needed.
             </div>
-            <iframe src={CLEAR_ZONE_DOC.url} className="flex-1 w-full" style={{ border: "none" }} title={CLEAR_ZONE_DOC.title} />
-            <div className="p-2 flex-shrink-0">
-              <button onClick={downloadDoc} className="w-full flex items-center justify-center gap-1 text-[11px] font-bold uppercase py-2 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>
-                <Download size={13} /> Download
-              </button>
-            </div>
+            {qrUrl ? (
+              <img src={qrUrl} alt="QR code" className="mx-auto" style={{ width: 200, height: 200 }} />
+            ) : (
+              <div className="text-[11px]" style={{ color: STEEL }}>Generating…</div>
+            )}
+            <div className="text-[10px] mt-2 break-all" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{deepLink}</div>
+            {qrUrl && (
+              <a href={qrUrl} download="traffic-control-qr-code.png" className="inline-block mt-2 text-[11px] font-bold uppercase px-3 py-2 rounded-sm" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>
+                Download QR Code
+              </a>
+            )}
           </div>
-        </div>
+        ) : (
+          <button
+            onClick={() => setShowQr(true)}
+            className="w-full mb-3 text-[11px] font-bold uppercase py-2.5 rounded-sm border"
+            style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}
+          >
+            Generate QR Code
+          </button>
+        )
       )}
+      <div className="mb-3">
+        <div className="text-[14px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{CLEAR_ZONE_DOC.title}</div>
+        <div className="text-[11px]" style={{ color: STEEL }}>Traffic Control · DriveTN</div>
+      </div>
+      <div className="flex-1 rounded-md overflow-hidden border" style={{ borderColor: "#E4E2DA", minHeight: 500 }}>
+        <iframe src={CLEAR_ZONE_DOC.url} className="w-full h-full" style={{ border: "none", minHeight: 500 }} title={CLEAR_ZONE_DOC.title} />
+      </div>
+      <button
+        onClick={downloadDoc}
+        className="w-full mt-3 flex items-center justify-center gap-1 text-[11px] font-bold uppercase py-2.5 rounded-sm border flex-shrink-0"
+        style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}
+      >
+        <Download size={13} /> Download
+      </button>
     </div>
   );
 }
-
 
 function LaborLawScreen({ user, go, activeProjectId }) {
   const { t } = useTranslation();
