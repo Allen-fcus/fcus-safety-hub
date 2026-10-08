@@ -522,7 +522,7 @@ function HomeScreen({ go, user, activeProjectId }) {
     { key: "emergency", label: t("emergencyContacts"), desc: t("emergencyDesc"), icon: Phone, count: t("alwaysAvailable") },
     ...(LABOR_LAWS_PROJECTS.includes(activeProjectId) ? [{ key: "laborlaws", label: t("laborLaws"), desc: t("laborLawsDesc"), icon: ShieldAlert, count: t("alwaysAvailable") }] : []),
     ...(TRAFFIC_CONTROL_PROJECTS.includes(activeProjectId) ? [{ key: "trafficcontrol", label: "Traffic Control", desc: "Clear Zone Criteria and other traffic control standards", icon: ShieldAlert, count: "1 document" }] : []),
-    ...(user && user.canViewMeetings ? [{ key: "meetings", label: "Meetings & Training", desc: "Sign-in sheets with QR code, for GC and Ferrovial staff", icon: Users, count: "Sign-ins" }] : []),
+    ...(user && user.canViewMeetings ? [{ key: "meetings", label: "Sign In Sheets", desc: "Sign-in sheets with QR code, for GC and Ferrovial staff", icon: Users, count: "Sign-ins" }] : []),
     { key: "concern", label: t("reportConcern"), desc: t("reportConcernDesc"), icon: MessageSquare, count: t("alwaysAvailable") },
   ];
 
@@ -961,7 +961,7 @@ function ManageEmergencyContactsScreen({ user }) {
 
 // ---- Screen: Texas & Federal Labor Law Postings (never gated — a
 // scanned QR code should work instantly, no login required) ----
-// ---- Meetings & Training sign-in ----
+// ---- Sign In Sheets sign-in ----
 function fmtMeetingDate(d) {
   if (!d) return "";
   const [y, m, day] = String(d).slice(0, 10).split("-").map(Number);
@@ -1321,6 +1321,8 @@ function MeetingFormCard({ initial, onSave, onCancel, saving }) {
 
 function MeetingsScreen({ user, activeProjectId }) {
   const token = user && user.sessionToken;
+  const canEdit = !!(user && user.canViewMeetings); // create, edit, close, add attendees
+  const canDelete = !!(user && (user.canAddPersonnel || user.isHubAdmin)); // delete sheets / remove people
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [openId, setOpenId] = useState(null);
@@ -1355,7 +1357,7 @@ function MeetingsScreen({ user, activeProjectId }) {
   }, [showQr, detail && detail.id, activeProjectId]);
 
   if (!user || !user.canViewMeetings) {
-    return <div className="px-4 pt-10 text-center text-[12px]" style={{ color: STEEL }}>Meetings are only available to Ferrovial and general contractor staff on this project.</div>;
+    return <div className="px-4 pt-10 text-center text-[12px]" style={{ color: STEEL }}>Sign In Sheets are only available to Ferrovial and general contractor staff on this project.</div>;
   }
 
   const createMeeting = async (f) => {
@@ -1417,7 +1419,7 @@ function MeetingsScreen({ user, activeProjectId }) {
       <div className="px-4 pt-4 pb-10" style={{ background: "#F4F3EF", minHeight: "100%" }}>
         <button onClick={() => { setOpenId(null); loadList(); }} className="text-[11px] font-bold uppercase mb-3" style={lab}>← All meetings</button>
         {!detail && <div className="text-[12px]" style={{ color: STEEL }}>Loading…</div>}
-        {detail && (editing ? (
+        {detail && (editing && canEdit ? (
           <MeetingFormCard initial={detail} saving={saving} onSave={saveEdit} onCancel={() => setEditing(false)} />
         ) : (
           <div className="bg-white rounded-md p-3 border mb-3" style={{ borderColor: "#E4E2DA" }}>
@@ -1430,17 +1432,17 @@ function MeetingsScreen({ user, activeProjectId }) {
               </div>
               <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-sm flex-shrink-0" style={{ background: detail.status === "open" ? "#E7F4E4" : "#E4E2DA", color: detail.status === "open" ? "#2F6B2A" : STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{detail.status}</span>
             </div>
-            <div className="flex flex-wrap gap-2 mt-3">
+            {canEdit && <div className="flex flex-wrap gap-2 mt-3">
               <button onClick={() => setEditing(true)} className="text-[10px] font-bold uppercase px-2.5 py-1.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Edit details</button>
               {detail.status === "open"
                 ? <button onClick={() => setStatus("closed")} className="text-[10px] font-bold uppercase px-2.5 py-1.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Close sign-in</button>
                 : <button onClick={() => setStatus("open")} className="text-[10px] font-bold uppercase px-2.5 py-1.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Reopen sign-in</button>}
-              <button onClick={removeMeeting} className="text-[10px] font-bold uppercase px-2.5 py-1.5 rounded-sm border" style={{ borderColor: ALERT, color: ALERT, fontFamily: "IBM Plex Mono, monospace" }}>Delete</button>
-            </div>
+              {canDelete && <button onClick={removeMeeting} className="text-[10px] font-bold uppercase px-2.5 py-1.5 rounded-sm border" style={{ borderColor: ALERT, color: ALERT, fontFamily: "IBM Plex Mono, monospace" }}>Delete</button>}
+            </div>}
           </div>
         ))}
 
-        {detail && !editing && (
+        {detail && !(editing && canEdit) && (
           <>
             <div className="bg-white rounded-md p-3 border mb-3 text-center" style={{ borderColor: "#E4E2DA" }}>
               {showQr ? (
@@ -1467,10 +1469,10 @@ function MeetingsScreen({ user, activeProjectId }) {
 
             <div className="flex items-center justify-between mb-2">
               <div className="text-[12px] font-bold uppercase" style={lab}>{(detail.attendees || []).length} signed in</div>
-              <button onClick={() => setAddOpen((v) => !v)} className="text-[10px] font-bold uppercase px-2.5 py-1.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{addOpen ? "Cancel" : "+ Add attendee"}</button>
+              {canEdit && <button onClick={() => setAddOpen((v) => !v)} className="text-[10px] font-bold uppercase px-2.5 py-1.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{addOpen ? "Cancel" : "+ Add attendee"}</button>}
             </div>
 
-            {addOpen && (
+            {canEdit && addOpen && (
               <div className="bg-white rounded-md p-3 border mb-3 space-y-2" style={{ borderColor: "#E4E2DA" }}>
                 <div className="grid grid-cols-2 gap-2">
                   <div><label className="text-[10px] uppercase font-bold" style={lab}>First *</label><input value={add.first} onChange={(e) => setAdd({ ...add, first: e.target.value })} className={inp} style={{ borderColor: "#C9C6BC" }} /></div>
@@ -1496,7 +1498,7 @@ function MeetingsScreen({ user, activeProjectId }) {
                     <div className="text-[11px] break-all" style={{ color: STEEL }}>{[a.email, a.phone].filter(Boolean).join(" · ")}</div>
                     {a.signature && <div style={{ fontFamily: '"Dancing Script", cursive', fontWeight: 600, fontSize: 22, color: INK }}>{a.signature}</div>}
                   </div>
-                  <button onClick={() => removeAttendee(a)} className="flex-shrink-0 p-1"><X size={15} color={STEEL} /></button>
+                  {canDelete && <button onClick={() => removeAttendee(a)} className="flex-shrink-0 p-1"><X size={15} color={STEEL} /></button>}
                 </div>
               ))}
               {(detail.attendees || []).length === 0 && <div className="text-[12px] text-center py-6" style={{ color: STEEL }}>No one has signed in yet.</div>}
@@ -1513,9 +1515,9 @@ function MeetingsScreen({ user, activeProjectId }) {
     <div className="px-4 pt-4 pb-10" style={{ background: "#F4F3EF", minHeight: "100%" }}>
       <div className="flex items-center justify-between mb-3">
         <div className="text-[12px]" style={{ color: STEEL }}>Sign-in sheets for meetings and trainings. Visible to GC and Ferrovial staff only.</div>
-        <button onClick={() => setShowNew(true)} className="text-[10px] font-bold uppercase px-2.5 py-1.5 rounded-sm flex-shrink-0 ml-2" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>+ New</button>
+        {canEdit && <button onClick={() => setShowNew(true)} className="text-[10px] font-bold uppercase px-2.5 py-1.5 rounded-sm flex-shrink-0 ml-2" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>+ New</button>}
       </div>
-      {showNew && <MeetingFormCard saving={saving} onSave={createMeeting} onCancel={() => setShowNew(false)} />}
+      {canEdit && showNew && <MeetingFormCard saving={saving} onSave={createMeeting} onCancel={() => setShowNew(false)} />}
       {err && <div className="text-[12px] mb-2" style={{ color: ALERT }}>{err}</div>}
       <div className="flex gap-2 mb-2">
         {["All", "Meeting", "Training"].map((f) => (
@@ -10942,7 +10944,7 @@ export default function SafetyHubPrototype() {
     managetoolbox: "Manage Toolbox Talks",
     laborlaws: t("laborLaws"),
     trafficcontrol: "Traffic Control",
-    meetings: "Meetings & Training",
+    meetings: "Sign In Sheets",
     meetingsignin: "Meeting Sign-In",
     managelaborlaw: "Manage Labor Law Postings",
     manageemergency: "Manage Emergency Contacts",
@@ -11023,7 +11025,7 @@ export default function SafetyHubPrototype() {
     { key: "emergency", icon: Phone, label: t("emergencyContacts") },
     ...(LABOR_LAWS_PROJECTS.includes(activeProjectId) ? [{ key: "laborlaws", icon: ShieldAlert, label: t("laborLaws") }] : []),
     ...(TRAFFIC_CONTROL_PROJECTS.includes(activeProjectId) ? [{ key: "trafficcontrol", icon: ShieldAlert, label: "Traffic Control" }] : []),
-    ...(user && user.canViewMeetings ? [{ key: "meetings", icon: Users, label: "Meetings & Training" }] : []),
+    ...(user && user.canViewMeetings ? [{ key: "meetings", icon: Users, label: "Sign In Sheets" }] : []),
   ];
 
   return (
