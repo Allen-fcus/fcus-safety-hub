@@ -3177,6 +3177,12 @@ const HS_STANDARDS_DOCS = [
   { language: "Spanish", title: "Estándares Mínimos de Seguridad y Salud", pages: 38, link: "https://drive.google.com/file/d/1uuTyfamCzU4GW2lvhGD6fmA8Q-_luEkH/preview" },
 ];
 // The Safety Plan itself is project-specific — each project's fallback is set in PROJECTS below.
+const FCW24_SAFETY_PLAN = [{
+  title: "Chapter 4 – Health, Safety & Wellness Plan",
+  pages: 98,
+  link: "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/fcw24-hsw-plan-chapter-4.pdf",
+  downloadable: true,
+}];
 const SAFETY_PLAN_DEFAULT = [{ title: "Chapter 5A – Safety Program", pages: 135, link: "https://drive.google.com/file/d/1CN4zxti0ovQd8cUkxfqy7WuXJMQfiYhd/preview", downloadable: false }];
 
 function HSStandardsQrCard() {
@@ -3276,7 +3282,7 @@ function SafetyPlanScreen() {
         <div key={i} className="flex flex-col mb-6" style={{ minHeight: 500 }}>
           <div className="mb-3">
             <div className="text-[14px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{d.title}</div>
-            <div className="text-[11px]" style={{ color: STEEL }}>{d.pages} pages · View only</div>
+            <div className="text-[11px]" style={{ color: STEEL }}>{d.pages} pages · {d.downloadable ? "View or download" : "View only"}</div>
           </div>
           {d.link ? (
             <div className="flex-1 rounded-md overflow-hidden border" style={{ borderColor: "#E4E2DA", minHeight: 500 }}>
@@ -3284,6 +3290,26 @@ function SafetyPlanScreen() {
             </div>
           ) : (
             <div className="flex-1 flex items-center justify-center py-12" style={{ color: STEEL }}>No document set up yet.</div>
+          )}
+          {d.link && d.downloadable && (
+            <button
+              onClick={async () => {
+                try {
+                  const res = await fetch(d.link);
+                  if (!res.ok) throw new Error("fetch failed");
+                  const blob = await res.blob();
+                  const a = document.createElement("a");
+                  a.href = URL.createObjectURL(blob);
+                  a.download = `${d.title.replace(/[^a-zA-Z0-9]+/g, "-")}.pdf`;
+                  document.body.appendChild(a); a.click(); a.remove();
+                  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+                } catch (e) { window.open(d.link, "_blank"); }
+              }}
+              className="w-full mt-3 flex items-center justify-center gap-1 text-[11px] font-bold uppercase py-2.5 rounded-sm border flex-shrink-0"
+              style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}
+            >
+              <Download size={13} /> Download
+            </button>
           )}
         </div>
       ))}
@@ -10045,7 +10071,7 @@ const PROJECTS = {
     name: "FCW24 - Tennessee",
     notifyEmail: "", // set this once you have Nashville's designated recipient
     sheetUrls: { ...EMPTY_SHEET_URLS },
-    fallbacks: { personnel: [], workPlans: [], safetyPlan: [], bulletin: [], emergencyContacts: EMERGENCY_CONTACTS_TBD, orientation: ORIENTATION_SESSIONS_TBD },
+    fallbacks: { personnel: [], workPlans: [], safetyPlan: FCW24_SAFETY_PLAN, bulletin: [], emergencyContacts: EMERGENCY_CONTACTS_TBD, orientation: ORIENTATION_SESSIONS_TBD },
   },
 };
 
