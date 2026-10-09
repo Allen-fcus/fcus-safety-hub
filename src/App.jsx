@@ -7195,7 +7195,7 @@ async function fillCompetentPersonPdf({ templateUrl, subcontractor, date, employ
 }
 
 // Generated Job Hazard Analysis PDF (landscape letter): header, job info, task steps table, checklists, signature.
-async function buildJhaPdf({ form, slug, projectName, standardValues, fieldValues, stepValues, stepCount, statusValues, conditions, signatureDataUrl }) {
+async function buildJhaPdf({ form, slug, projectName, standardValues, fieldValues, stepValues, stepCount, statusValues, conditions, signatureDataUrl, pick, lifesaving }) {
   const { StandardFonts, rgb } = await import("pdf-lib");
   const doc = await PDFDocument.create();
   const sans = await doc.embedFont(StandardFonts.Helvetica);
@@ -7279,34 +7279,38 @@ async function buildJhaPdf({ form, slug, projectName, standardValues, fieldValue
   });
   y -= 8;
 
-  // ---- steps table ----
-  const cols = [
-    { k: "#", w: 24 }, { k: "Step to complete work", w: 170 }, { k: "Hazards of this step", w: 160 },
-    { k: "Actions taken to prevent hazards", w: 268 }, { k: "Lifesaving control", w: 120 },
-  ];
+  // ---- hazards and controls ----
+  if (lifesaving && lifesaving.trim()) {
+    const lines = wrap(lifesaving, sans, 9.5, W - 2 * M - 190);
+    need(lines.length * 12 + 6);
+    page.drawText("LIFESAVING CONTROL", { x: M, y: y - 9, size: 7, font: sansB, color: grey });
+    lines.forEach((ln, li) => page.drawText(ln, { x: M + 190, y: y - 9 - li * 12, size: 9.5, font: sans, color: ink }));
+    y -= lines.length * 12 + 6;
+    page.drawLine({ start: { x: M, y: y + 3 }, end: { x: W - M, y: y + 3 }, thickness: 0.4, color: line });
+  }
+  y -= 8;
+  const cols = [{ k: "Hazard", w: 190 }, { k: "Controls confirmed in place", w: W - 2 * M - 190 }];
   const thead = () => {
     need(40);
     page.drawRectangle({ x: M, y: y - 16, width: W - 2 * M, height: 16, color: gold });
-    let x = M;
-    cols.forEach((c) => { page.drawText(c.k.toUpperCase(), { x: x + 3, y: y - 11.5, size: 7, font: sansB, color: ink }); x += c.w; });
+    page.drawText("HAZARD", { x: M + 4, y: y - 11.5, size: 7.5, font: sansB, color: ink });
+    page.drawText("CONTROLS CONFIRMED IN PLACE", { x: M + cols[0].w + 4, y: y - 11.5, size: 7.5, font: sansB, color: ink });
     y -= 16;
   };
   thead();
-  for (let si = 0; si < stepCount; si++) {
-    const sv = stepValues[si] || {};
-    if (![0, 1, 2, 3].some((f) => (sv[f] || "").trim())) continue;
-    const cells = [String(si + 1), sv[0] || "", sv[1] || "", sv[2] || "", sv[3] || ""].map((t, ci) => wrap(t, ci === 0 ? sansB : sans, 8, cols[ci].w - 7));
-    const rows = Math.max(...cells.map((c) => c.length), 1);
-    const rh = rows * 10 + 7;
+  const rowsData = pick.h.map((h) => ({ h, c: (HAZARD_LIBRARY[h] || []).filter((c) => pick.c.includes(c)) }));
+  if (pick.xh.trim() || pick.xc.trim()) rowsData.push({ h: pick.xh.trim() || "Other", c: pick.xc.trim() ? pick.xc.trim().split("\n") : [] });
+  if (rowsData.length === 0) rowsData.push({ h: "None selected", c: [] });
+  rowsData.forEach((r) => {
+    const hl = wrap(r.h, sansB, 9, cols[0].w - 8);
+    const cl = r.c.length ? r.c.flatMap((c) => wrap("- " + c.replace(/^- /, ""), sans, 8.5, cols[1].w - 8)) : ["No controls confirmed"];
+    const rh = Math.max(hl.length, cl.length) * 11 + 8;
     if (y - rh < 44) { newPage(); thead(); }
-    let x = M;
-    cells.forEach((cl, ci) => {
-      cl.forEach((ln, li) => page.drawText(ln, { x: x + 3, y: y - 10 - li * 10, size: 8, font: ci === 0 ? sansB : sans, color: ink }));
-      x += cols[ci].w;
-    });
+    hl.forEach((ln, li) => page.drawText(ln, { x: M + 4, y: y - 11 - li * 11, size: 9, font: sansB, color: ink }));
+    cl.forEach((ln, li) => page.drawText(ln, { x: M + cols[0].w + 4, y: y - 11 - li * 11, size: 8.5, font: sans, color: r.c.length ? ink : grey }));
     y -= rh;
     page.drawLine({ start: { x: M, y }, end: { x: W - M, y }, thickness: 0.4, color: line });
-  }
+  });
   y -= 12;
 
   // ---- checklists ----
@@ -7568,7 +7572,7 @@ function HazardControlPicker({ pick, onChange, suggest }) {
   const lab = { color: STEEL, fontFamily: "IBM Plex Mono, monospace" };
   return (
     <div>
-      <label className="text-[10px] uppercase font-bold" style={lab}>Hazards of this step</label>
+      <label className="text-[10px] uppercase font-bold" style={lab}>Hazards for this job</label>
       {suggest.length > 0 && (
         <div className="mt-1 mb-1 flex flex-wrap gap-1 items-center">
           <span className="text-[10px]" style={{ color: ALERT }}>Today's weather suggests:</span>
@@ -7651,7 +7655,7 @@ function FillFormModal({ form, onClose, user }) {
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [emailStatus, setEmailStatus] = useState(null);
-  const [stepCount, setStepCount] = useState(form.stepPlan ? form.stepPlan.minSteps : 0);
+  const [stepCount, setStepCount] = useState(form.stepPlan ? (form.stepPlan.useLibrary ? 1 : form.stepPlan.minSteps) : 0);
   const [stepValues, setStepValues] = useState({});
   const [stepPicks, setStepPicks] = useState({});
   const [conditions, setConditions] = useState("");
@@ -7707,6 +7711,10 @@ function FillFormModal({ form, onClose, user }) {
     });
     if (form.stepPlan) {
       if (conditions.trim()) lines.push("", `Conditions at start of shift: ${conditions.trim()}`);
+      if (form.stepPlan.useLibrary) {
+        const sv0 = stepValues[0] || {};
+        lines.push("", `Hazards: ${sv0[1] || ""}`, "", "Controls confirmed in place:", sv0[2] || "", "", `Lifesaving control: ${sv0[3] || ""}`);
+      } else {
       lines.push("", "Task Steps:");
       Array.from({ length: stepCount }).forEach((_, si) => {
         lines.push(`  Step ${si + 1}:`);
@@ -7714,6 +7722,7 @@ function FillFormModal({ form, onClose, user }) {
           lines.push(`    ${label}: ${(stepValues[si] || {})[fi] || ""}`);
         });
       });
+      }
     }
     return lines.join("\n");
   };
@@ -7745,6 +7754,7 @@ function FillFormModal({ form, onClose, user }) {
         const filledBytes = await buildJhaPdf({
           form, slug: activeProjectId, projectName: projName, standardValues, fieldValues: values,
           stepValues, stepCount, statusValues: effectiveStatusValues, conditions, signatureDataUrl,
+          pick: stepPicks[0] || { h: [], c: [], xh: "", xc: "" }, lifesaving: (stepValues[0] || {})[3] || "",
         });
         const blob = new Blob([filledBytes], { type: "application/pdf" });
         const localUrl = URL.createObjectURL(blob);
@@ -8076,7 +8086,26 @@ function FillFormModal({ form, onClose, user }) {
             );
           })}
 
-          {form.stepPlan && (
+          {form.stepPlan && form.stepPlan.useLibrary && (
+            <div>
+              <div className="text-[11px] uppercase font-bold mb-2" style={{ color: GOLD, fontFamily: "IBM Plex Mono, monospace" }}>
+                Hazards &amp; Controls
+              </div>
+              <div className="mb-3">
+                <label className="text-[10px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Conditions at start of shift (auto-filled, edit if needed)</label>
+                <input value={conditions} onChange={(e) => setConditions(e.target.value)} placeholder="Weather at the work site" className="w-full mt-1 rounded-md border px-2.5 py-1.5 text-[13px]" style={{ borderColor: "#C9C6BC" }} />
+              </div>
+              <div className="rounded-md p-3 border" style={{ borderColor: "#E4E2DA", background: "#FCFCFA" }}>
+                <HazardControlPicker pick={stepPicks[0]} onChange={(np) => setStepPick(0, np)} suggest={weatherSuggest} />
+                <div className="mt-3">
+                  <label className="text-[10px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Lifesaving control</label>
+                  <textarea rows={2} value={(stepValues[0] || {})[3] || ""} onChange={(e) => setStepField(0, 3, e.target.value)} className="w-full mt-1 rounded-md border px-2.5 py-1.5 text-[13px]" style={{ borderColor: "#C9C6BC" }} />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {form.stepPlan && !form.stepPlan.useLibrary && (
             <div>
               <div className="text-[11px] uppercase font-bold mb-2" style={{ color: GOLD, fontFamily: "IBM Plex Mono, monospace" }}>
                 Task Steps — Hazards &amp; Lifesaving Controls
