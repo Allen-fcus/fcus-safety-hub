@@ -5682,6 +5682,7 @@ const EXTERNAL_FORMS_DEFAULT = [
 const FORMS_DEFAULT = [
   {
     title: "Job Hazard Analysis",
+    pdfFillTemplate: "job-hazard-analysis",
     description: "Identifies task-specific hazards and the controls in place to prevent them, completed before work begins.",
     pdfLink: "https://drive.google.com/file/d/1mnudZbn3_LlA95Brg-Fktb0pTP4bzsaP/preview",
     fields: [
@@ -7193,6 +7194,166 @@ async function fillCompetentPersonPdf({ templateUrl, subcontractor, date, employ
   return pdfDoc.save({ useObjectStreams: false });
 }
 
+// Generated Job Hazard Analysis PDF (landscape letter): header, job info, task steps table, checklists, signature.
+async function buildJhaPdf({ form, slug, projectName, standardValues, fieldValues, stepValues, stepCount, statusValues, conditions, signatureDataUrl }) {
+  const { StandardFonts, rgb } = await import("pdf-lib");
+  const doc = await PDFDocument.create();
+  const sans = await doc.embedFont(StandardFonts.Helvetica);
+  const sansB = await doc.embedFont(StandardFonts.HelveticaBold);
+  const clean = (t) => String(t == null ? "" : t).replace(/[\r]/g, "").replace(/[^\n -ÿ]/g, "?");
+  const ink = rgb(0.1, 0.1, 0.1), gold = rgb(0.98, 0.78, 0.02), grey = rgb(0.4, 0.42, 0.45), line = rgb(0.8, 0.79, 0.75), pale = rgb(0.96, 0.95, 0.92);
+  const W = 792, H = 612, M = 30;
+  const wrap = (text, font, size, max) => {
+    const out = [];
+    clean(text).split("\n").forEach((para) => {
+      if (!para.trim()) { out.push(""); return; }
+      let cur = "";
+      para.split(/\s+/).forEach((word) => {
+        const tryLine = cur ? cur + " " + word : word;
+        if (font.widthOfTextAtSize(tryLine, size) <= max) { cur = tryLine; return; }
+        if (cur) out.push(cur);
+        let w = word;
+        while (font.widthOfTextAtSize(w, size) > max && w.length > 1) {
+          let k = w.length - 1;
+          while (k > 1 && font.widthOfTextAtSize(w.slice(0, k), size) > max) k--;
+          out.push(w.slice(0, k)); w = w.slice(k);
+        }
+        cur = w;
+      });
+      if (cur) out.push(cur);
+    });
+    return out;
+  };
+
+  let logo = null;
+  const logoInfo = PROJECT_LOGOS[slug];
+  if (logoInfo) {
+    try {
+      const bin = atob(logoInfo.src.split(",")[1]); const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      logo = await doc.embedPng(bytes);
+    } catch (e) { logo = null; }
+  }
+
+  let page = doc.addPage([W, H]);
+  let y = H;
+  const band = (first) => {
+    const bh = first ? 56 : 32;
+    page.drawRectangle({ x: 0, y: H - bh, width: W, height: bh, color: ink });
+    if (logo) {
+      const s = Math.min((first ? 180 : 100) / logo.width, (first ? 38 : 20) / logo.height);
+      page.drawImage(logo, { x: M, y: H - bh + (bh - logo.height * s) / 2, width: logo.width * s, height: logo.height * s });
+    }
+    const t = "JOB HAZARD ANALYSIS";
+    const sz = first ? 16 : 11;
+    page.drawText(t, { x: W - M - sansB.widthOfTextAtSize(t, sz), y: H - bh / 2 - sz / 3, size: sz, font: sansB, color: gold });
+    return H - bh;
+  };
+  const newPage = () => { page = doc.addPage([W, H]); y = band(false) - 14; };
+  const need = (h) => { if (y - h < 44) newPage(); };
+  y = band(true) - 16;
+
+  // ---- job info ----
+  const info = [
+    ["Date", standardValues.date], ["Project", projectName || ""],
+    ["Subcontractor", standardValues.subcontractor], ["Prepared by", standardValues.name],
+    ["Segment", standardValues.segment], ["Conditions", conditions],
+  ];
+  info.forEach(([k, v], i) => {
+    const col = i % 2, row = Math.floor(i / 2), x = M + col * 372, yy = y - row * 17;
+    page.drawText(k.toUpperCase(), { x, y: yy, size: 7.5, font: sansB, color: grey });
+    const lines = wrap(v || "—", sansB, 10, 290);
+    page.drawText(lines[0] + (lines.length > 1 ? "..." : ""), { x: x + 72, y: yy, size: 10, font: sansB, color: ink });
+  });
+  y -= 3 * 17 + 4;
+
+  // ---- plan fields (task, FA/CPR person, machinery ...) ----
+  (form.fields || []).forEach((label, i) => {
+    const val = fieldValues[i] || "";
+    const lines = wrap(val || "—", sans, 9.5, W - 2 * M - 190);
+    need(lines.length * 12 + 6);
+    page.drawText(clean(label).toUpperCase(), { x: M, y: y - 9, size: 7, font: sansB, color: grey });
+    lines.forEach((ln, li) => page.drawText(ln, { x: M + 190, y: y - 9 - li * 12, size: 9.5, font: sans, color: ink }));
+    y -= lines.length * 12 + 6;
+    page.drawLine({ start: { x: M, y: y + 3 }, end: { x: W - M, y: y + 3 }, thickness: 0.4, color: line });
+  });
+  y -= 8;
+
+  // ---- steps table ----
+  const cols = [
+    { k: "#", w: 24 }, { k: "Step to complete work", w: 170 }, { k: "Hazards of this step", w: 160 },
+    { k: "Actions taken to prevent hazards", w: 268 }, { k: "Lifesaving control", w: 120 },
+  ];
+  const thead = () => {
+    need(40);
+    page.drawRectangle({ x: M, y: y - 16, width: W - 2 * M, height: 16, color: gold });
+    let x = M;
+    cols.forEach((c) => { page.drawText(c.k.toUpperCase(), { x: x + 3, y: y - 11.5, size: 7, font: sansB, color: ink }); x += c.w; });
+    y -= 16;
+  };
+  thead();
+  for (let si = 0; si < stepCount; si++) {
+    const sv = stepValues[si] || {};
+    if (![0, 1, 2, 3].some((f) => (sv[f] || "").trim())) continue;
+    const cells = [String(si + 1), sv[0] || "", sv[1] || "", sv[2] || "", sv[3] || ""].map((t, ci) => wrap(t, ci === 0 ? sansB : sans, 8, cols[ci].w - 7));
+    const rows = Math.max(...cells.map((c) => c.length), 1);
+    const rh = rows * 10 + 7;
+    if (y - rh < 44) { newPage(); thead(); }
+    let x = M;
+    cells.forEach((cl, ci) => {
+      cl.forEach((ln, li) => page.drawText(ln, { x: x + 3, y: y - 10 - li * 10, size: 8, font: ci === 0 ? sansB : sans, color: ink }));
+      x += cols[ci].w;
+    });
+    y -= rh;
+    page.drawLine({ start: { x: M, y }, end: { x: W - M, y }, thickness: 0.4, color: line });
+  }
+  y -= 12;
+
+  // ---- checklists ----
+  (form.statusGroups || []).forEach((group, gi) => {
+    const sv = statusValues[gi] || {};
+    need(30);
+    page.drawRectangle({ x: M, y: y - 14, width: W - 2 * M, height: 14, color: pale });
+    page.drawText(clean(group.label).toUpperCase(), { x: M + 4, y: y - 10, size: 7.5, font: sansB, color: ink });
+    y -= 14;
+    const perRow = 3, cw = (W - 2 * M) / perRow;
+    for (let i = 0; i < group.items.length; i += perRow) {
+      need(14);
+      for (let j = 0; j < perRow && i + j < group.items.length; j++) {
+        const idx = i + j, v = sv[idx] || "N/A";
+        const x = M + j * cw;
+        page.drawText(clean(group.items[idx]).slice(0, 40), { x: x + 4, y: y - 10, size: 8.5, font: sans, color: ink });
+        page.drawText(v, { x: x + cw - 8 - sansB.widthOfTextAtSize(v, 8.5), y: y - 10, size: 8.5, font: sansB, color: v === "Yes" ? rgb(0.12, 0.48, 0.2) : grey });
+      }
+      y -= 13;
+    }
+    y -= 6;
+  });
+
+  // ---- signature ----
+  need(80);
+  page.drawText("SIGNATURE", { x: M, y: y - 10, size: 7.5, font: sansB, color: grey });
+  if (signatureDataUrl) {
+    try {
+      const bin = atob(signatureDataUrl.split(",")[1]); const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const img = await doc.embedPng(bytes);
+      const sc = Math.min(200 / img.width, 48 / img.height);
+      page.drawImage(img, { x: M, y: y - 14 - img.height * sc, width: img.width * sc, height: img.height * sc });
+    } catch (e) { /* signature image optional */ }
+  }
+  page.drawLine({ start: { x: M, y: y - 66 }, end: { x: M + 240, y: y - 66 }, thickness: 0.6, color: ink });
+  page.drawText(`${clean(standardValues.name)}   ${clean(standardValues.date)}`, { x: M, y: y - 77, size: 8, font: sans, color: grey });
+
+  const pages = doc.getPages();
+  pages.forEach((p, i) => {
+    const t = `Page ${i + 1} of ${pages.length}`;
+    p.drawText(t, { x: W - M - sans.widthOfTextAtSize(t, 8), y: 20, size: 8, font: sans, color: grey });
+    p.drawText("Generated by the Safety Hub", { x: M, y: 20, size: 8, font: sans, color: grey });
+  });
+  return await doc.save();
+}
+
 // Hazards and controls library for the Job Hazard Analysis (from the project's hazards_and_controls list)
 const HAZARD_LIBRARY = {
  "Cold/wet weather conditions": [
@@ -7455,7 +7616,7 @@ function composePickText(p) {
 }
 
 function FillFormModal({ form, onClose, user }) {
-  const { notifyEmail, id: activeProjectId } = useContext(ProjectContext);
+  const { notifyEmail, id: activeProjectId, name: projName } = useContext(ProjectContext);
   const subcontractorOptions = useSubcontractors(activeProjectId);
   const todayStr = new Date().toLocaleDateString();
   const [standardValues, setStandardValues] = useState({
@@ -7575,6 +7736,37 @@ function FillFormModal({ form, onClose, user }) {
     const fieldsText = buildFieldsText(effectiveStatusValues);
     let filledPdfUrl = null;
     let proofDocUrls = [];
+
+    if (form.pdfFillTemplate === "job-hazard-analysis") {
+      setPdfGenerating(true);
+      setPdfError("");
+      try {
+        const signatureDataUrl = signatureCanvasRef.current ? signatureCanvasRef.current.toDataURL("image/png") : null;
+        const filledBytes = await buildJhaPdf({
+          form, slug: activeProjectId, projectName: projName, standardValues, fieldValues: values,
+          stepValues, stepCount, statusValues: effectiveStatusValues, conditions, signatureDataUrl,
+        });
+        const blob = new Blob([filledBytes], { type: "application/pdf" });
+        const localUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = localUrl;
+        a.download = `Job Hazard Analysis - ${standardValues.subcontractor || standardValues.name || "form"} - ${new Date().toISOString().slice(0, 10)}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(localUrl), 5000);
+        const path = `submission-${Date.now()}-job-hazard-analysis.pdf`;
+        const { error: uploadError } = await supabase.storage.from("documents").upload(path, blob);
+        if (!uploadError) {
+          const { data: urlData } = supabase.storage.from("documents").getPublicUrl(path);
+          filledPdfUrl = urlData && urlData.publicUrl ? urlData.publicUrl : null;
+        }
+        setPdfGenerated(true);
+      } catch (e) {
+        setPdfError(e && e.message ? e.message : "Could not generate the filled PDF.");
+      }
+      setPdfGenerating(false);
+    }
 
     if (form.pdfFillTemplate === "drug-screen-affidavit") {
       setPdfGenerating(true);
@@ -8269,7 +8461,7 @@ function SubmittedFormsScreen({ user }) {
   return (
     <div className="px-4 pt-4 pb-8" style={{ background: "#F4F3EF", minHeight: "100%" }}>
       <div className="text-[12px] mb-3" style={{ color: STEEL }}>
-        Every form submitted across the app — from Forms &amp; Templates, Orientation, and Orientation Scheduling — with the actual completed document. This works even if email delivery didn't. Admin only.
+        Every form submitted from Forms &amp; Templates, with the actual completed document. Orientation forms are in the Orientation tab. This works even if email delivery didn't. Admin only.
       </div>
 
       <input
