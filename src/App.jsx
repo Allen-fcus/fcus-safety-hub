@@ -5694,6 +5694,7 @@ const FORMS_DEFAULT = [
       "Crew Members Involved (list names)",
     ],
     stepPlan: {
+      useLibrary: true,
       minSteps: 7,
       fieldLabels: ["Step to Complete Work", "Hazards of This Step", "Actions Taken to Prevent Hazards", "Lifesaving Control"],
     },
@@ -7192,6 +7193,267 @@ async function fillCompetentPersonPdf({ templateUrl, subcontractor, date, employ
   return pdfDoc.save({ useObjectStreams: false });
 }
 
+// Hazards and controls library for the Job Hazard Analysis (from the project's hazards_and_controls list)
+const HAZARD_LIBRARY = {
+ "Cold/wet weather conditions": [
+  "Assess area for access/egress in event of rising water where appropriate",
+  "Watch for overhead ice hazards falling from structures",
+  "Wear layers and cold weather PPE, drink plenty of warm fluids & avoid lone working if possible"
+ ],
+ "Confined space": [
+  "Confined space evaluation document must be complete",
+  "If determined to be permit required, documentation is to be completed",
+  "Only trained and competent persons to enter confined space",
+  "Safety equipment is checked and ready for use"
+ ],
+ "Crystalline silica": [
+  "Crystalline silica procedure control plan in place",
+  "Dry methods such as ventilation controls that use vacuum and HEPA filters to control dust",
+  "Use the proper respiratory protection (refer to the respiratory protection plan)",
+  "Wet methods that use water to control dust"
+ ],
+ "Excavations": [
+  "Competent person is on site at all times when workers are exposed to excavation hazards",
+  "Ensure 811 confirmations have been received and attached to Utility Locate Permit",
+  "Ensure Daily Excavation Checklist is completed by a competent person",
+  "Ensure Utility Locate Permit is complete",
+  "Excavation will be protected upon leaving site",
+  "Gas test atmosphere in trenches more than 4ft depth"
+ ],
+ "Extreme winds": [
+  "All traffic signs should be secured and appropriate weights used",
+  "Avoid lifting operations, unless additional controls are implemented and evidenced",
+  "Beware of flying/falling objects on site",
+  "For any machinery operated - refer to manufacturer recommendation for wind tolerance",
+  "Secure all materials, especially on elevated surfaces"
+ ],
+ "Falls from heights": [
+  "All employees are trained in the correct selection, inspection and safe use of personal fall protection systems",
+  "Anchor points are installed properly per engineer drawings",
+  "Competent person has inspected the personal fall protection system",
+  "Ensure all leading edges are secured with warning lines, barricade or other safe alternatives",
+  "Exclusion zones in work area to avoid falls or falling objects",
+  "Ladders shall not be used to access heights over 15 feet and used for short duration work only",
+  "No one working alone",
+  "Only trained employees can operate aerial platforms and a full body harness must be worn"
+ ],
+ "Fire": [
+  "Fire extinguishers to be correct type/in date visible and readily available- within 25 feet",
+  "Fire watch is required for all welding and cutting activities",
+  "Flammable substances stored and used correctly",
+  "Never refuel running equipment"
+ ],
+ "Flammable liquids": [
+  "Clear spillages immediately and ensure appropriate fire extinguisher in place",
+  "Store liquids securely and do not use tools/equipment that emit sparks"
+ ],
+ "Hazardous substances (lime, concrete, etc.)": [
+  "Eye wash readily available",
+  "Have spill kits available and ready to control any spillages",
+  "Only work with substances you have been trained to use",
+  "Use and store substances in line with project rules and work plans",
+  "Wear the correct protective clothing/respirators for the substance/chemical being used"
+ ],
+ "Heavy Equipment (including  reversing/backing up)": [
+  "Be aware of surroundings at all times",
+  "Ensure 3 Point contact when access ing equipment",
+  "Ensure back up alarm is in working order",
+  "Equipment Checklist must be completed",
+  "Seatbelts must be worn"
+ ],
+ "Hot weather conditions": [
+  "Ensure one or more areas with shade are available for employees if temperature exceeds 80 degrees",
+  "Wear sun screen, drink plenty of water, take frequent breaks and work in the shade if possible"
+ ],
+ "Housekeeping": [
+  "Designated employee parking",
+  "Keep Trash/debris in container(s)",
+  "Maintain a clear access to the jobsite",
+  "Maintain roadway around the project clear",
+  "Maintain Walkways Clear In Work Area (remove nails protruding lumber)",
+  "Proper material storage area(s)"
+ ],
+ "Illumination (light plants)": [
+  "When working at night ensure illumination plan is in place"
+ ],
+ "Impalement": [
+  "Impalement risk must be eliminated or otherwise protected to reduce the hazard (Rebar/Carney Cap)"
+ ],
+ "Lifting operation": [
+  "All crane(s) have been checked in by NTI Safety Department",
+  "All rigging equipment must be inspected by designated competent person",
+  "Critical Lift Plan required when lift exceeds 75% of crane capacity",
+  "Damage/Defective/shock loaded rigging equipment to be removed from service, report to supervisor",
+  "Only certified crane operators (CIC or NCCCO) allowed and daily Crane Checklist completed",
+  "Only designated and qualified employee may rig material to be hoisted",
+  "Tag lines required on all loads"
+ ],
+ "Manual lifting/Handling": [
+  "All tasks to be carried out in line with lifting/ handling training",
+  "Ask for help where required or consider mechanical aids"
+ ],
+ "Noise": [
+  "Ensure appropriate ear protection is worn",
+  "Keep compressor/machine covers closed and turned off when not in use",
+  "Keep noise to a minimum using enclosures where appropriate"
+ ],
+ "Overhead cables": [
+  "Ensure competent safety observer is available and can maintain communication",
+  "Ensure power line close proximity permit is in place, before work, when required",
+  "Goal posts and signage in place"
+ ],
+ "Site requirements": [
+  "All team members have orientation badge",
+  "Competent person present for all activities preformed",
+  "Person trained in First Aid/CPR",
+  "Work Plan is in place"
+ ],
+ "Site security": [
+  "Barriers/fencing and signs in place to prevent unauthorised access to work area",
+  "Keep site clean and secure tools/equipment when not in use"
+ ],
+ "Slip, trips, falls": [
+  "Clear spillages immediately and make sure changes to walkways are well marked",
+  "Floor holes or openings are protected by a cover, marked and securely held in place to prevent tools or materials from falling",
+  "Housekeeping – Keep work area clean with routes kept free of clutter and/or obstacles",
+  "Route cables/hoses appropriately using curbs where required"
+ ],
+ "Struck by": [
+  "Barricade the swing radius of the equipment (crane, drill rig, etc.)",
+  "Be aware of your surroundings at all times (Construction vehicles, Heavy equipment, Concrete Truck, Round Bottom, etc.)",
+  "Do not work under suspended loads",
+  "Keep a safe distance from suspended loads"
+ ],
+ "Tools and equipment": [
+  "Beacon lights",
+  "Ensure all electrical tools are marked with the proper color code tape for the quarter",
+  "Ensure compressor hoses are secured at both ends with fasteners and whip checks",
+  "Ensure pneumatic tools are fastened securely to the air hose",
+  "Equipment and tools must be maintained and/or tested by a competent person",
+  "Fire extinguisher",
+  "Remove faulty equipment and tools, report defects to supervisor",
+  "Saw horses shall be used",
+  "Use proper tools designed for the task"
+ ],
+ "Towing": [
+  "Dedicated safety zone to be set up with loading/unloading",
+  "Hazard lights to be used at loading scene",
+  "Hi visibility clothing and protective equipment to be worn"
+ ],
+ "Trucks in work zone": [
+  "50 foot clear zone must be in place between dumping site and traffic",
+  "All drivers to have appropriate badge in place and wear PPE at all times",
+  "Ensure trucks are on flat ground when dumping",
+  "Ensure backing alarm is properly working. Use best practices",
+  "Monitor environment for changing conditions (i.e. wind and other activities in the area)",
+  "No dumping side by side",
+  "Take care when climbing in and out of vehicles (i.e. maintain three points of contact)"
+ ],
+ "Underground utilities": [
+  "Adopt safe digging practices and dig by non mechanical means",
+  "Ensure 811 confirmations have been received and attached to Utility Locate Permit",
+  "Ensure Utility Locate Permit is complete",
+  "Only trained and competent staff to interpret, mark up drawings and work with locating equipment",
+  "Unless confirmed, assume services are live and use temporary markings in line with company work plans"
+ ],
+ "Use of portable electric equipment": [
+  "All electrical tools must be in good condition and inspected before use and only used for intended purpose",
+  "De-energize electrical equipment before inspection or repair",
+  "Ensure GFCI's are used in front of all AC power supply"
+ ],
+ "Working in live traffic": [
+  "Correct PPE must be worn (Class 3 Vest and Class E Pants)",
+  "Approved Traffic Control Plan(TCP) must be in place",
+  "Ensure 30 feet clear zone is maintained from the live main lane when traffic control is not in place",
+  "Ensure 3ft clear zone is maintained from curbs on frontage road when traffic control is not in place",
+  "Ensure proper (16 feet) clear zone is maintainted on live Frontage Roads and Ramps when traffic control is not in place",
+  "Minimum distance of 100 feet is maintained from the crash cushion attenuator",
+  "Only competent workers to set up signs/signals & barricades",
+  "Proper lane closures are in place with truck mount attenuator (TMA)",
+  "Qualifed and Certified flagger(s) must be in place where required"
+ ]
+};
+
+async function fetchSiteConditions(slug) {
+  const cfg = PROJECT_WEATHER[slug];
+  if (!cfg) return null;
+  try {
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${cfg.lat}&longitude=${cfg.lon}`
+      + "&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m,wind_gusts_10m"
+      + "&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto";
+    const r = await fetch(url);
+    if (!r.ok) return null;
+    const c = (await r.json()).current;
+    if (!c) return null;
+    return {
+      text: `${Math.round(c.temperature_2m)}°F (feels like ${Math.round(c.apparent_temperature)}°F), ${WMO_TEXT[c.weather_code] || "conditions n/a"}, wind ${Math.round(c.wind_speed_10m)} mph, gusts ${Math.round(c.wind_gusts_10m)} mph`,
+      feels: c.apparent_temperature, temp: c.temperature_2m, gust: c.wind_gusts_10m, code: c.weather_code,
+    };
+  } catch (e) { return null; }
+}
+
+// Pick hazards, then tick the controls in place. Writes plain text back so the email, saved copy and PDF all keep working.
+function HazardControlPicker({ pick, onChange, suggest }) {
+  const [open, setOpen] = useState(false);
+  const p = pick || { h: [], c: [], xh: "", xc: "" };
+  const names = Object.keys(HAZARD_LIBRARY);
+  const toggleH = (h) => {
+    const has = p.h.includes(h);
+    const nh = has ? p.h.filter((x) => x !== h) : [...p.h, h];
+    const nc = has ? p.c.filter((c) => !HAZARD_LIBRARY[h].includes(c)) : p.c;
+    onChange({ ...p, h: nh, c: nc });
+  };
+  const toggleC = (c) => onChange({ ...p, c: p.c.includes(c) ? p.c.filter((x) => x !== c) : [...p.c, c] });
+  const lab = { color: STEEL, fontFamily: "IBM Plex Mono, monospace" };
+  return (
+    <div>
+      <label className="text-[10px] uppercase font-bold" style={lab}>Hazards of this step</label>
+      {suggest.length > 0 && (
+        <div className="mt-1 mb-1 flex flex-wrap gap-1 items-center">
+          <span className="text-[10px]" style={{ color: ALERT }}>Today's weather suggests:</span>
+          {suggest.filter((h) => !p.h.includes(h)).map((h) => (
+            <button key={h} type="button" onClick={() => toggleH(h)} className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: AMBER, color: INK }}>+ {h}</button>
+          ))}
+        </div>
+      )}
+      <div className="flex flex-wrap gap-1 mt-1">
+        {p.h.map((h) => (
+          <button key={h} type="button" onClick={() => toggleH(h)} className="text-[11px] font-bold px-2 py-1 rounded-full" style={{ background: INK, color: GOLD }}>{h} ✕</button>
+        ))}
+        <button type="button" onClick={() => setOpen((v) => !v)} className="text-[11px] font-bold px-2 py-1 rounded-full border" style={{ borderColor: GOLD, color: INK }}>{open ? "Close list" : "+ Pick hazards"}</button>
+      </div>
+      {open && (
+        <div className="mt-1.5 rounded-md border p-1.5 flex flex-wrap gap-1" style={{ borderColor: "#E4E2DA", background: "white", maxHeight: 190, overflowY: "auto" }}>
+          {names.map((h) => (
+            <button key={h} type="button" onClick={() => toggleH(h)} className="text-[11px] px-2 py-1 rounded-full border" style={{ borderColor: p.h.includes(h) ? INK : "#C9C6BC", background: p.h.includes(h) ? INK : "white", color: p.h.includes(h) ? GOLD : INK }}>{h}</button>
+          ))}
+        </div>
+      )}
+      <input value={p.xh} onChange={(e) => onChange({ ...p, xh: e.target.value })} placeholder="Other hazards not listed (optional)" className="w-full mt-1.5 rounded-md border px-2.5 py-1.5 text-[12px]" style={{ borderColor: "#C9C6BC" }} />
+
+      <label className="text-[10px] uppercase font-bold block mt-3" style={lab}>Actions taken to prevent hazards — tick each control that is in place</label>
+      {p.h.length === 0 && <div className="text-[11px] mt-1" style={{ color: STEEL }}>Pick a hazard above and its controls appear here.</div>}
+      {p.h.map((h) => (
+        <div key={h} className="mt-1.5 rounded-md border p-2" style={{ borderColor: "#E4E2DA", background: "white" }}>
+          <div className="text-[11px] font-bold mb-1">{h}</div>
+          {HAZARD_LIBRARY[h].map((c) => (
+            <label key={c} className="flex items-start gap-2 py-0.5 text-[12px]">
+              <input type="checkbox" checked={p.c.includes(c)} onChange={() => toggleC(c)} className="mt-0.5" />
+              <span>{c}</span>
+            </label>
+          ))}
+        </div>
+      ))}
+      <textarea rows={2} value={p.xc} onChange={(e) => onChange({ ...p, xc: e.target.value })} placeholder="Other controls / actions (optional)" className="w-full mt-1.5 rounded-md border px-2.5 py-1.5 text-[12px]" style={{ borderColor: "#C9C6BC" }} />
+    </div>
+  );
+}
+function composePickText(p) {
+  const hz = [...p.h, ...(p.xh.trim() ? [p.xh.trim()] : [])].join("; ");
+  const ct = [...p.c.map((c) => `- ${c}`), ...(p.xc.trim() ? [p.xc.trim()] : [])].join("\n");
+  return { hz, ct };
+}
+
 function FillFormModal({ form, onClose, user }) {
   const { notifyEmail, id: activeProjectId } = useContext(ProjectContext);
   const subcontractorOptions = useSubcontractors(activeProjectId);
@@ -7230,6 +7492,28 @@ function FillFormModal({ form, onClose, user }) {
   const [emailStatus, setEmailStatus] = useState(null);
   const [stepCount, setStepCount] = useState(form.stepPlan ? form.stepPlan.minSteps : 0);
   const [stepValues, setStepValues] = useState({});
+  const [stepPicks, setStepPicks] = useState({});
+  const [conditions, setConditions] = useState("");
+  const [weatherSuggest, setWeatherSuggest] = useState([]);
+  useEffect(() => {
+    if (!form.stepPlan || !form.stepPlan.useLibrary) return;
+    let cancelled = false;
+    fetchSiteConditions(activeProjectId).then((w) => {
+      if (cancelled || !w) return;
+      setConditions(w.text);
+      const sug = [];
+      if (w.feels >= 95) sug.push("Hot weather conditions");
+      if (w.temp <= 40) sug.push("Cold/wet weather conditions");
+      if (w.gust >= 20) sug.push("Extreme winds");
+      setWeatherSuggest(sug);
+    });
+    return () => { cancelled = true; };
+  }, [activeProjectId]);
+  const setStepPick = (si, np) => {
+    setStepPicks((v) => ({ ...v, [si]: np }));
+    const { hz, ct } = composePickText(np);
+    setStepValues((v) => ({ ...v, [si]: { ...(v[si] || {}), 1: hz, 2: ct } }));
+  };
 
   const setStd = (key, val) => setStandardValues((v) => ({ ...v, [key]: val }));
   const setStepField = (stepIdx, fieldIdx, val) => {
@@ -7261,6 +7545,7 @@ function FillFormModal({ form, onClose, user }) {
       lines.push("", `${group.label}: ${chosenIdx != null ? group.items[chosenIdx] : "—"}`);
     });
     if (form.stepPlan) {
+      if (conditions.trim()) lines.push("", `Conditions at start of shift: ${conditions.trim()}`);
       lines.push("", "Task Steps:");
       Array.from({ length: stepCount }).forEach((_, si) => {
         lines.push(`  Step ${si + 1}:`);
@@ -7604,6 +7889,12 @@ function FillFormModal({ form, onClose, user }) {
               <div className="text-[11px] uppercase font-bold mb-2" style={{ color: GOLD, fontFamily: "IBM Plex Mono, monospace" }}>
                 Task Steps — Hazards &amp; Lifesaving Controls
               </div>
+              {form.stepPlan.useLibrary && (
+                <div className="mb-3">
+                  <label className="text-[10px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Conditions at start of shift (auto-filled, edit if needed)</label>
+                  <input value={conditions} onChange={(e) => setConditions(e.target.value)} placeholder="Weather at the work site" className="w-full mt-1 rounded-md border px-2.5 py-1.5 text-[13px]" style={{ borderColor: "#C9C6BC" }} />
+                </div>
+              )}
               <div className="space-y-3">
                 {Array.from({ length: stepCount }).map((_, stepIdx) => (
                   <div key={stepIdx} className="rounded-md p-3 border" style={{ borderColor: "#E4E2DA", background: "#FCFCFA" }}>
@@ -7612,6 +7903,9 @@ function FillFormModal({ form, onClose, user }) {
                     </div>
                     <div className="space-y-2">
                       {form.stepPlan.fieldLabels.map((label, fieldIdx) => (
+                        form.stepPlan.useLibrary && fieldIdx === 1 ? (
+                          <HazardControlPicker key={fieldIdx} pick={stepPicks[stepIdx]} onChange={(np) => setStepPick(stepIdx, np)} suggest={weatherSuggest} />
+                        ) : form.stepPlan.useLibrary && fieldIdx === 2 ? null : (
                         <div key={fieldIdx}>
                           <label className="text-[10px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{label}</label>
                           <textarea
@@ -7622,6 +7916,7 @@ function FillFormModal({ form, onClose, user }) {
                             style={{ borderColor: "#C9C6BC" }}
                           />
                         </div>
+                        )
                       ))}
                     </div>
                   </div>
