@@ -489,7 +489,7 @@ const PROJECT_LOGOS = {
   "nti-sylvania": { src: LOGO_NTA, plate: false, alt: "North Tarrant Infrastructure" },
   "nti-golden-triangle": { src: LOGO_NTA, plate: false, alt: "North Tarrant Infrastructure" },
   "sh99-houston": { src: LOGO_WEBBER, plate: false, alt: "Ferrovial Webber Joint Venture" },
-  "nashville": { src: LOGO_DRIVETN, plate: false, alt: "driveTN" },
+  "nashville": { src: LOGO_DRIVETN, plate: false, alt: "Ferrovial Construction-Webber 24 JV" },
 };
 
 function ProjectLogo({ projectId, maxHeight = 44, fallback = null }) {
