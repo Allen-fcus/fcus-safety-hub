@@ -4,7 +4,7 @@ import { Wallet, Home, BookOpen, PlayCircle, ClipboardCheck, FileText, ChevronRi
 import { supabase, loadProjectMap, projectIdForSlug, projectSlugForId } from "./supabaseClient.js";
 import { PDFDocument } from "pdf-lib";
 import QRCode from "qrcode";
-import { LOGO_DRIVETN, LOGO_WEBBER, LOGO_NTA } from "./projectLogos.js";
+import { LOGO_FCW24, LOGO_WEBBER, LOGO_NTA } from "./projectLogos.js";
 
 // ============================================================
 // CONTENT SOURCE CONFIG
@@ -388,7 +388,7 @@ const HERO_IMAGE = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAoHC
 
 // Projects where TX & Federal Labor Laws is shown — Houston only for now.
 const LABOR_LAWS_PROJECTS = ["sh99-houston"];
-// Traffic Control tab: DriveTN only. The PDF lives in the Supabase "documents" bucket.
+// Traffic Control tab: FCW24 (Tennessee) only. The PDF lives in the Supabase "documents" bucket.
 const TRAFFIC_CONTROL_PROJECTS = ["nashville"];
 const CLEAR_ZONE_DOC = {
   title: "Clear Zone Criteria: S-CZ-1",
@@ -489,7 +489,7 @@ const PROJECT_LOGOS = {
   "nti-sylvania": { src: LOGO_NTA, plate: false, alt: "North Tarrant Infrastructure" },
   "nti-golden-triangle": { src: LOGO_NTA, plate: false, alt: "North Tarrant Infrastructure" },
   "sh99-houston": { src: LOGO_WEBBER, plate: false, alt: "Ferrovial Webber Joint Venture" },
-  "nashville": { src: LOGO_DRIVETN, plate: false, alt: "Ferrovial Construction-Webber 24 JV" },
+  "nashville": { src: LOGO_FCW24, plate: false, alt: "Ferrovial Construction-Webber 24 JV" },
 };
 
 function ProjectLogo({ projectId, maxHeight = 44, fallback = null }) {
@@ -1660,7 +1660,7 @@ function MeetingsScreen({ user, activeProjectId }) {
   );
 }
 
-// ---- Screen: Traffic Control (DriveTN only) ----
+// ---- Screen: Traffic Control (FCW24 only) ----
 // Same layout as H&S Minimum Standards: the document is always open on the page.
 function TrafficControlScreen({ user, activeProjectId }) {
   const [showQr, setShowQr] = useState(false);
@@ -1674,7 +1674,7 @@ function TrafficControlScreen({ user, activeProjectId }) {
   }, [deepLink, isAdmin, showQr]);
 
   if (!TRAFFIC_CONTROL_PROJECTS.includes(activeProjectId)) {
-    return <div className="px-4 pt-6 text-[12px] text-center" style={{ color: STEEL }}>Traffic Control is only available on the DriveTN project.</div>;
+    return <div className="px-4 pt-6 text-[12px] text-center" style={{ color: STEEL }}>Traffic Control is only available on the FCW24 project.</div>;
   }
 
   const downloadDoc = async () => {
@@ -1724,7 +1724,7 @@ function TrafficControlScreen({ user, activeProjectId }) {
       )}
       <div className="mb-3">
         <div className="text-[14px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{CLEAR_ZONE_DOC.title}</div>
-        <div className="text-[11px]" style={{ color: STEEL }}>Traffic Control · DriveTN</div>
+        <div className="text-[11px]" style={{ color: STEEL }}>Traffic Control · FCW24</div>
       </div>
       <div className="flex-1 rounded-md overflow-hidden border" style={{ borderColor: "#E4E2DA", minHeight: 500 }}>
         <iframe src={CLEAR_ZONE_DOC.url} className="w-full h-full" style={{ border: "none", minHeight: 500 }} title={CLEAR_ZONE_DOC.title} />
@@ -6568,7 +6568,7 @@ function suggestedExpiryFor(label, issuedDateStr) {
   issued.setFullYear(issued.getFullYear() + rule.years);
   return issued.toISOString().slice(0, 10);
 }
-const DRUG_SCREEN_RECIPIENT_BY_PROJECT = { "nti-sylvania": "North Tarrant Infrastructure", "nti-golden-triangle": "North Tarrant Infrastructure", "sh99-houston": "FCW99", "nashville": "DriveTN" };
+const DRUG_SCREEN_RECIPIENT_BY_PROJECT = { "nti-sylvania": "North Tarrant Infrastructure", "nti-golden-triangle": "North Tarrant Infrastructure", "sh99-houston": "FCW99", "nashville": "FCW24" };
 
 // ------------------------------------------------------------
 // Fills the real "Drug Screen Affidavit" PDF — mapped by exact
@@ -9733,7 +9733,7 @@ function BulletinPostEditor({ post, user, onDone }) {
         <button onClick={() => setBroadcast((b) => !b)} className="w-full flex items-center justify-between rounded-md p-2 border mb-3" style={{ borderColor: broadcast ? GOLD : "#E4E2DA", background: broadcast ? "#FFF8E1" : "#FCFCFA" }}>
           <div>
             <div className="text-[12px] font-bold">Post to All Projects</div>
-            <div className="text-[10px]" style={{ color: STEEL }}>Sylvania, Golden Triangle, Houston, and DriveTN all at once</div>
+            <div className="text-[10px]" style={{ color: STEEL }}>Sylvania, Golden Triangle, Houston, and FCW24 all at once</div>
           </div>
           <div className="w-9 h-5 rounded-full flex items-center px-0.5 flex-shrink-0 ml-2" style={{ background: broadcast ? GOLD : "#E4E2DA", justifyContent: broadcast ? "flex-end" : "flex-start" }}>
             <div className="w-4 h-4 rounded-full bg-white" />
@@ -10042,7 +10042,7 @@ const PROJECTS = {
   },
   "nashville": {
     id: "nashville",
-    name: "DriveTN - Tennessee",
+    name: "FCW24 - Tennessee",
     notifyEmail: "", // set this once you have Nashville's designated recipient
     sheetUrls: { ...EMPTY_SHEET_URLS },
     fallbacks: { personnel: [], workPlans: [], safetyPlan: [], bulletin: [], emergencyContacts: EMERGENCY_CONTACTS_TBD, orientation: ORIENTATION_SESSIONS_TBD },
