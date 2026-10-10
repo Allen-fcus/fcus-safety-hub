@@ -3011,6 +3011,18 @@ function ManageOrientationSignInsScreen({ user, activeProjectId }) {
           Export CSV
         </button>
       </div>
+      {!loading && (
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          <div className="rounded-md p-3 text-center" style={{ background: INK }}>
+            <div style={{ fontFamily: "Oswald, sans-serif", fontWeight: 700, fontSize: 28, color: GOLD, lineHeight: 1 }}>{entries.length}</div>
+            <div className="text-[10px] uppercase mt-1" style={{ color: "#C9C6BC", fontFamily: "IBM Plex Mono, monospace" }}>Signed in · waiting for a badge</div>
+          </div>
+          <div className="rounded-md p-3 text-center" style={{ background: INK }}>
+            <div style={{ fontFamily: "Oswald, sans-serif", fontWeight: 700, fontSize: 28, color: GOLD, lineHeight: 1 }}>{entries.filter((e) => new Date(e.submitted_at).toDateString() === new Date().toDateString()).length}</div>
+            <div className="text-[10px] uppercase mt-1" style={{ color: "#C9C6BC", fontFamily: "IBM Plex Mono, monospace" }}>Signed in today</div>
+          </div>
+        </div>
+      )}
       {loading && <div className="text-[12px] mb-2" style={{ color: STEEL }}>Loading…</div>}
       {entries.map((entry) => <SignInCard key={entry.id} entry={entry} user={user} onDone={load} />)}
       {!loading && entries.length === 0 && (
@@ -9194,6 +9206,11 @@ function PersonnelScreen({ user, go }) {
         className="w-full rounded-md border px-3 py-2 text-[13px] mb-3"
         style={{ borderColor: "#C9C6BC" }}
       />
+      {!loading && (
+        <div className="text-[11px] mb-2 font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>
+          {q ? `${filtered.length} of ${employees.length} people` : `${employees.length} ${employees.length === 1 ? "person" : "people"} on file`}
+        </div>
+      )}
       <div className="space-y-2">
         {filtered.map((e, i) => {
           const photo = e.photoUrl;
