@@ -3341,6 +3341,38 @@ const WORK_PLANS_FLAT_DEFAULT = [
   { subcontractor: "MCD Construction", title: "Bridge Deck Pour Work Plan", pages: 5, link: "" },
 ];
 
+// Opens uploaded documents inside the page instead of downloading them.
+// Google Drive links already preview; Office files use Microsoft's viewer, PDFs and anything else use Google's.
+function inlineViewUrl(link) {
+  if (!link) return "";
+  if (/drive\.google\.com|docs\.google\.com|view\.officeapps\.live\.com|docs\.google\.com\/gview/i.test(link)) return link;
+  const clean = link.split("?")[0].toLowerCase();
+  if (/\.(png|jpe?g|gif|webp|svg)$/.test(clean)) return link;
+  if (/\.(docx?|xlsx?|pptx?)$/.test(clean)) return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(link)}`;
+  return `https://docs.google.com/gview?embedded=1&url=${encodeURIComponent(link)}`;
+}
+function fileNameFromLink(link, fallback) {
+  try {
+    const last = decodeURIComponent(link.split("?")[0].split("/").pop() || "");
+    const nm = last.replace(/^\d{10,}-/, "");
+    return nm || fallback;
+  } catch (e) { return fallback; }
+}
+async function downloadFromLink(link, fallbackName) {
+  try {
+    const res = await fetch(link);
+    if (!res.ok) throw new Error("fetch failed");
+    const blob = await res.blob();
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = fileNameFromLink(link, fallbackName || "document");
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  } catch (e) {
+    window.open(link, "_blank");
+  }
+}
+
 function WorkPlansScreen({ user, go }) {
   const { t } = useTranslation();
   const [viewing, setViewing] = useState(null);
@@ -3373,7 +3405,7 @@ function WorkPlansScreen({ user, go }) {
 
   const handleDownload = (p, key) => {
     setDownloaded((d) => ({ ...d, [key]: true }));
-    if (p.link) window.open(p.link, "_blank");
+    if (p.link) downloadFromLink(p.link, p.title);
   };
 
   const grouped = {};
@@ -3434,10 +3466,15 @@ function WorkPlansScreen({ user, go }) {
                 <div className="text-[10px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{viewing.subcontractor}</div>
                 <div className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{viewing.title}</div>
               </div>
-              <button onClick={() => setViewing(null)}><X size={18} color={STEEL} /></button>
+              <div className="flex items-center gap-3">
+                {viewing.link && (
+                  <button onClick={() => downloadFromLink(viewing.link, viewing.title)} className="flex items-center gap-1 text-[10px] font-bold uppercase" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}><Download size={13} /> {t("download")}</button>
+                )}
+                <button onClick={() => setViewing(null)}><X size={18} color={STEEL} /></button>
+              </div>
             </div>
             {viewing.link ? (
-              <iframe src={viewing.link} className="flex-1 w-full" style={{ border: "none" }} title={viewing.title} />
+              <iframe src={inlineViewUrl(viewing.link)} className="flex-1 w-full" style={{ border: "none" }} title={viewing.title} />
             ) : (
               <div className="flex-1 overflow-y-auto flex items-center justify-center py-12" style={{ background: "#FCFCFA" }}>
                 <div className="text-center px-6">
