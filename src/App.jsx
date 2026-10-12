@@ -5758,6 +5758,7 @@ const FORMS_DEFAULT = [
   {
     title: "Job Hazard Analysis",
     pdfFillTemplate: "job-hazard-analysis",
+    equipmentSelectFields: { "Machinery to be Used": "multi" },
     description: "Identifies task-specific hazards and the controls in place to prevent them, completed before work begins.",
     pdfLink: "https://drive.google.com/file/d/1mnudZbn3_LlA95Brg-Fktb0pTP4bzsaP/preview",
     fields: [
@@ -5798,6 +5799,7 @@ const FORMS_DEFAULT = [
     pdfLink: "https://drive.google.com/file/d/1cV343qtYv6oXGxKNap7fFZFjlpGuNQtM/preview",
     pdfFillTemplate: "daily-equipment-inspection",
     fields: ["Company", "Operator", "Equipment Type", "Project Location", "Supervisor"],
+    equipmentSelectFields: { "Equipment Type": "single" },
     choiceGroups: [
       { label: "Day or Night", items: ["Day", "Night"] },
     ],
@@ -7269,6 +7271,46 @@ async function fillCompetentPersonPdf({ templateUrl, subcontractor, date, employ
   return pdfDoc.save({ useObjectStreams: false });
 }
 
+// Equipment list used by the Daily Equipment Inspection (pick one) and the JHA machinery field (pick several)
+const EQUIPMENT_OPTIONS = [
+  "Aerial Man Lift", "Track Hoe", "Back Hoe", "Forklift", "Skid Steer", "Excavator", "Boom Lift", "Mini Excavator",
+  "Skytrack (Telehandler)", "Off Road Truck", "Water Truck", "Dozer", "Compactor", "Front End Loader", "Trencher",
+  "Sheep Foot Roller", "Motor Grader", "Scraper", "Scissor Lift", "Dump Truck", "Bore Machine", "Rock Hauler",
+  "Milling Machine", "Broom/Sweeper", "Shuttle Buggy", "Asphalt Paver", "Power Broom", "Lime Mixer", "TMA", "Boat",
+  "Crane", "Drill Rig", "Other",
+];
+function EquipmentSelect({ multi, onChange }) {
+  const [sel, setSel] = useState([]);
+  const [other, setOther] = useState("");
+  const compose = (nextSel, nextOther) =>
+    nextSel.map((x) => (x === "Other" ? (nextOther.trim() ? `Other: ${nextOther.trim()}` : "Other") : x)).join(", ");
+  const update = (nextSel, nextOther) => { setSel(nextSel); setOther(nextOther); onChange(compose(nextSel, nextOther)); };
+  const toggle = (o) => update(sel.includes(o) ? sel.filter((x) => x !== o) : [...sel, o], other);
+  return (
+    <div className="mt-1">
+      {multi ? (
+        <div className="flex flex-wrap gap-1 rounded-md border p-1.5 bg-white" style={{ borderColor: "#C9C6BC", maxHeight: 170, overflowY: "auto" }}>
+          {EQUIPMENT_OPTIONS.map((o) => {
+            const on = sel.includes(o);
+            return (
+              <button key={o} type="button" onClick={() => toggle(o)} className="text-[11px] px-2 py-1 rounded-full border" style={{ borderColor: on ? INK : "#C9C6BC", background: on ? INK : "white", color: on ? GOLD : INK }}>{o}</button>
+            );
+          })}
+        </div>
+      ) : (
+        <select value={sel[0] || ""} onChange={(e) => update(e.target.value ? [e.target.value] : [], other)} className="w-full rounded-md border px-2.5 py-1.5 text-[13px] bg-white" style={{ borderColor: "#C9C6BC" }}>
+          <option value="">Select equipment…</option>
+          {EQUIPMENT_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+        </select>
+      )}
+      {multi && sel.length > 0 && <div className="text-[10px] mt-1" style={{ color: STEEL }}>Selected: {sel.join(", ")}</div>}
+      {sel.includes("Other") && (
+        <input value={other} onChange={(e) => update(sel, e.target.value)} placeholder="Describe the other equipment" className="w-full mt-1.5 rounded-md border px-2.5 py-1.5 text-[13px]" style={{ borderColor: "#C9C6BC" }} />
+      )}
+    </div>
+  );
+}
+
 // Generated Job Hazard Analysis PDF (landscape letter): header, job info, task steps table, checklists, signature.
 async function buildJhaPdf({ form, slug, projectName, standardValues, fieldValues, stepValues, stepCount, statusValues, conditions, signatureDataUrl, pick, lifesaving }) {
   const { StandardFonts, rgb } = await import("pdf-lib");
@@ -8147,6 +8189,9 @@ function FillFormModal({ form, onClose, user }) {
               <div key={i}>
                 <label className="text-[11px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{f}</label>
                 <FieldHint label={f} />
+                {form.equipmentSelectFields && form.equipmentSelectFields[f] ? (
+                  <EquipmentSelect multi={form.equipmentSelectFields[f] === "multi"} onChange={(val) => setValues((v) => ({ ...v, [i]: val }))} />
+                ) : (
                 <textarea
                   rows={f.length > 30 ? 2 : 1}
                   value={values[i] || ""}
@@ -8154,6 +8199,7 @@ function FillFormModal({ form, onClose, user }) {
                   className="w-full mt-1 rounded-md border px-2.5 py-1.5 text-[13px]"
                   style={{ borderColor: "#C9C6BC" }}
                 />
+                )}
                 {i === 0 && form.noteBelowFirstField && (
                   <div className="text-[10px] mt-1.5 mb-1" style={{ color: STEEL }}>{form.noteBelowFirstField}</div>
                 )}
