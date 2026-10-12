@@ -5826,6 +5826,7 @@ const FORMS_DEFAULT = [
     pdfFillTemplate: "generic-form-pdf",
     genericPdfLongFields: ["Purpose of Excavation / Drilling / Boring", "Location of Excavation / Drilling / Boring"],
     projects: ["nti-sylvania", "nti-golden-triangle"],
+    photoFields: { "Submit a photo of the marked utilities in the specific work area": true },
     requiresTwoSignatures: true,
     signatureLabels: ["Equipment Operator Signature", "Foreman/Supervisor Signature"],
     fields: [
@@ -5834,7 +5835,7 @@ const FORMS_DEFAULT = [
       "Location of Excavation / Drilling / Boring",
       "Depth", "Width / Diameter", "Length",
       "Utility Locate Reference #",
-      "Have Locates Been Documented With Video/Photos?",
+      "Submit a photo of the marked utilities in the specific work area",
       "Ticket Refresh Date 1", "Ticket Number 1",
       "Ticket Refresh Date 2", "Ticket Number 2",
     ],
@@ -7109,7 +7110,7 @@ const DESIGNATION_PDF_CONFIGS = {
         "Description of the Excavation or Drilled shaft": getField("Depth"),
         WidthDiameter: getField("Width / Diameter"),
         Length: getField("Length"),
-        "Have locates been documented with video and or Photos": getField("Have Locates Been Documented With Video/Photos?"),
+        "Have locates been documented with video and or Photos": getField("Submit a photo of the marked utilities in the specific work area"),
         Date_2: standardValues.date,
         Date_3: standardValues.date,
         Date_4: getField("Ticket Refresh Date 1"),
@@ -7320,7 +7321,33 @@ function EquipmentSelect({ multi, onChange }) {
 
 // Generated PDF for simple field + checklist + signature forms (portrait letter).
 // Used by the Utility Locate Permit; any similar form can reuse it by setting pdfFillTemplate to "generic-form-pdf".
-async function buildGenericFormPdf({ form, slug, projectName, standardValues, fieldValues, choiceValues, statusValues, signatures, longFields }) {
+// Time stamp + photo helpers for Site Safety Forms
+const fmtSubmittedAt = (d) => d.toLocaleString("en-US", { month: "2-digit", day: "2-digit", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true });
+async function fileToJpegBytes(file, maxDim = 1600) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
+    const sc = Math.min(1, maxDim / Math.max(img.width, img.height));
+    const c = document.createElement("canvas");
+    c.width = Math.round(img.width * sc); c.height = Math.round(img.height * sc);
+    const ctx = c.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height); ctx.drawImage(img, 0, 0, c.width, c.height);
+    const blob = await new Promise((res) => c.toBlob(res, "image/jpeg", 0.82));
+    return new Uint8Array(await blob.arrayBuffer());
+  } finally { URL.revokeObjectURL(url); }
+}
+async function stampSubmitted(bytes, label) {
+  const { StandardFonts, rgb } = await import("pdf-lib");
+  const doc = await PDFDocument.load(bytes);
+  const f = await doc.embedFont(StandardFonts.HelveticaBold);
+  const t = `Submitted: ${label}`;
+  doc.getPages().forEach((p) => {
+    const { width } = p.getSize();
+    p.drawText(t, { x: width - 36 - f.widthOfTextAtSize(t, 7), y: 8, size: 7, font: f, color: rgb(0.25, 0.25, 0.25) });
+  });
+  return await doc.save();
+}
+
+async function buildGenericFormPdf({ form, slug, projectName, standardValues, fieldValues, choiceValues, statusValues, signatures, longFields, submittedAt, photos }) {
   const { StandardFonts, rgb } = await import("pdf-lib");
   const doc = await PDFDocument.create();
   const sans = await doc.embedFont(StandardFonts.Helvetica);
@@ -7383,7 +7410,7 @@ async function buildGenericFormPdf({ form, slug, projectName, standardValues, fi
   };
   // header facts
   const colW = (CW - 16) / 2;
-  let h1 = Math.max(kv("Date", standardValues.date, M, colW), kv("Project", projectName || "", M + colW + 16, colW));
+  let h1 = Math.max(kv("Date / Time Submitted", submittedAt || standardValues.date, M, colW), kv("Project", projectName || "", M + colW + 16, colW));
   y -= h1;
   let h2 = Math.max(kv("Company", standardValues.subcontractor, M, colW), kv("Prepared by", standardValues.name, M + colW + 16, colW));
   y -= h2;
@@ -7392,7 +7419,8 @@ async function buildGenericFormPdf({ form, slug, projectName, standardValues, fi
 
   // fields: short ones two-up, long ones full width
   const long = new Set(longFields || []);
-  const items = (form.fields || []).map((label, i) => ({ label, value: fieldValues[i] || "", full: long.has(label) || String(fieldValues[i] || "").length > 34 }));
+  const photoMap = photos || {};
+  const items = (form.fields || []).map((label, i) => ({ label, value: photoMap[label] ? `${photoMap[label].length} photo(s) attached - see below` : (fieldValues[i] || ""), full: long.has(label) || String(fieldValues[i] || "").length > 34 }));
   let k = 0;
   while (k < items.length) {
     const a = items[k];
@@ -7406,6 +7434,29 @@ async function buildGenericFormPdf({ form, slug, projectName, standardValues, fi
       const ha = kv(a.label, a.value, M, colW);
       const hb = b ? kv(b.label, b.value, M + colW + 16, colW) : 0;
       y -= Math.max(ha, hb); k += b ? 2 : 1;
+    }
+  }
+
+  // photos
+  for (const [plabel, imgs] of Object.entries(photoMap)) {
+    if (!imgs || !imgs.length) continue;
+    need(30); y -= 4;
+    page.drawRectangle({ x: M, y: y - 14, width: CW, height: 14, color: gold });
+    page.drawText(clean(plabel).toUpperCase().slice(0, 90), { x: M + 4, y: y - 10, size: 7.5, font: sansB, color: ink });
+    y -= 20;
+    const per = 2, bw = (CW - 12) / per, bh = 130;
+    for (let i = 0; i < imgs.length; i += per) {
+      need(bh + 8);
+      for (let j = 0; j < per && i + j < imgs.length; j++) {
+        try {
+          const im = await doc.embedJpg(imgs[i + j]);
+          const sc = Math.min(bw / im.width, bh / im.height);
+          const w = im.width * sc, h = im.height * sc, x = M + j * (bw + 12);
+          page.drawRectangle({ x, y: y - bh, width: bw, height: bh, borderColor: line, borderWidth: 0.5 });
+          page.drawImage(im, { x: x + (bw - w) / 2, y: y - bh + (bh - h) / 2, width: w, height: h });
+        } catch (e) { /* skip bad image */ }
+      }
+      y -= bh + 8;
     }
   }
 
@@ -7456,7 +7507,7 @@ async function buildGenericFormPdf({ form, slug, projectName, standardValues, fi
         } catch (e) { /* signature image optional */ }
       }
       page.drawLine({ start: { x, y: y - 62 }, end: { x: x + sw, y: y - 62 }, thickness: 0.6, color: ink });
-      page.drawText(i === 0 ? `${clean(standardValues.name)}   ${clean(standardValues.date)}` : `Date: ${clean(standardValues.date)}`, { x, y: y - 73, size: 8, font: sans, color: grey });
+      page.drawText(i === 0 ? `${clean(standardValues.name)}   ${clean(submittedAt || standardValues.date)}` : `Date: ${clean(submittedAt || standardValues.date)}`, { x, y: y - 73, size: 8, font: sans, color: grey });
     }
   }
   const pages = doc.getPages();
@@ -7469,7 +7520,7 @@ async function buildGenericFormPdf({ form, slug, projectName, standardValues, fi
 }
 
 // Generated Job Hazard Analysis PDF (landscape letter): header, job info, task steps table, checklists, signature.
-async function buildJhaPdf({ form, slug, projectName, standardValues, fieldValues, stepValues, stepCount, statusValues, conditions, signatureDataUrl, pick, lifesaving }) {
+async function buildJhaPdf({ form, slug, projectName, standardValues, fieldValues, stepValues, stepCount, statusValues, conditions, signatureDataUrl, pick, lifesaving, submittedAt }) {
   const { StandardFonts, rgb } = await import("pdf-lib");
   const doc = await PDFDocument.create();
   const sans = await doc.embedFont(StandardFonts.Helvetica);
@@ -7529,7 +7580,7 @@ async function buildJhaPdf({ form, slug, projectName, standardValues, fieldValue
 
   // ---- job info ----
   const info = [
-    ["Date", standardValues.date], ["Project", projectName || ""],
+    ["Date / Time Submitted", submittedAt || standardValues.date], ["Project", projectName || ""],
     ["Subcontractor", standardValues.subcontractor], ["Prepared by", standardValues.name],
     ...(NO_SEGMENT_PROJECTS.includes(slug) ? [] : [["Segment", standardValues.segment]]), ["Conditions", conditions],
   ];
@@ -7621,7 +7672,7 @@ async function buildJhaPdf({ form, slug, projectName, standardValues, fieldValue
     } catch (e) { /* signature image optional */ }
   }
   page.drawLine({ start: { x: M, y: y - 66 }, end: { x: M + 240, y: y - 66 }, thickness: 0.6, color: ink });
-  page.drawText(`${clean(standardValues.name)}   ${clean(standardValues.date)}`, { x: M, y: y - 77, size: 8, font: sans, color: grey });
+  page.drawText(`${clean(standardValues.name)}   ${clean(submittedAt || standardValues.date)}`, { x: M, y: y - 77, size: 8, font: sans, color: grey });
 
   const pages = doc.getPages();
   pages.forEach((p, i) => {
@@ -7921,6 +7972,8 @@ function FillFormModal({ form, onClose, user }) {
   const [pdfGenerated, setPdfGenerated] = useState(false);
   const [pdfError, setPdfError] = useState("");
   const [proofFiles, setProofFiles] = useState([]);
+  const [fieldPhotos, setFieldPhotos] = useState({});
+  const photoInputRefs = useRef({});
   const proofInputRef = useRef(null);
   const [logoFile, setLogoFile] = useState(null);
   const [logoPreview, setLogoPreview] = useState(null);
@@ -7965,16 +8018,17 @@ function FillFormModal({ form, onClose, user }) {
     setChoiceValues((v) => ({ ...v, [groupIdx]: itemIdx }));
   };
 
-  const buildFieldsText = (overrideStatusValues) => {
+  const buildFieldsText = (overrideStatusValues, submittedAtLabel) => {
     const svToUse = overrideStatusValues || statusValues;
     const lines = [
       `Name: ${standardValues.name}`,
       `Subcontractor: ${standardValues.subcontractor}`,
       ...(NO_SEGMENT_PROJECTS.includes(activeProjectId) ? [] : [`Segment: ${standardValues.segment}`]),
       `Date: ${standardValues.date}`,
+      ...(submittedAtLabel ? [`Time Submitted: ${submittedAtLabel}`] : []),
       "",
     ];
-    (form.fields || []).forEach((f, i) => lines.push(`${f}: ${values[i] || ""}`));
+    (form.fields || []).forEach((f, i) => lines.push(`${f}: ${form.photoFields && form.photoFields[f] ? `${(fieldPhotos[f] || []).length} photo(s) attached` : (values[i] || "")}`));
     (form.statusGroups || []).forEach((group, gi) => {
       lines.push("", group.label + ":");
       group.items.forEach((item, ii) => lines.push(`  ${item}: ${(svToUse[gi] || {})[ii] || "—"}`));
@@ -8016,9 +8070,28 @@ function FillFormModal({ form, onClose, user }) {
       effectiveStatusValues[gi] = next;
     });
     setStatusValues(effectiveStatusValues);
-    const fieldsText = buildFieldsText(effectiveStatusValues);
+    const submittedAt = fmtSubmittedAt(new Date());
+    const fieldsText = buildFieldsText(effectiveStatusValues, submittedAt);
     let filledPdfUrl = null;
     let proofDocUrls = [];
+
+    // Photos attached next to a question: convert to JPEG, upload, and keep the bytes for the PDF
+    const photoBytes = {};
+    for (const label of Object.keys(form.photoFields || {})) {
+      const files = fieldPhotos[label] || [];
+      for (let pi = 0; pi < files.length; pi++) {
+        try {
+          const bytes = await fileToJpegBytes(files[pi]);
+          (photoBytes[label] = photoBytes[label] || []).push(bytes);
+          const ppath = `photo-${Date.now()}-${pi}.jpg`;
+          const { error: pErr } = await supabase.storage.from("documents").upload(ppath, new Blob([bytes], { type: "image/jpeg" }), { contentType: "image/jpeg" });
+          if (!pErr) {
+            const { data: pUrl } = supabase.storage.from("documents").getPublicUrl(ppath);
+            if (pUrl && pUrl.publicUrl) proofDocUrls.push(pUrl.publicUrl);
+          }
+        } catch (e) { /* skip unreadable photo */ }
+      }
+    }
 
     if (form.pdfFillTemplate === "generic-form-pdf") {
       setPdfGenerating(true);
@@ -8026,7 +8099,7 @@ function FillFormModal({ form, onClose, user }) {
       try {
         const filledBytes = await buildGenericFormPdf({
           form, slug: activeProjectId, projectName: projName, standardValues, fieldValues: values,
-          choiceValues, statusValues: effectiveStatusValues, longFields: form.genericPdfLongFields,
+          choiceValues, statusValues: effectiveStatusValues, longFields: form.genericPdfLongFields, submittedAt, photos: photoBytes,
           signatures: [
             { label: (form.signatureLabels && form.signatureLabels[0]) || "Signature", dataUrl: signatureCanvasRef.current ? signatureCanvasRef.current.toDataURL("image/png") : null },
             ...(form.requiresTwoSignatures ? [{ label: (form.signatureLabels && form.signatureLabels[1]) || "Signature 2", dataUrl: signature2CanvasRef.current ? signature2CanvasRef.current.toDataURL("image/png") : null }] : []),
@@ -8062,7 +8135,7 @@ function FillFormModal({ form, onClose, user }) {
         const filledBytes = await buildJhaPdf({
           form, slug: activeProjectId, projectName: projName, standardValues, fieldValues: values,
           stepValues, stepCount, statusValues: effectiveStatusValues, conditions, signatureDataUrl,
-          pick: stepPicks[0] || { h: [], c: [], xh: "", xc: "" }, lifesaving: (stepValues[0] || {})[3] || "",
+          pick: stepPicks[0] || { h: [], c: [], xh: "", xc: "" }, lifesaving: (stepValues[0] || {})[3] || "", submittedAt,
         });
         const blob = new Blob([filledBytes], { type: "application/pdf" });
         const localUrl = URL.createObjectURL(blob);
@@ -8111,7 +8184,7 @@ function FillFormModal({ form, onClose, user }) {
           logoDataUrl: logoPreview,
         });
 
-        const blob = new Blob([filledBytes], { type: "application/pdf" });
+        const blob = new Blob([await stampSubmitted(filledBytes, submittedAt)], { type: "application/pdf" });
 
         const localUrl = URL.createObjectURL(blob);
         const a = document.createElement("a");
@@ -8156,7 +8229,7 @@ function FillFormModal({ form, onClose, user }) {
           dropdownFields: config.buildDropdownFields ? config.buildDropdownFields(ctx) : {},
           signatures: config.buildSignatures ? config.buildSignatures(ctx) : [],
         });
-        const blob = new Blob([filledBytes], { type: "application/pdf" });
+        const blob = new Blob([await stampSubmitted(filledBytes, submittedAt)], { type: "application/pdf" });
 
         const localUrl = URL.createObjectURL(blob);
         const a = document.createElement("a");
@@ -8202,7 +8275,7 @@ function FillFormModal({ form, onClose, user }) {
           signatureDataUrl,
           authRepSignatureDataUrl,
         });
-        const blob = new Blob([filledBytes], { type: "application/pdf" });
+        const blob = new Blob([await stampSubmitted(filledBytes, submittedAt)], { type: "application/pdf" });
 
         // Download a copy locally for whoever is submitting on-site
         const localUrl = URL.createObjectURL(blob);
@@ -8269,7 +8342,7 @@ function FillFormModal({ form, onClose, user }) {
         await supabase.rpc("submit_form", {
           p_token: user.sessionToken,
           p_form_title: form.title,
-          p_data: { ...standardValues, fields: values, statusValues: effectiveStatusValues, choiceValues, stepValues, filledPdfUrl, proofDocUrls, category },
+          p_data: { ...standardValues, submittedAtLabel: submittedAt, fields: values, statusValues: effectiveStatusValues, choiceValues, stepValues, filledPdfUrl, proofDocUrls, category },
           p_signature: null,
         });
       } catch (e) {
@@ -8382,7 +8455,29 @@ function FillFormModal({ form, onClose, user }) {
               <div key={i}>
                 <label className="text-[11px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{f}</label>
                 <FieldHint label={f} />
-                {form.equipmentSelectFields && form.equipmentSelectFields[f] ? (
+                {form.photoFields && form.photoFields[f] ? (
+                  <div>
+                    <input ref={(el) => { photoInputRefs.current[f] = el; }} type="file" accept="image/*" multiple className="hidden" onChange={(e) => {
+                      const nf = Array.from(e.target.files || []);
+                      if (nf.length) setFieldPhotos((p) => ({ ...p, [f]: [...(p[f] || []), ...nf] }));
+                      e.target.value = "";
+                    }} />
+                    {(fieldPhotos[f] || []).length > 0 && (
+                      <div className="grid grid-cols-3 gap-2 mt-1 mb-2">
+                        {(fieldPhotos[f] || []).map((file, pi) => (
+                          <div key={pi} className="relative rounded-md overflow-hidden border" style={{ borderColor: "#C9C6BC" }}>
+                            <img src={URL.createObjectURL(file)} alt="" className="w-full h-20 object-cover" />
+                            <button onClick={() => setFieldPhotos((p) => ({ ...p, [f]: (p[f] || []).filter((_, k) => k !== pi) }))} className="absolute top-1 right-1 rounded-full bg-white p-0.5"><X size={12} color={STEEL} /></button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <button onClick={() => photoInputRefs.current[f] && photoInputRefs.current[f].click()} className="w-full rounded-md border-2 border-dashed py-3 flex flex-col items-center gap-1" style={{ borderColor: "#C9C6BC" }}>
+                      <ImagePlus size={18} color={STEEL} />
+                      <span className="text-[11px]" style={{ color: STEEL }}>{(fieldPhotos[f] || []).length > 0 ? "Add Another Photo" : "Take or Upload Photo(s)"}</span>
+                    </button>
+                  </div>
+                ) : form.equipmentSelectFields && form.equipmentSelectFields[f] ? (
                   <EquipmentSelect multi={form.equipmentSelectFields[f] === "multi"} onChange={(val) => setValues((v) => ({ ...v, [i]: val }))} />
                 ) : (
                 <textarea
@@ -8609,7 +8704,7 @@ function FillFormModal({ form, onClose, user }) {
               <button
                 disabled={
                   sigEmpty || (form.requiresTwoSignatures && sig2Empty) || submitting ||
-                  proofMissing ||
+                  proofMissing || Object.keys(form.photoFields || {}).some((l) => (fieldPhotos[l] || []).length === 0) ||
                   (form.requiresLogo && !logoFile) ||
                   (form.allFieldsRequired && (form.fields || []).some((label, i) => !/\(if applicable\)/i.test(label) && !(values[i] || "").trim()))
                 }
