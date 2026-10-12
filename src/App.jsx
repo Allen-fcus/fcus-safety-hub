@@ -5802,8 +5802,14 @@ const FORMS_DEFAULT = [
     title: "Daily Equipment Inspection",
     description: "Daily pre-use inspection confirming equipment is in safe operating condition before it's used on-site.",
     pdfLink: "https://drive.google.com/file/d/1cV343qtYv6oXGxKNap7fFZFjlpGuNQtM/preview",
-    pdfFillTemplate: "daily-equipment-inspection",
-    fields: ["Company", "Operator", "Equipment Type", "Project Location", "Supervisor"],
+    pdfFillTemplate: "generic-form-pdf",
+    genericPdfLongFields: ["Deficiencies / Comments"],
+    fields: ["Company", "Operator", "Equipment Type", "Project Location", "Supervisor", "Deficiencies / Comments"],
+    trailingFieldLabels: ["Deficiencies / Comments"],
+    bigTextFields: ["Deficiencies / Comments"],
+    prefillNameFields: ["Operator"],
+    prefillSubcontractorFields: ["Company"],
+    signatureLabels: ["Operator Signature"],
     equipmentSelectFields: { "Equipment Type": "single" },
     choiceGroups: [
       { label: "Day or Night", items: ["Day", "Night"] },
@@ -7366,7 +7372,7 @@ async function buildGenericFormPdf({ form, slug, projectName, standardValues, fi
   const doc = await PDFDocument.create();
   const sans = await doc.embedFont(StandardFonts.Helvetica);
   const sansB = await doc.embedFont(StandardFonts.HelveticaBold);
-  const clean = (t) => String(t == null ? "" : t).replace(/\r/g, "").replace(/[^\n -ÿ]/g, "?");
+  const clean = (t) => String(t == null ? "" : t).replace(/[\u2013\u2014]/g, "-").replace(/\r/g, "").replace(/[^\n -ÿ]/g, "?");
   const ink = rgb(0.1, 0.1, 0.1), gold = rgb(0.98, 0.78, 0.02), grey = rgb(0.4, 0.42, 0.45), line = rgb(0.8, 0.79, 0.75), pale = rgb(0.96, 0.95, 0.92);
   const W = 612, H = 792, M = 36, CW = W - 2 * M;
   const wrap = (text, font, size, max) => {
@@ -7430,6 +7436,18 @@ async function buildGenericFormPdf({ form, slug, projectName, standardValues, fi
   y -= h2;
   page.drawLine({ start: { x: M, y: y + 2 }, end: { x: W - M, y: y + 2 }, thickness: 0.6, color: ink });
   y -= 6;
+
+  // deficiency banner (any checklist item marked Bad)
+  const badItems = [];
+  (form.statusGroups || []).forEach((g, gi) => g.items.forEach((it, ii) => { if (((statusValues[gi] || {})[ii]) === "Bad") badItems.push(it); }));
+  if (badItems.length) {
+    const lines = wrap(`${badItems.length} DEFICIENC${badItems.length === 1 ? "Y" : "IES"} REPORTED: ${badItems.join(", ")}. Do not operate until corrected.`, sansB, 9, CW - 12);
+    const bh = 10 + lines.length * 11;
+    need(bh + 6);
+    page.drawRectangle({ x: M, y: y - bh, width: CW, height: bh, color: rgb(0.78, 0.07, 0.18) });
+    lines.forEach((ln, li) => page.drawText(ln, { x: M + 6, y: y - 13 - li * 11, size: 9, font: sansB, color: rgb(1, 1, 1) }));
+    y -= bh + 8;
+  }
 
   // fields: short ones two-up, long ones full width
   const long = new Set(longFields || []);
@@ -7500,7 +7518,7 @@ async function buildGenericFormPdf({ form, slug, projectName, standardValues, fi
           const rt = clean(rf ? `Ref #: ${rf}` : "Ref #: -").slice(0, 30);
           page.drawText(rt, { x: x + 92, y: y - 11, size: 8.5, font: sansB, color: ink });
         }
-        page.drawText(v, { x: x + cw - 12 - sansB.widthOfTextAtSize(v, 9), y: y - 11, size: 9, font: sansB, color: v === "Yes" ? rgb(0.12, 0.48, 0.2) : v === "No" ? rgb(0.78, 0.07, 0.18) : grey });
+        page.drawText(v, { x: x + cw - 12 - sansB.widthOfTextAtSize(v, 9), y: y - 11, size: 9, font: sansB, color: (v === "Yes" || v === "OK") ? rgb(0.12, 0.48, 0.2) : (v === "No" || v === "Bad") ? rgb(0.78, 0.07, 0.18) : grey });
       }
       y -= 15;
       page.drawLine({ start: { x: M, y: y + 1 }, end: { x: W - M, y: y + 1 }, thickness: 0.3, color: line });
@@ -7544,7 +7562,7 @@ async function buildJhaPdf({ form, slug, projectName, standardValues, fieldValue
   const doc = await PDFDocument.create();
   const sans = await doc.embedFont(StandardFonts.Helvetica);
   const sansB = await doc.embedFont(StandardFonts.HelveticaBold);
-  const clean = (t) => String(t == null ? "" : t).replace(/[\r]/g, "").replace(/[^\n -ÿ]/g, "?");
+  const clean = (t) => String(t == null ? "" : t).replace(/[\u2013\u2014]/g, "-").replace(/[\r]/g, "").replace(/[^\n -ÿ]/g, "?");
   const ink = rgb(0.1, 0.1, 0.1), gold = rgb(0.98, 0.78, 0.02), grey = rgb(0.4, 0.42, 0.45), line = rgb(0.8, 0.79, 0.75), pale = rgb(0.96, 0.95, 0.92);
   const W = 792, H = 612, M = 30;
   const wrap = (text, font, size, max) => {
@@ -7996,20 +8014,26 @@ function FillFormModal({ form, onClose, user }) {
   const photoInputRefs = useRef({});
   // Fields that mirror the Name box (e.g. "Requested By"): copy it in, and keep following it until edited by hand
   const prevNameRef = useRef(null);
+  const prevCompanyRef = useRef(null);
   useEffect(() => {
-    const labels = form.prefillNameFields || [];
-    if (!labels.length) return;
+    const nameLabels = form.prefillNameFields || [];
+    const coLabels = form.prefillSubcontractorFields || [];
+    if (!nameLabels.length && !coLabels.length) return;
     setValues((v) => {
       const next = { ...v };
-      labels.forEach((l) => {
+      nameLabels.forEach((l) => {
         const i = (form.fields || []).indexOf(l);
-        if (i === -1) return;
-        if (!next[i] || next[i] === prevNameRef.current) next[i] = standardValues.name;
+        if (i !== -1 && (!next[i] || next[i] === prevNameRef.current)) next[i] = standardValues.name;
+      });
+      coLabels.forEach((l) => {
+        const i = (form.fields || []).indexOf(l);
+        if (i !== -1 && (!next[i] || next[i] === prevCompanyRef.current)) next[i] = standardValues.subcontractor;
       });
       return next;
     });
     prevNameRef.current = standardValues.name;
-  }, [standardValues.name]);
+    prevCompanyRef.current = standardValues.subcontractor;
+  }, [standardValues.name, standardValues.subcontractor]);
   const proofInputRef = useRef(null);
   const [logoFile, setLogoFile] = useState(null);
   const [logoPreview, setLogoPreview] = useState(null);
@@ -8517,7 +8541,8 @@ function FillFormModal({ form, onClose, user }) {
                   <EquipmentSelect multi={form.equipmentSelectFields[f] === "multi"} onChange={(val) => setValues((v) => ({ ...v, [i]: val }))} />
                 ) : (
                 <textarea
-                  rows={f.length > 30 ? 2 : 1}
+                  rows={(form.bigTextFields || []).includes(f) ? 5 : (f.length > 30 ? 2 : 1)}
+                  placeholder={(form.bigTextFields || []).includes(f) ? "Type any deficiencies, damage, or comments here. Write \"None\" if there are none." : undefined}
                   value={values[i] || ""}
                   onChange={(e) => setValues((v) => ({ ...v, [i]: e.target.value }))}
                   className="w-full mt-1 rounded-md border px-2.5 py-1.5 text-[13px]"
@@ -8639,7 +8664,8 @@ function FillFormModal({ form, onClose, user }) {
                 <label className="text-[11px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{f}</label>
                 <FieldHint label={f} />
                 <textarea
-                  rows={f.length > 30 ? 2 : 1}
+                  rows={(form.bigTextFields || []).includes(f) ? 5 : (f.length > 30 ? 2 : 1)}
+                  placeholder={(form.bigTextFields || []).includes(f) ? "Type any deficiencies, damage, or comments here. Write \"None\" if there are none." : undefined}
                   value={values[i] || ""}
                   onChange={(e) => setValues((v) => ({ ...v, [i]: e.target.value }))}
                   className="w-full mt-1 rounded-md border px-2.5 py-1.5 text-[13px]"
