@@ -5812,6 +5812,7 @@ const FORMS_DEFAULT = [
     mediaUpload: { afterGroup: 0, label: "Upload a Video of the Equipment Condition", hint: "Record a short walk-around video (or add photos) showing the equipment's condition. Max 50 MB per file." },
     trailingFieldLabels: ["Deficiencies / Comments"],
     bigTextFields: ["Deficiencies / Comments"],
+    bigTextHints: { "Deficiencies / Comments": "Type any deficiencies, damage, or comments here. Write \"None\" if there are none." },
     prefillNameFields: ["Operator"],
     prefillSubcontractorFields: ["Company"],
     signatureLabels: ["Operator Signature"],
@@ -5951,7 +5952,12 @@ const FORMS_DEFAULT = [
     title: "Confined Space Evaluation",
     description: "Evaluates a work area to determine confined space entry requirements and the safety measures needed before entry.",
     pdfLink: "https://drive.google.com/file/d/1MgOYWLMNzq1Qn9q00nVnnJeI69IQwbL2/preview",
-    pdfFillTemplate: "confined-space-evaluation",
+    pdfFillTemplate: "generic-form-pdf",
+    genericPdfWrap: true,
+    genericPdfLongFields: ["Purpose of Entry", "Location / Description of Work Area", "Comments"],
+    trailingFieldLabels: ["Comments"],
+    bigTextFields: ["Comments"],
+    bigTextHints: { "Comments": "Type any comments or special conditions for this entry here." },
     requiresProof: true,
     proofLabel: "Supporting Documentation",
     proofRequired: false,
@@ -5979,7 +5985,15 @@ const FORMS_DEFAULT = [
     title: "Hot Work Permit",
     description: "Authorizes welding, cutting, or other hot work once required fire safety precautions are confirmed in place.",
     pdfLink: "https://drive.google.com/file/d/14v_Nb87T7pNCTjWxaxd_JTUDAu89O6V-/preview",
-    pdfFillTemplate: "hot-work-permit",
+    pdfFillTemplate: "generic-form-pdf",
+    genericPdfWrap: true,
+    genericPdfLongFields: ["Location of Work", "Description of Work", "Equipment to be Used", "Special Conditions (if any)"],
+    signatureLabels: ["Contractor Signature"],
+    prefillSubcontractorFields: ["Contractor Performing Work"],
+    prefillNameFields: ["Contact Name"],
+    trailingFieldLabels: ["Special Conditions (if any)"],
+    bigTextFields: ["Special Conditions (if any)"],
+    bigTextHints: { "Special Conditions (if any)": "Type any special conditions for this hot work permit, or write None." },
     requiresProof: true,
     proofLabel: "Supporting Documentation",
     proofRequired: false,
@@ -6007,7 +6021,11 @@ const FORMS_DEFAULT = [
     title: "Power Line Close Proximity Permit",
     description: "Authorizes work near energized power lines once required clearance distances and protective measures are confirmed.",
     pdfLink: "https://drive.google.com/file/d/1h-Dr6EIzM0zhDPt7llr8JSEBeCpzXIJK/preview",
-    pdfFillTemplate: "power-line-permit",
+    pdfFillTemplate: "generic-form-pdf",
+    genericPdfWrap: true,
+    genericPdfCols: 1,
+    genericPdfLongFields: ["Purpose of Activity", "Location of Activity", "Owner of Utility & Point of Contact", "Equipment to Be Used"],
+    prefillNameFields: ["Requested By"],
     requiresProof: true,
     proofLabel: "Supporting Documentation",
     proofRequired: false,
@@ -6039,7 +6057,16 @@ const FORMS_DEFAULT = [
     title: "Crane Inspection Checklist",
     description: "Documents periodic crane inspection results and confirms the crane is safe for continued use.",
     pdfLink: "https://drive.google.com/file/d/1cpgAGp3bzP_OJmITgkKAvYGFrzp0qLqE/preview",
-    fields: ["Unit No.", "Make", "Model", "Serial No.", "Hours"],
+    pdfFillTemplate: "generic-form-pdf",
+    genericPdfWrap: true,
+    genericBadValues: ["U"],
+    genericPdfLegend: "S = Satisfactory    U = Unsatisfactory    N/A = Not applicable",
+    genericPdfLongFields: ["Deficiencies / Comments"],
+    signatureLabels: ["Inspector Signature"],
+    trailingFieldLabels: ["Deficiencies / Comments"],
+    bigTextFields: ["Deficiencies / Comments"],
+    bigTextHints: { "Deficiencies / Comments": "Describe any unsatisfactory (U) items and corrective action, or write None." },
+    fields: ["Unit No.", "Make", "Model", "Serial No.", "Hours", "Deficiencies / Comments"],
     statusGroups: [
       {
         label: "Overall",
@@ -7523,7 +7550,7 @@ async function buildGenericFormPdf({ form, slug, projectName, standardValues, fi
 
   // deficiency banner (any checklist item marked Bad)
   const badItems = [];
-  (form.statusGroups || []).forEach((g, gi) => g.items.forEach((it, ii) => { if (((statusValues[gi] || {})[ii]) === "Bad") badItems.push(it); }));
+  (form.statusGroups || []).forEach((g, gi) => g.items.forEach((it, ii) => { if ((form.genericBadValues || ["Bad"]).includes((statusValues[gi] || {})[ii])) badItems.push(it); }));
   if (badItems.length) {
     const lines = wrap(`${badItems.length} DEFICIENC${badItems.length === 1 ? "Y" : "IES"} REPORTED: ${badItems.join(", ")}. Do not operate until corrected.`, sansB, 9, CW - 12);
     const bh = 10 + lines.length * 11;
@@ -7618,6 +7645,27 @@ async function buildGenericFormPdf({ form, slug, projectName, standardValues, fi
   });
   y -= 6;
 
+  // reference table (e.g. clearance distances)
+  if (form.referenceTable) {
+    const rt = form.referenceTable;
+    need(30 + rt.rows.length * 14);
+    page.drawRectangle({ x: M, y: y - 14, width: CW, height: 14, color: gold });
+    page.drawText(clean(rt.title).toUpperCase(), { x: M + 4, y: y - 10, size: 7.5, font: sansB, color: ink });
+    y -= 14;
+    rt.rows.forEach((r, ri) => {
+      page.drawText(clean(r[0]), { x: M + 4, y: y - 11, size: 9, font: sans, color: ink });
+      page.drawText(clean(r[1]), { x: M + CW / 2, y: y - 11, size: 9, font: sansB, color: ink });
+      y -= 14;
+      page.drawLine({ start: { x: M, y: y + 1 }, end: { x: W - M, y: y + 1 }, thickness: 0.3, color: line });
+    });
+    y -= 6;
+  }
+  if (form.genericPdfLegend) {
+    need(14);
+    page.drawText(clean(form.genericPdfLegend), { x: M, y: y - 9, size: 7.5, font: sans, color: grey });
+    y -= 14;
+  }
+
   // checklists
   (form.statusGroups || []).forEach((g, gi) => {
     const sv = statusValues[gi] || {};
@@ -7625,7 +7673,23 @@ async function buildGenericFormPdf({ form, slug, projectName, standardValues, fi
     page.drawRectangle({ x: M, y: y - 14, width: CW, height: 14, color: gold });
     page.drawText(clean(g.label).toUpperCase(), { x: M + 4, y: y - 10, size: 7.5, font: sansB, color: ink });
     y -= 14;
-    if (form.genericPdfWide) {
+    const stCol = (v) => form.genericPdfNeutral ? ink : ((v === "Yes" || v === "OK" || v === "S" || v === "Confirmed") ? rgb(0.12, 0.48, 0.2) : (v === "No" || v === "Bad" || v === "U") ? rgb(0.78, 0.07, 0.18) : grey);
+    if (form.genericPdfWrap) {
+      const per = form.genericPdfCols || 2, cw = CW / per;
+      for (let i = 0; i < g.items.length; i += per) {
+        const cells = [];
+        for (let j = 0; j < per && i + j < g.items.length; j++) cells.push(wrap(g.items[i + j], sans, 8.5, cw - 54));
+        const rowLines = Math.max(...cells.map((c) => c.length));
+        need(rowLines * 10 + 8);
+        cells.forEach((lines, j) => {
+          const idx = i + j, v = sv[idx] || "N/A", x = M + j * cw;
+          lines.forEach((ln, li) => page.drawText(ln, { x: x + 4, y: y - 10 - li * 10, size: 8.5, font: sans, color: ink }));
+          page.drawText(v, { x: x + cw - 8 - sansB.widthOfTextAtSize(v, 8.5), y: y - 10, size: 8.5, font: sansB, color: stCol(v) });
+        });
+        y -= rowLines * 10 + 4;
+        page.drawLine({ start: { x: M, y: y + 1 }, end: { x: W - M, y: y + 1 }, thickness: 0.3, color: line });
+      }
+    } else if (form.genericPdfWide) {
       for (let idx = 0; idx < g.items.length; idx++) {
         const v = sv[idx] || "N/A";
         const lines = wrap(g.items[idx], sans, 9, CW - 60);
@@ -8722,7 +8786,7 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
                 ) : (
                 <textarea
                   rows={(form.bigTextFields || []).includes(f) ? 5 : (f.length > 30 ? 2 : 1)}
-                  placeholder={(form.bigTextFields || []).includes(f) ? "Type any deficiencies, damage, or comments here. Write \"None\" if there are none." : undefined}
+                  placeholder={(form.bigTextHints || {})[f] || ((form.bigTextFields || []).includes(f) ? "Type here. Write \"None\" if there is nothing to add." : undefined)}
                   value={values[i] || ""}
                   onChange={(e) => setValues((v) => ({ ...v, [i]: e.target.value }))}
                   className="w-full mt-1 rounded-md border px-2.5 py-1.5 text-[13px]"
@@ -8876,7 +8940,7 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
                 {form.photoFields && form.photoFields[f] ? renderPhotoPicker(f) : (
                 <textarea
                   rows={(form.bigTextFields || []).includes(f) ? 5 : (f.length > 30 ? 2 : 1)}
-                  placeholder={(form.bigTextFields || []).includes(f) ? "Type any deficiencies, damage, or comments here. Write \"None\" if there are none." : undefined}
+                  placeholder={(form.bigTextHints || {})[f] || ((form.bigTextFields || []).includes(f) ? "Type here. Write \"None\" if there is nothing to add." : undefined)}
                   value={values[i] || ""}
                   onChange={(e) => setValues((v) => ({ ...v, [i]: e.target.value }))}
                   className="w-full mt-1 rounded-md border px-2.5 py-1.5 text-[13px]"
