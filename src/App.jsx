@@ -5879,6 +5879,7 @@ const FORMS_DEFAULT = [
       "Soil Type": { options: ["Type A", "Type B", "Type C"] },
       "Type of Protective System Used": { options: ["Trench Box", "Shoring System", "Sloping", "Benching"], multi: true },
     },
+    slopeDiagramField: "Soil Type",
     followUpForm: "Utility Locate Permit",
     followUpMap: {
       "Location of Excavation / Drilling / Boring": "Site Location",
@@ -6595,6 +6596,43 @@ function AboutForm({ form }) {
     <div className="rounded-md px-3 py-2 mb-3 text-[12px] leading-snug" style={{ background: "#FFF8E1", border: "1px solid #F0DFA0", color: INK }}>
       <div className="text-[10px] uppercase font-bold mb-0.5" style={{ color: GOLD, fontFamily: "IBM Plex Mono, monospace" }}>About this form</div>
       {form.description}
+    </div>
+  );
+}
+
+// OSHA 29 CFR 1926 Subpart P, Appendix B maximum allowable slopes (H:V) for excavations 20 ft or less
+const SOIL_SLOPES = [
+  { key: "Type A", ratio: 0.75, label: "3/4 : 1", deg: "53" },
+  { key: "Type B", ratio: 1, label: "1 : 1", deg: "45" },
+  { key: "Type C", ratio: 1.5, label: "1 1/2 : 1", deg: "34" },
+];
+
+function SoilSlopeDiagram({ selected }) {
+  const d = 28, bw = 16, cell = 110;
+  return (
+    <div className="mt-2 rounded-md border p-2" style={{ borderColor: "#E4E2DA", background: "#FCFCFA" }}>
+      <div className="text-[10px] uppercase font-bold mb-1" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Maximum allowable slopes (horizontal : vertical)</div>
+      <svg viewBox={`0 0 ${cell * 3} 100`} className="w-full" role="img" aria-label="Maximum allowable slope diagrams for Type A, B and C soil">
+        {SOIL_SLOPES.map((t, i) => {
+          const x0 = i * cell, run = t.ratio * d, mid = x0 + cell / 2;
+          const xl = mid - bw / 2 - run, xr = mid + bw / 2 + run, gy = 18, by = gy + d;
+          const on = selected && selected.includes(t.key);
+          return (
+            <g key={t.key}>
+              {on && <rect x={x0 + 2} y={2} width={cell - 4} height={96} rx={4} fill="#FFF3C4" stroke={GOLD} strokeWidth="1.5" />}
+              <rect x={x0 + 6} y={gy} width={cell - 12} height={d + 12} fill="#D9C7A3" />
+              <polygon points={`${xl},${gy} ${xr},${gy} ${mid + bw / 2},${by} ${mid - bw / 2},${by}`} fill="#FFFFFF" stroke="#4B5563" strokeWidth="1" />
+              <line x1={x0 + 6} y1={gy} x2={x0 + cell - 6} y2={gy} stroke="#4B5563" strokeWidth="1.2" />
+              <text x={mid} y={11} textAnchor="middle" fontSize="9" fontWeight="700" fill="#111">{t.key.toUpperCase()}</text>
+              <text x={mid} y={by + 11 + 0} textAnchor="middle" fontSize="7" fill="#111">{t.label}</text>
+              <text x={mid} y={by + 21} textAnchor="middle" fontSize="7" fill="#4B5563">{t.deg}&#176; from horizontal</text>
+              <text x={mid - bw / 2 - run / 2} y={gy + 8} textAnchor="middle" fontSize="6" fill="#4B5563">H</text>
+              <text x={xl + 3} y={by - 1} fontSize="6" fill="#4B5563">V = 1</text>
+            </g>
+          );
+        })}
+      </svg>
+      <div className="text-[9px] leading-snug" style={{ color: STEEL }}>Type A 3/4:1 (53&#176;) &middot; Type B 1:1 (45&#176;) &middot; Type C 1 1/2:1 (34&#176;). Per OSHA 29 CFR 1926 Subpart P, Appendix B, for excavations 20 ft deep or less. Your Competent Person classifies the soil.</div>
     </div>
   );
 }
@@ -7514,6 +7552,34 @@ async function buildGenericFormPdf({ form, slug, projectName, standardValues, fi
   if (mediaCount) {
     need(30);
     y -= kv("Video / photos of equipment condition", `${mediaCount} file(s) attached - open them from the submission`, M, CW);
+  }
+
+  // slope diagram (OSHA 1926 Subpart P, App. B)
+  if (form.slopeDiagramField) {
+    const si = (form.fields || []).indexOf(form.slopeDiagramField);
+    const chosen = String((fieldValues && fieldValues[si]) || "");
+    const bandH = 14, boxH = 102;
+    need(bandH + boxH + 14);
+    page.drawRectangle({ x: M, y: y - 14, width: CW, height: 14, color: gold });
+    page.drawText("MAXIMUM ALLOWABLE SLOPES (HORIZONTAL : VERTICAL) - OSHA 29 CFR 1926 SUBPART P, APPENDIX B", { x: M + 4, y: y - 10, size: 7, font: sansB, color: ink });
+    y -= 18;
+    const cellW = CW / 3, d = 34, bw = 20;
+    const slopes = [["Type A", 0.75, "3/4 : 1", "53"], ["Type B", 1, "1 : 1", "45"], ["Type C", 1.5, "1 1/2 : 1", "34"]];
+    slopes.forEach(([key, ratio, lab, deg], ci) => {
+      const x0 = M + ci * cellW, mid = x0 + cellW / 2, run = ratio * d;
+      const on = chosen.includes(key);
+      page.drawRectangle({ x: x0 + 2, y: y - boxH, width: cellW - 4, height: boxH, color: on ? rgb(1, 0.95, 0.77) : rgb(0.99, 0.99, 0.98), borderColor: on ? gold : line, borderWidth: on ? 1.5 : 0.5 });
+      const gy = y - 24;
+      page.drawText(key.toUpperCase() + (on ? "  (SELECTED)" : ""), { x: mid - sansB.widthOfTextAtSize(key.toUpperCase() + (on ? "  (SELECTED)" : ""), 8) / 2, y: y - 12, size: 8, font: sansB, color: ink });
+      page.drawRectangle({ x: x0 + 8, y: gy - d - 12, width: cellW - 16, height: d + 12, color: rgb(0.85, 0.78, 0.64) });
+      const pts = [[mid - bw / 2 - run, gy], [mid + bw / 2 + run, gy], [mid + bw / 2, gy - d], [mid - bw / 2, gy - d]];
+      page.drawSvgPath(`M ${pts[0][0]} 0 L ${pts[1][0]} 0 L ${pts[2][0]} ${d} L ${pts[3][0]} ${d} Z`, { x: 0, y: gy, color: rgb(1, 1, 1), borderColor: rgb(0.29, 0.33, 0.38), borderWidth: 0.8 });
+      page.drawLine({ start: { x: x0 + 8, y: gy }, end: { x: x0 + cellW - 8, y: gy }, thickness: 1, color: rgb(0.29, 0.33, 0.38) });
+      const t1 = `Slope ${lab}   (${deg}\u00b0 from horizontal)`;
+      page.drawText(clean(t1), { x: mid - sans.widthOfTextAtSize(clean(t1), 7.5) / 2, y: gy - d - 24, size: 7.5, font: sans, color: ink });
+      page.drawText("V = 1", { x: mid - bw / 2 - run + 3, y: gy - d + 2, size: 6, font: sans, color: grey });
+    });
+    y -= boxH + 8;
   }
 
   const drawPhotos = async () => {
@@ -8636,7 +8702,10 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
                 {form.photoFields && form.photoFields[f] ? (
                   renderPhotoPicker(f)
                 ) : form.chipFields && form.chipFields[f] ? (
-                  <ChipSelect options={form.chipFields[f].options} multi={!!form.chipFields[f].multi} value={values[i] || ""} onChange={(val) => setValues((v) => ({ ...v, [i]: val }))} />
+                  <div>
+                    <ChipSelect options={form.chipFields[f].options} multi={!!form.chipFields[f].multi} value={values[i] || ""} onChange={(val) => setValues((v) => ({ ...v, [i]: val }))} />
+                    {form.slopeDiagramField === f && <SoilSlopeDiagram selected={values[i] || ""} />}
+                  </div>
                 ) : form.equipmentSelectFields && form.equipmentSelectFields[f] ? (
                   <EquipmentSelect multi={form.equipmentSelectFields[f] === "multi"} onChange={(val) => setValues((v) => ({ ...v, [i]: val }))} />
                 ) : (
