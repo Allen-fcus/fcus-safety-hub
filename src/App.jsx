@@ -8818,9 +8818,9 @@ async function appendTicketRefreshLog(baseBytes, { original, refreshes, startNum
   return await doc.save();
 }
 
-function UtilityPermitRenewals({ user, projectName }) {
+function UtilityPermitRenewals({ user, projectName, onClose }) {
   const { notifyEmail } = useContext(ProjectContext);
-  const [open, setOpen] = useState(false);
+  const open = true;
   const [permits, setPermits] = useState([]);
   const [loading, setLoading] = useState(false);
   const [activeId, setActiveId] = useState(null);
@@ -8892,14 +8892,16 @@ function UtilityPermitRenewals({ user, projectName }) {
   };
 
   return (
-    <div className="bg-white rounded-md p-3 border mb-3" style={{ borderColor: GOLD }}>
-      <button onClick={() => setOpen((o) => !o)} className="w-full flex items-center justify-between text-left">
+    <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/80 p-4">
+      <div className="bg-white rounded-md w-full max-w-sm flex flex-col overflow-hidden" style={{ maxHeight: "85vh" }}>
+      <div className="flex items-center justify-between px-4 py-3" style={{ background: INK }}>
         <div>
-          <div className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 500 }}>Utility Locate Permit - Add Ticket Refresh</div>
-          <div className="text-[11px] leading-snug" style={{ color: STEEL }}>Locate tickets renew every 14 days. Open a permit you already submitted and add the new ticket.</div>
+          <div className="text-[14px]" style={{ color: GOLD, fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>Ticket Refresh</div>
+          <div className="text-[10px]" style={{ color: "#E4E2DA" }}>Utility Locate Permit - tickets renew every 14 days</div>
         </div>
-        <span className="text-[10px] font-bold uppercase ml-2" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{open ? "Hide" : "Open"}</span>
-      </button>
+        <button onClick={onClose} aria-label="Close"><X size={18} color="white" /></button>
+      </div>
+      <div className="overflow-y-auto px-4 py-3">
       {open && (
         <div className="mt-3">
           {loading && <div className="text-[12px]" style={{ color: STEEL }}>Loading…</div>}
@@ -8939,6 +8941,8 @@ function UtilityPermitRenewals({ user, projectName }) {
           {!loading && permits.length === 0 && <div className="text-[12px]" style={{ color: STEEL }}>No Utility Locate Permits submitted in the last 90 days.</div>}
         </div>
       )}
+      </div>
+      </div>
     </div>
   );
 }
@@ -8946,6 +8950,7 @@ function UtilityPermitRenewals({ user, projectName }) {
 function FormsScreen({ user, go, activeProjectId }) {
   const { sheetUrls, name: projDisplayName } = useContext(ProjectContext);
   const [openForm, setOpenForm] = useState(null);
+  const [showRefresh, setShowRefresh] = useState(false);
   const [viewingPdf, setViewingPdf] = useState(null);
   const [downloaded, setDownloaded] = useState({});
   const [formsRaw, loading] = useSheetData(sheetUrls.forms, FORMS_DEFAULT, (row) => ({
@@ -8980,9 +8985,7 @@ function FormsScreen({ user, go, activeProjectId }) {
         </div>
       </div>
       {loading && <div className="text-[12px] mb-2" style={{ color: STEEL }}>Loading…</div>}
-      {user && user.sessionToken && forms.some((f) => f.title === "Utility Locate Permit") && (
-        <UtilityPermitRenewals user={user} projectName={projDisplayName} />
-      )}
+      {showRefresh && <UtilityPermitRenewals user={user} projectName={projDisplayName} onClose={() => setShowRefresh(false)} />}
       <div className="space-y-2">
         {forms.map((f, i) => (
           <div key={i} className="bg-white rounded-md p-3 border" style={{ borderColor: "#E4E2DA" }}>
@@ -9004,6 +9007,11 @@ function FormsScreen({ user, go, activeProjectId }) {
                 {downloaded[i] ? <CheckCircle2 size={13} color={GOLD} /> : <Download size={13} />} {downloaded[i] ? "Saved" : "Download"}
               </button>
             </div>
+            {f.title === "Utility Locate Permit" && user && user.sessionToken && (
+              <button onClick={() => setShowRefresh(true)} className="w-full mt-2 text-center text-[10px] font-bold uppercase px-2 py-1.5 rounded-sm border-2" style={{ borderColor: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>
+                Ticket Refresh (14-day)
+              </button>
+            )}
           </div>
         ))}
         {forms.length === 0 && !loading && (
