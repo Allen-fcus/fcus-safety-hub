@@ -5864,7 +5864,15 @@ const FORMS_DEFAULT = [
     title: "Daily Excavation Checklist",
     description: "Daily inspection confirming trench and excavation safety requirements are met before work continues.",
     pdfLink: "https://drive.google.com/file/d/10Ew0hQruE-Zg6F0T1FKuBhq2lYJTq3mK/preview",
-    fields: ["Site Location", "Soil Type", "Excavation Depth", "Excavation Width", "Type of Protective System Used"],
+    pdfFillTemplate: "generic-form-pdf",
+    genericPdfWide: true,
+    genericPdfPhotosLast: true,
+    genericPdfNeutral: true,
+    genericPdfLongFields: ["Site Location", "Type of Protective System Used"],
+    signatureLabels: ["Competent Person Signature"],
+    photoFields: { "Photos of the Excavation": true },
+    trailingFieldLabels: ["Photos of the Excavation"],
+    fields: ["Site Location", "Soil Type", "Excavation Depth", "Excavation Width", "Type of Protective System Used", "Photos of the Excavation"],
     statusGroups: [
       {
         label: "General Information",
@@ -7373,7 +7381,7 @@ async function buildGenericFormPdf({ form, slug, projectName, standardValues, fi
   const doc = await PDFDocument.create();
   const sans = await doc.embedFont(StandardFonts.Helvetica);
   const sansB = await doc.embedFont(StandardFonts.HelveticaBold);
-  const clean = (t) => String(t == null ? "" : t).replace(/[\u2013\u2014]/g, "-").replace(/\r/g, "").replace(/[^\n -ÿ]/g, "?");
+  const clean = (t) => String(t == null ? "" : t).replace(/[\u2013\u2014]/g, "-").replace(/\u2264/g, "<=").replace(/\u2265/g, ">=").replace(/\r/g, "").replace(/[^\n -ÿ]/g, "?");
   const ink = rgb(0.1, 0.1, 0.1), gold = rgb(0.98, 0.78, 0.02), grey = rgb(0.4, 0.42, 0.45), line = rgb(0.8, 0.79, 0.75), pale = rgb(0.96, 0.95, 0.92);
   const W = 612, H = 792, M = 36, CW = W - 2 * M;
   const wrap = (text, font, size, max) => {
@@ -7474,7 +7482,7 @@ async function buildGenericFormPdf({ form, slug, projectName, standardValues, fi
     y -= kv("Video / photos of equipment condition", `${mediaCount} file(s) attached - open them from the submission`, M, CW);
   }
 
-  // photos
+  const drawPhotos = async () => {
   for (const [plabel, imgs] of Object.entries(photoMap)) {
     if (!imgs || !imgs.length) continue;
     need(30); y -= 4;
@@ -7496,6 +7504,8 @@ async function buildGenericFormPdf({ form, slug, projectName, standardValues, fi
       y -= bh + 8;
     }
   }
+  };
+  if (!form.genericPdfPhotosLast) await drawPhotos();
 
   // choice groups
   (form.choiceGroups || []).forEach((g, gi) => {
@@ -7512,6 +7522,17 @@ async function buildGenericFormPdf({ form, slug, projectName, standardValues, fi
     page.drawRectangle({ x: M, y: y - 14, width: CW, height: 14, color: gold });
     page.drawText(clean(g.label).toUpperCase(), { x: M + 4, y: y - 10, size: 7.5, font: sansB, color: ink });
     y -= 14;
+    if (form.genericPdfWide) {
+      for (let idx = 0; idx < g.items.length; idx++) {
+        const v = sv[idx] || "N/A";
+        const lines = wrap(g.items[idx], sans, 9, CW - 60);
+        need(lines.length * 11 + 6);
+        lines.forEach((ln, li) => page.drawText(ln, { x: M + 4, y: y - 11 - li * 11, size: 9, font: sans, color: ink }));
+        page.drawText(v, { x: W - M - 6 - sansB.widthOfTextAtSize(v, 9), y: y - 11, size: 9, font: sansB, color: form.genericPdfNeutral ? ink : ((v === "Yes" || v === "OK") ? rgb(0.12, 0.48, 0.2) : (v === "No" || v === "Bad") ? rgb(0.78, 0.07, 0.18) : grey) });
+        y -= lines.length * 11 + 4;
+        page.drawLine({ start: { x: M, y: y + 1 }, end: { x: W - M, y: y + 1 }, thickness: 0.3, color: line });
+      }
+    } else {
     const per = 2, cw = CW / per;
     for (let i = 0; i < g.items.length; i += per) {
       need(16);
@@ -7528,8 +7549,10 @@ async function buildGenericFormPdf({ form, slug, projectName, standardValues, fi
       y -= 15;
       page.drawLine({ start: { x: M, y: y + 1 }, end: { x: W - M, y: y + 1 }, thickness: 0.3, color: line });
     }
+    }
     y -= 6;
   });
+  if (form.genericPdfPhotosLast) await drawPhotos();
 
   // signatures
   const sigs = (signatures || []).filter((x) => x);
@@ -7567,7 +7590,7 @@ async function buildJhaPdf({ form, slug, projectName, standardValues, fieldValue
   const doc = await PDFDocument.create();
   const sans = await doc.embedFont(StandardFonts.Helvetica);
   const sansB = await doc.embedFont(StandardFonts.HelveticaBold);
-  const clean = (t) => String(t == null ? "" : t).replace(/[\u2013\u2014]/g, "-").replace(/[\r]/g, "").replace(/[^\n -ÿ]/g, "?");
+  const clean = (t) => String(t == null ? "" : t).replace(/[\u2013\u2014]/g, "-").replace(/\u2264/g, "<=").replace(/\u2265/g, ">=").replace(/[\r]/g, "").replace(/[^\n -ÿ]/g, "?");
   const ink = rgb(0.1, 0.1, 0.1), gold = rgb(0.98, 0.78, 0.02), grey = rgb(0.4, 0.42, 0.45), line = rgb(0.8, 0.79, 0.75), pale = rgb(0.96, 0.95, 0.92);
   const W = 792, H = 612, M = 30;
   const wrap = (text, font, size, max) => {
@@ -8124,6 +8147,30 @@ function FillFormModal({ form, onClose, user }) {
     return lines.join("\n");
   };
 
+  const renderPhotoPicker = (f) => (
+                  <div>
+                    <input ref={(el) => { photoInputRefs.current[f] = el; }} type="file" accept="image/*" multiple className="hidden" onChange={(e) => {
+                      const nf = Array.from(e.target.files || []);
+                      if (nf.length) setFieldPhotos((p) => ({ ...p, [f]: [...(p[f] || []), ...nf] }));
+                      e.target.value = "";
+                    }} />
+                    {(fieldPhotos[f] || []).length > 0 && (
+                      <div className="grid grid-cols-3 gap-2 mt-1 mb-2">
+                        {(fieldPhotos[f] || []).map((file, pi) => (
+                          <div key={pi} className="relative rounded-md overflow-hidden border" style={{ borderColor: "#C9C6BC" }}>
+                            <img src={URL.createObjectURL(file)} alt="" className="w-full h-20 object-cover" />
+                            <button onClick={() => setFieldPhotos((p) => ({ ...p, [f]: (p[f] || []).filter((_, k) => k !== pi) }))} className="absolute top-1 right-1 rounded-full bg-white p-0.5"><X size={12} color={STEEL} /></button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <button onClick={() => photoInputRefs.current[f] && photoInputRefs.current[f].click()} className="w-full rounded-md border-2 border-dashed py-3 flex flex-col items-center gap-1" style={{ borderColor: "#C9C6BC" }}>
+                      <ImagePlus size={18} color={STEEL} />
+                      <span className="text-[11px]" style={{ color: STEEL }}>{(fieldPhotos[f] || []).length > 0 ? "Add Another Photo" : "Take or Upload Photo(s)"}</span>
+                    </button>
+                  </div>
+  );
+
   const doSubmit = async () => {
     setSubmitting(true);
     // Anything left unselected in a Yes/N-A style checklist defaults to
@@ -8536,27 +8583,7 @@ function FillFormModal({ form, onClose, user }) {
                 <label className="text-[11px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{f}</label>
                 <FieldHint label={f} />
                 {form.photoFields && form.photoFields[f] ? (
-                  <div>
-                    <input ref={(el) => { photoInputRefs.current[f] = el; }} type="file" accept="image/*" multiple className="hidden" onChange={(e) => {
-                      const nf = Array.from(e.target.files || []);
-                      if (nf.length) setFieldPhotos((p) => ({ ...p, [f]: [...(p[f] || []), ...nf] }));
-                      e.target.value = "";
-                    }} />
-                    {(fieldPhotos[f] || []).length > 0 && (
-                      <div className="grid grid-cols-3 gap-2 mt-1 mb-2">
-                        {(fieldPhotos[f] || []).map((file, pi) => (
-                          <div key={pi} className="relative rounded-md overflow-hidden border" style={{ borderColor: "#C9C6BC" }}>
-                            <img src={URL.createObjectURL(file)} alt="" className="w-full h-20 object-cover" />
-                            <button onClick={() => setFieldPhotos((p) => ({ ...p, [f]: (p[f] || []).filter((_, k) => k !== pi) }))} className="absolute top-1 right-1 rounded-full bg-white p-0.5"><X size={12} color={STEEL} /></button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    <button onClick={() => photoInputRefs.current[f] && photoInputRefs.current[f].click()} className="w-full rounded-md border-2 border-dashed py-3 flex flex-col items-center gap-1" style={{ borderColor: "#C9C6BC" }}>
-                      <ImagePlus size={18} color={STEEL} />
-                      <span className="text-[11px]" style={{ color: STEEL }}>{(fieldPhotos[f] || []).length > 0 ? "Add Another Photo" : "Take or Upload Photo(s)"}</span>
-                    </button>
-                  </div>
+                  renderPhotoPicker(f)
                 ) : form.equipmentSelectFields && form.equipmentSelectFields[f] ? (
                   <EquipmentSelect multi={form.equipmentSelectFields[f] === "multi"} onChange={(val) => setValues((v) => ({ ...v, [i]: val }))} />
                 ) : (
@@ -8713,6 +8740,7 @@ function FillFormModal({ form, onClose, user }) {
               <div key={`trailing-${i}`}>
                 <label className="text-[11px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{f}</label>
                 <FieldHint label={f} />
+                {form.photoFields && form.photoFields[f] ? renderPhotoPicker(f) : (
                 <textarea
                   rows={(form.bigTextFields || []).includes(f) ? 5 : (f.length > 30 ? 2 : 1)}
                   placeholder={(form.bigTextFields || []).includes(f) ? "Type any deficiencies, damage, or comments here. Write \"None\" if there are none." : undefined}
@@ -8721,6 +8749,7 @@ function FillFormModal({ form, onClose, user }) {
                   className="w-full mt-1 rounded-md border px-2.5 py-1.5 text-[13px]"
                   style={{ borderColor: "#C9C6BC" }}
                 />
+                )}
               </div>
             );
           })}
@@ -8816,7 +8845,7 @@ function FillFormModal({ form, onClose, user }) {
               <button
                 disabled={
                   sigEmpty || (form.requiresTwoSignatures && sig2Empty) || submitting ||
-                  proofMissing || Object.keys(form.photoFields || {}).some((l) => (fieldPhotos[l] || []).length === 0) ||
+                  proofMissing || Object.keys(form.photoFields || {}).some((l) => form.photoFields[l] !== "optional" && (fieldPhotos[l] || []).length === 0) ||
                   (form.requiresLogo && !logoFile) ||
                   (form.allFieldsRequired && (form.fields || []).some((label, i) => !/\(if applicable\)/i.test(label) && !(values[i] || "").trim()))
                 }
