@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo, createContext, useContext } from "react";
+import React, { useState, useRef, useEffect, useMemo, createContext, useContext } from "react";
 import Papa from "papaparse";
 import { Wallet, Home, BookOpen, PlayCircle, ClipboardCheck, FileText, ChevronRight, Download, CheckCircle2, Circle, X, Play, ShieldAlert, Clock, Eraser, Send, PenLine, Users, Eye, BadgeCheck, LogOut, Loader2, CalendarDays, MapPin, Megaphone, Pin, ExternalLink, Lock, AlertTriangle, Camera, Phone, MessageSquare, ImagePlus, Volume2, VolumeX, Pause } from "lucide-react";
 import { supabase, loadProjectMap, projectIdForSlug, projectSlugForId } from "./supabaseClient.js";
@@ -5805,6 +5805,7 @@ const FORMS_DEFAULT = [
     pdfFillTemplate: "generic-form-pdf",
     genericPdfLongFields: ["Deficiencies / Comments"],
     fields: ["Company", "Operator", "Equipment Type", "Project Location", "Supervisor", "Deficiencies / Comments"],
+    mediaUpload: { afterGroup: 0, label: "Upload a Video of the Equipment Condition", hint: "Record a short walk-around video (or add photos) showing the equipment's condition. Max 50 MB per file." },
     trailingFieldLabels: ["Deficiencies / Comments"],
     bigTextFields: ["Deficiencies / Comments"],
     prefillNameFields: ["Operator"],
@@ -7367,7 +7368,7 @@ async function stampSubmitted(bytes, label) {
   return await doc.save();
 }
 
-async function buildGenericFormPdf({ form, slug, projectName, standardValues, fieldValues, choiceValues, statusValues, signatures, longFields, submittedAt, photos, statusRefs }) {
+async function buildGenericFormPdf({ form, slug, projectName, standardValues, fieldValues, choiceValues, statusValues, signatures, longFields, submittedAt, photos, statusRefs, mediaCount }) {
   const { StandardFonts, rgb } = await import("pdf-lib");
   const doc = await PDFDocument.create();
   const sans = await doc.embedFont(StandardFonts.Helvetica);
@@ -7467,6 +7468,10 @@ async function buildGenericFormPdf({ form, slug, projectName, standardValues, fi
       const hb = b ? kv(b.label, b.value, M + colW + 16, colW) : 0;
       y -= Math.max(ha, hb); k += b ? 2 : 1;
     }
+  }
+  if (mediaCount) {
+    need(30);
+    y -= kv("Video / photos of equipment condition", `${mediaCount} file(s) attached - open them from the submission`, M, CW);
   }
 
   // photos
@@ -8010,6 +8015,9 @@ function FillFormModal({ form, onClose, user }) {
   const [pdfGenerated, setPdfGenerated] = useState(false);
   const [pdfError, setPdfError] = useState("");
   const [proofFiles, setProofFiles] = useState([]);
+  const [mediaFiles, setMediaFiles] = useState([]);
+  const mediaInputRef = useRef(null);
+  const [mediaError, setMediaError] = useState("");
   const [fieldPhotos, setFieldPhotos] = useState({});
   const photoInputRefs = useRef({});
   // Fields that mirror the Name box (e.g. "Requested By"): copy it in, and keep following it until edited by hand
@@ -8097,6 +8105,7 @@ function FillFormModal({ form, onClose, user }) {
       const chosenIdx = choiceValues[gi];
       lines.push("", `${group.label}: ${chosenIdx != null ? group.items[chosenIdx] : "—"}`);
     });
+    if (form.mediaUpload) lines.push("", `${form.mediaUpload.label}: ${mediaFiles.length} file(s) attached`);
     if (form.stepPlan) {
       if (conditions.trim()) lines.push("", `Conditions at start of shift: ${conditions.trim()}`);
       if (form.stepPlan.useLibrary) {
@@ -8135,6 +8144,17 @@ function FillFormModal({ form, onClose, user }) {
     let filledPdfUrl = null;
     let proofDocUrls = [];
 
+    // Video / photos of equipment condition: upload as-is
+    const mediaUrls = [];
+    for (const file of mediaFiles) {
+      const mpath = `media-${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.\-_]/g, "_")}`;
+      const { error: mErr } = await supabase.storage.from("documents").upload(mpath, file, { contentType: file.type || undefined });
+      if (!mErr) {
+        const { data: mUrl } = supabase.storage.from("documents").getPublicUrl(mpath);
+        if (mUrl && mUrl.publicUrl) { mediaUrls.push(mUrl.publicUrl); proofDocUrls.push(mUrl.publicUrl); }
+      }
+    }
+
     // Photos attached next to a question: convert to JPEG, upload, and keep the bytes for the PDF
     const photoBytes = {};
     for (const label of Object.keys(form.photoFields || {})) {
@@ -8159,7 +8179,7 @@ function FillFormModal({ form, onClose, user }) {
       try {
         const filledBytes = await buildGenericFormPdf({
           form, slug: activeProjectId, projectName: projName, standardValues, fieldValues: values,
-          choiceValues, statusValues: effectiveStatusValues, longFields: form.genericPdfLongFields, submittedAt, photos: photoBytes, statusRefs,
+          choiceValues, statusValues: effectiveStatusValues, longFields: form.genericPdfLongFields, submittedAt, photos: photoBytes, statusRefs, mediaCount: mediaFiles.length,
           signatures: [
             { label: (form.signatureLabels && form.signatureLabels[0]) || "Signature", dataUrl: signatureCanvasRef.current ? signatureCanvasRef.current.toDataURL("image/png") : null },
             ...(form.requiresTwoSignatures ? [{ label: (form.signatureLabels && form.signatureLabels[1]) || "Signature 2", dataUrl: signature2CanvasRef.current ? signature2CanvasRef.current.toDataURL("image/png") : null }] : []),
@@ -8624,7 +8644,37 @@ function FillFormModal({ form, onClose, user }) {
           )}
 
           {(form.statusGroups || []).map((group, gi) => (
-            <StatusGroup key={gi} group={group} values={statusValues[gi] || {}} onChange={(itemIdx, opt) => setStatus(gi, itemIdx, opt)} refs={statusRefs[gi] || {}} onRef={(itemIdx, val) => setStatusRefs((r) => ({ ...r, [gi]: { ...(r[gi] || {}), [itemIdx]: val } }))} />
+            <React.Fragment key={gi}>
+            <StatusGroup group={group} values={statusValues[gi] || {}} onChange={(itemIdx, opt) => setStatus(gi, itemIdx, opt)} refs={statusRefs[gi] || {}} onRef={(itemIdx, val) => setStatusRefs((r) => ({ ...r, [gi]: { ...(r[gi] || {}), [itemIdx]: val } }))} />
+            {form.mediaUpload && form.mediaUpload.afterGroup === gi && (
+              <div className="mt-3 mb-1 rounded-md border-2 p-2.5" style={{ borderColor: GOLD, background: "#FFFBEA" }}>
+                <div className="text-[11px] uppercase font-bold" style={{ color: INK, fontFamily: "IBM Plex Mono, monospace" }}>{form.mediaUpload.label}</div>
+                <div className="text-[10px] mb-2" style={{ color: STEEL }}>{form.mediaUpload.hint}</div>
+                <input ref={mediaInputRef} type="file" accept="video/*,image/*" multiple className="hidden" onChange={(e) => {
+                  const nf = Array.from(e.target.files || []);
+                  const ok = nf.filter((f) => f.size <= 50 * 1024 * 1024);
+                  setMediaError(ok.length < nf.length ? "A file was over 50 MB and was skipped. Record a shorter video." : "");
+                  if (ok.length) setMediaFiles((p) => [...p, ...ok]);
+                  e.target.value = "";
+                }} />
+                {mediaFiles.length > 0 && (
+                  <div className="space-y-1.5 mb-2">
+                    {mediaFiles.map((f, k) => (
+                      <div key={k} className="flex items-center justify-between rounded-md border bg-white px-2.5 py-1.5" style={{ borderColor: "#C9C6BC" }}>
+                        <span className="text-[12px] truncate">{f.name} <span style={{ color: STEEL }}>({(f.size / 1048576).toFixed(1)} MB)</span></span>
+                        <button onClick={() => setMediaFiles((p) => p.filter((_, idx) => idx !== k))}><X size={14} color={STEEL} /></button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {mediaError && <div className="text-[11px] mb-1" style={{ color: ALERT }}>{mediaError}</div>}
+                <button onClick={() => mediaInputRef.current && mediaInputRef.current.click()} className="w-full rounded-md border-2 border-dashed py-3 flex flex-col items-center gap-1 bg-white" style={{ borderColor: "#C9C6BC" }}>
+                  <ImagePlus size={18} color={STEEL} />
+                  <span className="text-[11px]" style={{ color: STEEL }}>{mediaFiles.length > 0 ? "Add Another" : "Record or Upload Video / Photos"}</span>
+                </button>
+              </div>
+            )}
+            </React.Fragment>
           ))}
 
           {form.referenceTable && (
