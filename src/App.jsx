@@ -116,7 +116,7 @@ const TRANSLATIONS = {
     home: "Home", hsStandards: "H&S Std", hsStandardsFull: "H&S Minimum Standards",
     safetyPlan: "Safety Plan", talks: "Talks", toolboxTalks: "Toolbox Talks",
     reports: "Reports", weeklyReport: "Weekly Report", forms: "Admin",
-    formsTemplates: "Administrative Controls", crew: "Crew", personnelLookup: "Personnel Lookup",
+    formsTemplates: "Site Safety Forms", crew: "Crew", personnelLookup: "Personnel Lookup",
     orientation: "Orientation", workPlans: "Work Plans", emergencyContacts: "Emergency Contacts",
     laborLaws: "TX & Federal Labor Laws", reportConcern: "Report a Concern",
     // Common actions
@@ -186,7 +186,7 @@ const TRANSLATIONS = {
     home: "Inicio", hsStandards: "Normas S&S", hsStandardsFull: "Normas Mínimas de Seguridad y Salud",
     safetyPlan: "Plan de Seguridad", talks: "Charlas", toolboxTalks: "Charlas de Seguridad",
     reports: "Informes", weeklyReport: "Informe Semanal", forms: "Admin",
-    formsTemplates: "Controles Administrativos", crew: "Personal", personnelLookup: "Búsqueda de Personal",
+    formsTemplates: "Formularios de Seguridad del Sitio", crew: "Personal", personnelLookup: "Búsqueda de Personal",
     orientation: "Orientación", workPlans: "Planes de Trabajo", emergencyContacts: "Contactos de Emergencia",
     laborLaws: "Leyes Laborales de TX y Federales", reportConcern: "Reportar una Inquietud",
     // Common actions
@@ -2839,7 +2839,7 @@ function OrientationSubmissionsScreen({ user }) {
   return (
     <div className="px-4 pt-4 pb-8" style={{ background: "#F4F3EF", minHeight: "100%" }}>
       <div className="text-[12px] mb-3" style={{ color: STEEL }}>
-        Every form submitted through Orientation Scheduling only — with the actual completed document. This never includes Forms &amp; Templates submissions. Admin only.
+        Every form submitted through Orientation Scheduling only — with the actual completed document. This never includes Site Safety Forms submissions. Admin only.
       </div>
 
       <input
@@ -8409,7 +8409,7 @@ function FormsScreen({ user, go, activeProjectId }) {
     <div className="px-4 pt-4 pb-8" style={{ background: "#F4F3EF", minHeight: "100%" }}>
       <div className="flex items-center justify-between mb-3">
         <div className="text-[12px]" style={{ color: STEEL }}>
-          Fill out, sign with your finger, and submit — it's emailed automatically. Or view, print, or download a blank copy.
+          Before starting work, complete all required administrative controls for your daily operations. This includes JHAs, equipment inspections, utility locate permits, and any other task-specific permits.
         </div>
         <div className="flex gap-2 flex-shrink-0 ml-2">
           {user && user.sessionToken && (
@@ -8565,7 +8565,7 @@ function SubmittedFormsScreen({ user }) {
   return (
     <div className="px-4 pt-4 pb-8" style={{ background: "#F4F3EF", minHeight: "100%" }}>
       <div className="text-[12px] mb-3" style={{ color: STEEL }}>
-        Every form submitted from Forms &amp; Templates, with the actual completed document. Orientation forms are in the Orientation tab. This works even if email delivery didn't. Admin only.
+        Every form submitted from Site Safety Forms, with the actual completed document. Orientation forms are in the Orientation tab. This works even if email delivery didn't. Admin only.
       </div>
 
       <input
