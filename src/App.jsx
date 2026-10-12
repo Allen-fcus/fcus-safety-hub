@@ -2933,6 +2933,8 @@ function SignInCard({ entry, user, onDone }) {
           name: entry.name,
           employer: entry.employer,
           role: entry.position,
+          email: entry.email,
+          phone: entry.phone,
           photoUrl: entry.photo_url,
           onCreated: async () => {
             await supabase.rpc("delete_orientation_signin", { p_token: user.sessionToken, p_signin_id: entry.id });
@@ -9108,6 +9110,8 @@ function AddPersonScreen({ user, onDone, prefill }) {
   const [badge, setBadge] = useState("");
   const [pin, setPin] = useState("");
   const [role, setRole] = useState(prefill ? prefill.role || "" : "");
+  const [contactEmail, setContactEmail] = useState(prefill ? prefill.email || "" : "");
+  const [contactPhone, setContactPhone] = useState(prefill ? prefill.phone || "" : "");
   const [employer, setEmployer] = useState(prefill ? prefill.employer || "" : "");
   const [orientationDate, setOrientationDate] = useState(new Date().toISOString().slice(0, 10));
   const [trainingAccess, setTrainingAccess] = useState(false);
@@ -9201,6 +9205,9 @@ function AddPersonScreen({ user, onDone, prefill }) {
     if (!data.success) {
       setError(data.error || "Couldn't add this person.");
       return;
+    }
+    if (contactEmail.trim() || contactPhone.trim()) {
+      await supabase.rpc("set_badge_contact", { p_token: user.sessionToken, p_employee_id: employeeId.trim(), p_email: contactEmail.trim(), p_phone: contactPhone.trim() });
     }
     if (prefill && prefill.onCreated) prefill.onCreated();
     setSuccess({ name: name.trim(), badge: badge.trim(), pin: pin.trim() });
@@ -9302,6 +9309,10 @@ function AddPersonScreen({ user, onDone, prefill }) {
 
       <label className="text-[10px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Role</label>
       <input value={role} onChange={(e) => setRole(e.target.value)} placeholder="e.g. Construction Laborer" className="w-full mt-1 mb-3 rounded-md border px-2.5 py-1.5 text-[13px]" style={{ borderColor: "#C9C6BC" }} />
+          <label className="text-[10px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Email</label>
+          <input type="email" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} className="w-full mt-1 mb-2 rounded-md border px-2.5 py-1.5 text-[13px]" style={{ borderColor: "#C9C6BC" }} />
+          <label className="text-[10px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Phone</label>
+          <input type="tel" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} className="w-full mt-1 mb-2 rounded-md border px-2.5 py-1.5 text-[13px]" style={{ borderColor: "#C9C6BC" }} />
 
       <label className="text-[10px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Subcontractor</label>
       <select value={employer} onChange={(e) => setEmployer(e.target.value)} className="w-full mt-1 mb-3 rounded-md border px-2.5 py-1.5 text-[13px] bg-white" style={{ borderColor: "#C9C6BC" }}>
@@ -9638,6 +9649,8 @@ function RosterRow({ person, user, onChanged }) {
   const subcontractorOptions = useSubcontractors(activeProjectId);
   const [editing, setEditing] = useState(false);
   const [role, setRole] = useState(person.role || "");
+  const [contactEmail, setContactEmail] = useState(person.contact_email || "");
+  const [contactPhone, setContactPhone] = useState(person.contact_phone || "");
   const [employer, setEmployer] = useState(person.employer || "");
   const [trainingAccess, setTrainingAccess] = useState(person.training_access || false);
   const [isAdmin, setIsAdmin] = useState(person.can_add_personnel || false);
@@ -9738,6 +9751,7 @@ function RosterRow({ person, user, onChanged }) {
       p_photo_url: photoUrl,
       p_can_add_personnel: isAdmin,
     });
+    await supabase.rpc("set_badge_contact", { p_token: user.sessionToken, p_person_id: person.id, p_email: contactEmail.trim(), p_phone: contactPhone.trim() });
     setSaving(false);
     setEditing(false);
     onChanged();
@@ -9779,6 +9793,7 @@ function RosterRow({ person, user, onChanged }) {
         <div>
           <div className="text-[14px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{person.name}</div>
           <div className="text-[11px]" style={{ color: STEEL }}>ID {person.employee_id} · Badge {person.badge_number}{!person.active ? " · Inactive" : ""}{person.can_add_personnel ? " · Admin" : ""}{person.is_rep_account ? " · Rep Account" : ""}</div>
+          {(person.contact_email || person.contact_phone) && <div className="text-[11px]" style={{ color: STEEL }}>{[person.contact_phone, person.contact_email].filter(Boolean).join(" · ")}</div>}
         </div>
         <button onClick={() => { setEditing((e) => !e); setConfirmDelete(false); }} className="text-[10px] font-bold uppercase px-2 py-1 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>
           {editing ? "Close" : "Edit"}
@@ -9803,6 +9818,11 @@ function RosterRow({ person, user, onChanged }) {
 
           <label className="text-[10px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Role</label>
           <input value={role} onChange={(e) => setRole(e.target.value)} className="w-full mt-1 mb-2 rounded-md border px-2.5 py-1.5 text-[13px]" style={{ borderColor: "#C9C6BC" }} />
+
+          <label className="text-[10px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Email</label>
+          <input type="email" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} className="w-full mt-1 mb-2 rounded-md border px-2.5 py-1.5 text-[13px]" style={{ borderColor: "#C9C6BC" }} />
+          <label className="text-[10px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Phone</label>
+          <input type="tel" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} className="w-full mt-1 mb-2 rounded-md border px-2.5 py-1.5 text-[13px]" style={{ borderColor: "#C9C6BC" }} />
 
           <label className="text-[10px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Subcontractor</label>
           <select value={employer} onChange={(e) => setEmployer(e.target.value)} className="w-full mt-1 mb-2 rounded-md border px-2.5 py-1.5 text-[13px] bg-white" style={{ borderColor: "#C9C6BC" }}>
@@ -10025,7 +10045,10 @@ function ManageRosterScreen({ user }) {
   const load = async () => {
     setLoading(true);
     const { data, error } = await supabase.rpc("list_personnel_admin", { p_token: user.sessionToken });
-    setPeople(error || !data ? [] : data);
+    const { data: contacts } = await supabase.rpc("list_badge_contacts", { p_token: user.sessionToken });
+    const byId = {};
+    (Array.isArray(contacts) ? contacts : []).forEach((c) => { byId[c.personnel_id] = c; });
+    setPeople(error || !data ? [] : data.map((p) => ({ ...p, contact_email: (byId[p.id] || {}).email || "", contact_phone: (byId[p.id] || {}).phone || "" })));
     setLoading(false);
   };
 
@@ -10040,6 +10063,8 @@ function ManageRosterScreen({ user }) {
         { label: "Employee ID", get: (p) => p.employee_id },
         { label: "Badge Number", get: (p) => p.badge_number },
         { label: "Role", get: (p) => p.role },
+        { label: "Email", get: (p) => p.contact_email },
+        { label: "Phone", get: (p) => p.contact_phone },
         { label: "Employer", get: (p) => p.employer },
         { label: "Orientation Date", get: (p) => p.orientation_date },
         { label: "Training Access", get: (p) => (p.training_access ? "Yes" : "No") },
