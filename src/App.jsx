@@ -7274,6 +7274,9 @@ async function fillCompetentPersonPdf({ templateUrl, subcontractor, date, employ
   return pdfDoc.save({ useObjectStreams: false });
 }
 
+// Projects where the "Segment" field is not used on any form
+const NO_SEGMENT_PROJECTS = ["nti-sylvania", "nti-golden-triangle"];
+
 // Equipment list used by the Daily Equipment Inspection (pick one) and the JHA machinery field (pick several)
 const EQUIPMENT_OPTIONS = [
   "Aerial Man Lift", "Track Hoe", "Back Hoe", "Forklift", "Skid Steer", "Excavator", "Boom Lift", "Mini Excavator",
@@ -7377,7 +7380,7 @@ async function buildJhaPdf({ form, slug, projectName, standardValues, fieldValue
   const info = [
     ["Date", standardValues.date], ["Project", projectName || ""],
     ["Subcontractor", standardValues.subcontractor], ["Prepared by", standardValues.name],
-    ["Segment", standardValues.segment], ["Conditions", conditions],
+    ...(NO_SEGMENT_PROJECTS.includes(slug) ? [] : [["Segment", standardValues.segment]]), ["Conditions", conditions],
   ];
   info.forEach(([k, v], i) => {
     const col = i % 2, row = Math.floor(i / 2), x = M + col * 372, yy = y - row * 17;
@@ -7816,7 +7819,7 @@ function FillFormModal({ form, onClose, user }) {
     const lines = [
       `Name: ${standardValues.name}`,
       `Subcontractor: ${standardValues.subcontractor}`,
-      `Segment: ${standardValues.segment}`,
+      ...(NO_SEGMENT_PROJECTS.includes(activeProjectId) ? [] : [`Segment: ${standardValues.segment}`]),
       `Date: ${standardValues.date}`,
       "",
     ];
@@ -8166,6 +8169,7 @@ function FillFormModal({ form, onClose, user }) {
                 ))}
               </select>
             </div>
+            {!NO_SEGMENT_PROJECTS.includes(activeProjectId) && (
             <div>
               <label className="text-[10px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Segment</label>
               <input
@@ -8175,6 +8179,7 @@ function FillFormModal({ form, onClose, user }) {
                 style={{ borderColor: "#C9C6BC" }}
               />
             </div>
+            )}
             <div>
               <label className="text-[10px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Date</label>
               <input
