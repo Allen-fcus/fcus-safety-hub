@@ -2238,6 +2238,10 @@ function PreOrientationFormStep({ form, projectId, activeProjectId, scheduleId, 
     if (recipientIdx !== -1 && DRUG_SCREEN_RECIPIENT_BY_PROJECT[activeProjectId]) {
       initial[recipientIdx] = DRUG_SCREEN_RECIPIENT_BY_PROJECT[activeProjectId];
     }
+    Object.keys(prefillValues || {}).forEach((label) => {
+      const pi = (form.fields || []).indexOf(label);
+      if (pi !== -1 && prefillValues[label]) initial[pi] = prefillValues[label];
+    });
     return initial;
   });
   const [statusValues, setStatusValues] = useState({});
@@ -5871,6 +5875,16 @@ const FORMS_DEFAULT = [
     genericPdfLongFields: ["Site Location", "Type of Protective System Used"],
     signatureLabels: ["Competent Person Signature"],
     photoFields: { "Photos of the Excavation": true },
+    chipFields: {
+      "Soil Type": { options: ["Type A", "Type B", "Type C"] },
+      "Type of Protective System Used": { options: ["Trench Box", "Shoring System", "Sloping", "Benching"], multi: true },
+    },
+    followUpForm: "Utility Locate Permit",
+    followUpMap: {
+      "Location of Excavation / Drilling / Boring": "Site Location",
+      "Depth": "Excavation Depth",
+      "Width / Diameter": "Excavation Width",
+    },
     trailingFieldLabels: ["Photos of the Excavation"],
     fields: ["Site Location", "Soil Type", "Excavation Depth", "Excavation Width", "Type of Protective System Used", "Photos of the Excavation"],
     statusGroups: [
@@ -6581,6 +6595,26 @@ function AboutForm({ form }) {
     <div className="rounded-md px-3 py-2 mb-3 text-[12px] leading-snug" style={{ background: "#FFF8E1", border: "1px solid #F0DFA0", color: INK }}>
       <div className="text-[10px] uppercase font-bold mb-0.5" style={{ color: GOLD, fontFamily: "IBM Plex Mono, monospace" }}>About this form</div>
       {form.description}
+    </div>
+  );
+}
+
+function ChipSelect({ options, multi, value, onChange }) {
+  const picked = (value || "").split(", ").filter(Boolean);
+  const toggle = (opt) => {
+    if (!multi) { onChange(picked[0] === opt ? "" : opt); return; }
+    onChange((picked.includes(opt) ? picked.filter((p) => p !== opt) : options.filter((o) => picked.includes(o) || o === opt)).join(", "));
+  };
+  return (
+    <div className="flex flex-wrap gap-1.5 mt-1">
+      {options.map((opt) => {
+        const on = picked.includes(opt);
+        return (
+          <button key={opt} type="button" onClick={() => toggle(opt)} className="text-[12px] font-bold px-3 py-1.5 rounded-md border-2" style={{ borderColor: on ? GOLD : "#C9C6BC", background: on ? GOLD : "white", color: on ? INK : STEEL }}>
+            {opt}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -8009,7 +8043,7 @@ function composePickText(p) {
   return { hz, ct };
 }
 
-function FillFormModal({ form, onClose, user }) {
+function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, onFollowUp }) {
   const { notifyEmail, id: activeProjectId, name: projName } = useContext(ProjectContext);
   const subcontractorOptions = useSubcontractors(activeProjectId);
   const todayStr = new Date().toLocaleDateString();
@@ -8510,8 +8544,25 @@ function FillFormModal({ form, onClose, user }) {
           {form.pdfFillTemplate && !pdfGenerated && pdfError && (
             <div className="text-[10px] mt-1 px-2 whitespace-pre-wrap break-words" style={{ color: ALERT }}>{pdfError}</div>
           )}
-          <button onClick={onClose} className="mt-4 text-[12px] font-bold uppercase px-4 py-2 rounded-sm" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>
-            Done
+          {form.followUpForm && followUpAvailable && onFollowUp && (
+            <div className="mt-4 rounded-md border-2 p-3" style={{ borderColor: GOLD, background: "#FFFBEA" }}>
+              <div className="text-[12px] font-bold" style={{ fontFamily: "Oswald, sans-serif" }}>Next step: {form.followUpForm} required</div>
+              <div className="text-[11px] mb-2" style={{ color: STEEL }}>Complete a {form.followUpForm} for this excavation. The location, depth and width are filled in for you.</div>
+              <button onClick={() => {
+                const pre = {};
+                Object.keys(form.followUpMap || {}).forEach((target) => {
+                  const si = (form.fields || []).indexOf(form.followUpMap[target]);
+                  if (si !== -1) pre[target] = values[si] || "";
+                });
+                pre["Competent Person"] = standardValues.name;
+                onFollowUp(form.followUpForm, pre);
+              }} className="w-full text-[12px] font-bold uppercase px-4 py-2 rounded-sm" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>
+                Start {form.followUpForm}
+              </button>
+            </div>
+          )}
+          <button onClick={onClose} className="mt-4 text-[12px] font-bold uppercase px-4 py-2 rounded-sm" style={{ background: form.followUpForm && followUpAvailable && onFollowUp ? "white" : GOLD, color: INK, border: form.followUpForm && followUpAvailable && onFollowUp ? "1px solid #C9C6BC" : "none", fontFamily: "IBM Plex Mono, monospace" }}>
+            {form.followUpForm && followUpAvailable && onFollowUp ? "Not Now" : "Done"}
           </button>
         </div>
       </div>
@@ -8584,6 +8635,8 @@ function FillFormModal({ form, onClose, user }) {
                 <FieldHint label={f} />
                 {form.photoFields && form.photoFields[f] ? (
                   renderPhotoPicker(f)
+                ) : form.chipFields && form.chipFields[f] ? (
+                  <ChipSelect options={form.chipFields[f].options} multi={!!form.chipFields[f].multi} value={values[i] || ""} onChange={(val) => setValues((v) => ({ ...v, [i]: val }))} />
                 ) : form.equipmentSelectFields && form.equipmentSelectFields[f] ? (
                   <EquipmentSelect multi={form.equipmentSelectFields[f] === "multi"} onChange={(val) => setValues((v) => ({ ...v, [i]: val }))} />
                 ) : (
@@ -9029,6 +9082,7 @@ function UtilityPermitRenewals({ user, projectName, onClose }) {
 function FormsScreen({ user, go, activeProjectId }) {
   const { sheetUrls, name: projDisplayName } = useContext(ProjectContext);
   const [openForm, setOpenForm] = useState(null);
+  const [openPrefill, setOpenPrefill] = useState(null);
   const [showRefresh, setShowRefresh] = useState(false);
   const [viewingPdf, setViewingPdf] = useState(null);
   const [downloaded, setDownloaded] = useState({});
@@ -9097,7 +9151,17 @@ function FormsScreen({ user, go, activeProjectId }) {
           <div className="text-[12px] text-center py-6" style={{ color: STEEL }}>No forms posted for this project yet.</div>
         )}
       </div>
-      {openForm && <FillFormModal form={openForm} onClose={() => setOpenForm(null)} user={user} />}
+      {openForm && (
+        <FillFormModal
+          key={openForm.title}
+          form={openForm}
+          user={user}
+          prefillValues={openPrefill}
+          onClose={() => { setOpenForm(null); setOpenPrefill(null); }}
+          followUpAvailable={!!(openForm.followUpForm && forms.some((x) => x.title === openForm.followUpForm))}
+          onFollowUp={(title, pre) => { const target = forms.find((x) => x.title === title); if (target) { setOpenPrefill(pre); setOpenForm(target); } }}
+        />
+      )}
       {viewingPdf && (
         <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/80 px-4">
           <div className="bg-white rounded-md w-full max-w-sm md:max-w-5xl md:w-[92vw] h-[80%] md:h-[92vh] md:max-h-[92vh] overflow-hidden max-h-[85%] flex flex-col">
