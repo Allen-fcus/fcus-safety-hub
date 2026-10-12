@@ -507,6 +507,9 @@ function ProjectLogo({ projectId, maxHeight = 44, fallback = null }) {
 // ---- Site weather (Open-Meteo for conditions, NWS for alerts; both free, no key) ----
 const PROJECT_WEATHER = {
   "nti-sylvania": { lat: 32.767181, lon: -97.30887, label: "Fort Worth, TX" },
+  "nti-golden-triangle": { lat: 32.933388, lon: -97.315312, label: "Fort Worth, TX" },
+  "sh99-houston": { lat: 29.438529, lon: -95.221452, label: "Houston, TX" },
+  "nashville": { lat: 36.098333, lon: -86.709782, label: "Tennessee" },
 };
 const WMO_TEXT = {
   0: "Clear", 1: "Mostly clear", 2: "Partly cloudy", 3: "Overcast", 45: "Fog", 48: "Fog",
