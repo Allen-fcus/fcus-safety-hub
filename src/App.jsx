@@ -5823,7 +5823,8 @@ const FORMS_DEFAULT = [
     title: "Utility Locate Permit",
     description: "Confirms underground or overhead utilities have been located and marked before excavation, drilling, or boring begins.",
     pdfLink: "https://drive.google.com/file/d/1e-gtaeZ4mZge8_-Tqkkl6tpgQyFOqhR-/preview",
-    pdfFillTemplate: "utility-locate-permit",
+    pdfFillTemplate: "generic-form-pdf",
+    genericPdfLongFields: ["Purpose of Excavation / Drilling / Boring", "Location of Excavation / Drilling / Boring"],
     projects: ["nti-sylvania", "nti-golden-triangle"],
     requiresTwoSignatures: true,
     signatureLabels: ["Equipment Operator Signature", "Foreman/Supervisor Signature"],
@@ -7317,6 +7318,156 @@ function EquipmentSelect({ multi, onChange }) {
   );
 }
 
+// Generated PDF for simple field + checklist + signature forms (portrait letter).
+// Used by the Utility Locate Permit; any similar form can reuse it by setting pdfFillTemplate to "generic-form-pdf".
+async function buildGenericFormPdf({ form, slug, projectName, standardValues, fieldValues, choiceValues, statusValues, signatures, longFields }) {
+  const { StandardFonts, rgb } = await import("pdf-lib");
+  const doc = await PDFDocument.create();
+  const sans = await doc.embedFont(StandardFonts.Helvetica);
+  const sansB = await doc.embedFont(StandardFonts.HelveticaBold);
+  const clean = (t) => String(t == null ? "" : t).replace(/\r/g, "").replace(/[^\n -ÿ]/g, "?");
+  const ink = rgb(0.1, 0.1, 0.1), gold = rgb(0.98, 0.78, 0.02), grey = rgb(0.4, 0.42, 0.45), line = rgb(0.8, 0.79, 0.75), pale = rgb(0.96, 0.95, 0.92);
+  const W = 612, H = 792, M = 36, CW = W - 2 * M;
+  const wrap = (text, font, size, max) => {
+    const out = [];
+    clean(text).split("\n").forEach((para) => {
+      let cur = "";
+      (para.trim() ? para.split(/\s+/) : [""]).forEach((word) => {
+        const t = cur ? cur + " " + word : word;
+        if (font.widthOfTextAtSize(t, size) <= max) { cur = t; return; }
+        if (cur) out.push(cur);
+        let w = word;
+        while (font.widthOfTextAtSize(w, size) > max && w.length > 1) {
+          let k = w.length - 1;
+          while (k > 1 && font.widthOfTextAtSize(w.slice(0, k), size) > max) k--;
+          out.push(w.slice(0, k)); w = w.slice(k);
+        }
+        cur = w;
+      });
+      out.push(cur);
+    });
+    return out;
+  };
+  let logo = null;
+  const li = PROJECT_LOGOS[slug];
+  if (li) {
+    try {
+      const bin = atob(li.src.split(",")[1]); const b = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i);
+      logo = await doc.embedPng(b);
+    } catch (e) { logo = null; }
+  }
+  const title = clean(form.title).toUpperCase();
+  let page = doc.addPage([W, H]);
+  let y = H;
+  const band = (first) => {
+    const bh = first ? 54 : 32;
+    page.drawRectangle({ x: 0, y: H - bh, width: W, height: bh, color: ink });
+    if (logo) {
+      const sc = Math.min((first ? 150 : 90) / logo.width, (first ? 40 : 20) / logo.height);
+      page.drawImage(logo, { x: M, y: H - bh + (bh - logo.height * sc) / 2, width: logo.width * sc, height: logo.height * sc });
+    }
+    const sz = first ? 14 : 10;
+    page.drawText(title, { x: W - M - sansB.widthOfTextAtSize(title, sz), y: H - bh / 2 - sz / 3, size: sz, font: sansB, color: gold });
+    return H - bh;
+  };
+  const newPage = () => { page = doc.addPage([W, H]); y = band(false) - 16; };
+  const need = (h) => { if (y - h < 50) newPage(); };
+  y = band(true) - 14;
+
+  const kv = (label, value, x, width) => {
+    const lines = wrap(value || "-", sansB, 10, width);
+    page.drawText(clean(label).toUpperCase(), { x, y: y - 8, size: 7, font: sansB, color: grey });
+    lines.forEach((ln, i) => page.drawText(ln, { x, y: y - 19 - i * 12, size: 10, font: sansB, color: ink }));
+    return 19 + lines.length * 12 + 3;
+  };
+  // header facts
+  const colW = (CW - 16) / 2;
+  let h1 = Math.max(kv("Date", standardValues.date, M, colW), kv("Project", projectName || "", M + colW + 16, colW));
+  y -= h1;
+  let h2 = Math.max(kv("Company", standardValues.subcontractor, M, colW), kv("Prepared by", standardValues.name, M + colW + 16, colW));
+  y -= h2;
+  page.drawLine({ start: { x: M, y: y + 2 }, end: { x: W - M, y: y + 2 }, thickness: 0.6, color: ink });
+  y -= 6;
+
+  // fields: short ones two-up, long ones full width
+  const long = new Set(longFields || []);
+  const items = (form.fields || []).map((label, i) => ({ label, value: fieldValues[i] || "", full: long.has(label) || String(fieldValues[i] || "").length > 34 }));
+  let k = 0;
+  while (k < items.length) {
+    const a = items[k];
+    if (a.full) {
+      const est = 19 + wrap(a.value || "-", sansB, 10, CW).length * 12 + 3;
+      need(est); y -= kv(a.label, a.value, M, CW); k++;
+    } else {
+      const b = items[k + 1] && !items[k + 1].full ? items[k + 1] : null;
+      const est = 19 + Math.max(wrap(a.value || "-", sansB, 10, colW).length, b ? wrap(b.value || "-", sansB, 10, colW).length : 1) * 12 + 3;
+      need(est);
+      const ha = kv(a.label, a.value, M, colW);
+      const hb = b ? kv(b.label, b.value, M + colW + 16, colW) : 0;
+      y -= Math.max(ha, hb); k += b ? 2 : 1;
+    }
+  }
+
+  // choice groups
+  (form.choiceGroups || []).forEach((g, gi) => {
+    need(40);
+    const chosen = choiceValues[gi] != null ? g.items[choiceValues[gi]] : "-";
+    y -= kv(g.label, chosen, M, CW);
+  });
+  y -= 6;
+
+  // checklists
+  (form.statusGroups || []).forEach((g, gi) => {
+    const sv = statusValues[gi] || {};
+    need(40);
+    page.drawRectangle({ x: M, y: y - 14, width: CW, height: 14, color: gold });
+    page.drawText(clean(g.label).toUpperCase(), { x: M + 4, y: y - 10, size: 7.5, font: sansB, color: ink });
+    y -= 14;
+    const per = 2, cw = CW / per;
+    for (let i = 0; i < g.items.length; i += per) {
+      need(16);
+      for (let j = 0; j < per && i + j < g.items.length; j++) {
+        const idx = i + j, v = sv[idx] || "N/A", x = M + j * cw;
+        page.drawText(clean(g.items[idx]).slice(0, 38), { x: x + 4, y: y - 11, size: 9, font: sans, color: ink });
+        page.drawText(v, { x: x + cw - 12 - sansB.widthOfTextAtSize(v, 9), y: y - 11, size: 9, font: sansB, color: v === "Yes" ? rgb(0.12, 0.48, 0.2) : v === "No" ? rgb(0.78, 0.07, 0.18) : grey });
+      }
+      y -= 15;
+      page.drawLine({ start: { x: M, y: y + 1 }, end: { x: W - M, y: y + 1 }, thickness: 0.3, color: line });
+    }
+    y -= 6;
+  });
+
+  // signatures
+  const sigs = (signatures || []).filter((x) => x);
+  if (sigs.length) {
+    need(84);
+    const sw = (CW - 20 * (sigs.length - 1)) / sigs.length;
+    for (let i = 0; i < sigs.length; i++) {
+      const x = M + i * (sw + 20);
+      page.drawText(clean(sigs[i].label).toUpperCase(), { x, y: y - 8, size: 7, font: sansB, color: grey });
+      if (sigs[i].dataUrl) {
+        try {
+          const bin = atob(sigs[i].dataUrl.split(",")[1]); const b = new Uint8Array(bin.length);
+          for (let q = 0; q < bin.length; q++) b[q] = bin.charCodeAt(q);
+          const img = await doc.embedPng(b);
+          const sc = Math.min(sw / img.width, 46 / img.height);
+          page.drawImage(img, { x, y: y - 12 - img.height * sc, width: img.width * sc, height: img.height * sc });
+        } catch (e) { /* signature image optional */ }
+      }
+      page.drawLine({ start: { x, y: y - 62 }, end: { x: x + sw, y: y - 62 }, thickness: 0.6, color: ink });
+      page.drawText(i === 0 ? `${clean(standardValues.name)}   ${clean(standardValues.date)}` : `Date: ${clean(standardValues.date)}`, { x, y: y - 73, size: 8, font: sans, color: grey });
+    }
+  }
+  const pages = doc.getPages();
+  pages.forEach((p, i) => {
+    const t = `Page ${i + 1} of ${pages.length}`;
+    p.drawText(t, { x: W - M - sans.widthOfTextAtSize(t, 8), y: 22, size: 8, font: sans, color: grey });
+    p.drawText("Generated by the Safety Hub", { x: M, y: 22, size: 8, font: sans, color: grey });
+  });
+  return await doc.save();
+}
+
 // Generated Job Hazard Analysis PDF (landscape letter): header, job info, task steps table, checklists, signature.
 async function buildJhaPdf({ form, slug, projectName, standardValues, fieldValues, stepValues, stepCount, statusValues, conditions, signatureDataUrl, pick, lifesaving }) {
   const { StandardFonts, rgb } = await import("pdf-lib");
@@ -7385,7 +7536,7 @@ async function buildJhaPdf({ form, slug, projectName, standardValues, fieldValue
   info.forEach(([k, v], i) => {
     const col = i % 2, row = Math.floor(i / 2), x = M + col * 372, yy = y - row * 17;
     page.drawText(k.toUpperCase(), { x, y: yy, size: 7.5, font: sansB, color: grey });
-    const lines = wrap(v || "—", sansB, 10, 290);
+    const lines = wrap(v || "-", sansB, 10, 290);
     page.drawText(lines[0] + (lines.length > 1 ? "..." : ""), { x: x + 72, y: yy, size: 10, font: sansB, color: ink });
   });
   y -= 3 * 17 + 4;
@@ -7393,7 +7544,7 @@ async function buildJhaPdf({ form, slug, projectName, standardValues, fieldValue
   // ---- plan fields (task, FA/CPR person, machinery ...) ----
   (form.fields || []).forEach((label, i) => {
     const val = fieldValues[i] || "";
-    const lines = wrap(val || "—", sans, 9.5, W - 2 * M - 190);
+    const lines = wrap(val || "-", sans, 9.5, W - 2 * M - 190);
     need(lines.length * 12 + 6);
     page.drawText(clean(label).toUpperCase(), { x: M, y: y - 9, size: 7, font: sansB, color: grey });
     lines.forEach((ln, li) => page.drawText(ln, { x: M + 190, y: y - 9 - li * 12, size: 9.5, font: sans, color: ink }));
@@ -7868,6 +8019,40 @@ function FillFormModal({ form, onClose, user }) {
     const fieldsText = buildFieldsText(effectiveStatusValues);
     let filledPdfUrl = null;
     let proofDocUrls = [];
+
+    if (form.pdfFillTemplate === "generic-form-pdf") {
+      setPdfGenerating(true);
+      setPdfError("");
+      try {
+        const filledBytes = await buildGenericFormPdf({
+          form, slug: activeProjectId, projectName: projName, standardValues, fieldValues: values,
+          choiceValues, statusValues: effectiveStatusValues, longFields: form.genericPdfLongFields,
+          signatures: [
+            { label: (form.signatureLabels && form.signatureLabels[0]) || "Signature", dataUrl: signatureCanvasRef.current ? signatureCanvasRef.current.toDataURL("image/png") : null },
+            ...(form.requiresTwoSignatures ? [{ label: (form.signatureLabels && form.signatureLabels[1]) || "Signature 2", dataUrl: signature2CanvasRef.current ? signature2CanvasRef.current.toDataURL("image/png") : null }] : []),
+          ],
+        });
+        const blob = new Blob([filledBytes], { type: "application/pdf" });
+        const localUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = localUrl;
+        a.download = `${form.title} - ${standardValues.subcontractor || standardValues.name || "form"} - ${new Date().toISOString().slice(0, 10)}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(localUrl), 5000);
+        const path = `submission-${Date.now()}-${form.title.replace(/[^a-zA-Z0-9]+/g, "-").toLowerCase()}.pdf`;
+        const { error: uploadError } = await supabase.storage.from("documents").upload(path, blob);
+        if (!uploadError) {
+          const { data: urlData } = supabase.storage.from("documents").getPublicUrl(path);
+          filledPdfUrl = urlData && urlData.publicUrl ? urlData.publicUrl : null;
+        }
+        setPdfGenerated(true);
+      } catch (e) {
+        setPdfError(e && e.message ? e.message : "Could not generate the filled PDF.");
+      }
+      setPdfGenerating(false);
+    }
 
     if (form.pdfFillTemplate === "job-hazard-analysis") {
       setPdfGenerating(true);
