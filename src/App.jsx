@@ -5839,6 +5839,7 @@ const FORMS_DEFAULT = [
     pdfFillTemplate: "generic-form-pdf",
     genericPdfLongFields: ["Purpose of Excavation / Drilling / Boring", "Location of Excavation / Drilling / Boring"],
     projects: ["nti-sylvania", "nti-golden-triangle"],
+    linkLabel: "Daily Excavation Checklist + Utility Locate Permit",
     photoFields: { "Submit a photo of the marked utilities in the specific work area": true },
     requiresTwoSignatures: true,
     signatureLabels: ["Equipment Operator Signature", "Foreman/Supervisor Signature"],
@@ -5880,6 +5881,7 @@ const FORMS_DEFAULT = [
       "Type of Protective System Used": { options: ["Trench Box", "Shoring System", "Sloping", "Benching"], multi: true },
     },
     slopeDiagramField: "Soil Type",
+    linkLabel: "Daily Excavation Checklist + Utility Locate Permit",
     followUpForm: "Utility Locate Permit",
     followUpMap: {
       "Location of Excavation / Drilling / Boring": "Site Location",
@@ -7448,7 +7450,7 @@ async function stampSubmitted(bytes, label) {
   return await doc.save();
 }
 
-async function buildGenericFormPdf({ form, slug, projectName, standardValues, fieldValues, choiceValues, statusValues, signatures, longFields, submittedAt, photos, statusRefs, mediaCount }) {
+async function buildGenericFormPdf({ form, slug, projectName, standardValues, fieldValues, choiceValues, statusValues, signatures, longFields, submittedAt, photos, statusRefs, mediaCount, linkRef }) {
   const { StandardFonts, rgb } = await import("pdf-lib");
   const doc = await PDFDocument.create();
   const sans = await doc.embedFont(StandardFonts.Helvetica);
@@ -7515,6 +7517,7 @@ async function buildGenericFormPdf({ form, slug, projectName, standardValues, fi
   y -= h1;
   let h2 = Math.max(kv("Company", standardValues.subcontractor, M, colW), kv("Prepared by", standardValues.name, M + colW + 16, colW));
   y -= h2;
+  if (linkRef) { y -= kv("Linked Forms Ref #", `${linkRef}  -  ${form.linkLabel || "linked forms"}`, M, CW); }
   page.drawLine({ start: { x: M, y: y + 2 }, end: { x: W - M, y: y + 2 }, thickness: 0.6, color: ink });
   y -= 6;
 
@@ -8138,6 +8141,12 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
   const [pdfGenerated, setPdfGenerated] = useState(false);
   const [pdfError, setPdfError] = useState("");
   const [proofFiles, setProofFiles] = useState([]);
+  const [linkId] = useState(() => {
+    if (prefillValues && prefillValues.__linkId) return prefillValues.__linkId;
+    if (!form.followUpForm) return null;
+    try { return crypto.randomUUID(); } catch (e) { return `${Date.now()}-${Math.random().toString(16).slice(2)}`; }
+  });
+  const linkRef = linkId ? String(linkId).replace(/[^a-zA-Z0-9]/g, "").slice(0, 6).toUpperCase() : null;
   const [mediaFiles, setMediaFiles] = useState([]);
   const mediaInputRef = useRef(null);
   const [mediaError, setMediaError] = useState("");
@@ -8228,6 +8237,7 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
       const chosenIdx = choiceValues[gi];
       lines.push("", `${group.label}: ${chosenIdx != null ? group.items[chosenIdx] : "—"}`);
     });
+    if (linkRef) lines.push("", `Linked Ref #: ${linkRef} (${form.linkLabel || "linked forms"})`);
     if (form.mediaUpload) lines.push("", `${form.mediaUpload.label}: ${mediaFiles.length} file(s) attached`);
     if (form.stepPlan) {
       if (conditions.trim()) lines.push("", `Conditions at start of shift: ${conditions.trim()}`);
@@ -8326,7 +8336,7 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
       try {
         const filledBytes = await buildGenericFormPdf({
           form, slug: activeProjectId, projectName: projName, standardValues, fieldValues: values,
-          choiceValues, statusValues: effectiveStatusValues, longFields: form.genericPdfLongFields, submittedAt, photos: photoBytes, statusRefs, mediaCount: mediaFiles.length,
+          choiceValues, statusValues: effectiveStatusValues, longFields: form.genericPdfLongFields, submittedAt, photos: photoBytes, statusRefs, mediaCount: mediaFiles.length, linkRef,
           signatures: [
             { label: (form.signatureLabels && form.signatureLabels[0]) || "Signature", dataUrl: signatureCanvasRef.current ? signatureCanvasRef.current.toDataURL("image/png") : null },
             ...(form.requiresTwoSignatures ? [{ label: (form.signatureLabels && form.signatureLabels[1]) || "Signature 2", dataUrl: signature2CanvasRef.current ? signature2CanvasRef.current.toDataURL("image/png") : null }] : []),
@@ -8569,7 +8579,7 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
         await supabase.rpc("submit_form", {
           p_token: user.sessionToken,
           p_form_title: form.title,
-          p_data: { ...standardValues, submittedAtLabel: submittedAt, statusRefs, refreshes: [], fields: values, statusValues: effectiveStatusValues, choiceValues, stepValues, filledPdfUrl, proofDocUrls, category },
+          p_data: { ...standardValues, linkId, linkRef, submittedAtLabel: submittedAt, statusRefs, refreshes: [], fields: values, statusValues: effectiveStatusValues, choiceValues, stepValues, filledPdfUrl, proofDocUrls, category },
           p_signature: null,
         });
       } catch (e) {
@@ -8621,6 +8631,7 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
                   if (si !== -1) pre[target] = values[si] || "";
                 });
                 pre["Competent Person"] = standardValues.name;
+                pre.__linkId = linkId;
                 onFollowUp(form.followUpForm, pre);
               }} className="w-full text-[12px] font-bold uppercase px-4 py-2 rounded-sm" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>
                 Start {form.followUpForm}
@@ -9256,9 +9267,46 @@ function FormsScreen({ user, go, activeProjectId }) {
   );
 }
 
+function useFormLinks(user, trigger) {
+  const [links, setLinks] = useState([]);
+  useEffect(() => {
+    let cancelled = false;
+    if (!user?.sessionToken) return;
+    supabase.rpc("list_form_links", { p_token: user.sessionToken }).then(({ data }) => {
+      if (!cancelled) setLinks(Array.isArray(data) ? data : []);
+    });
+    return () => { cancelled = true; };
+  }, [user?.sessionToken, trigger]);
+  return links;
+}
+
+// Shows the forms that were started from / alongside this submission (same linkId)
+function LinkedFormsBlock({ submission, links }) {
+  const me = links.find((l) => l.submission_id === submission.id);
+  if (!me) return null;
+  const cfg = FORMS_DEFAULT.find((f) => f.title === submission.form_title);
+  const sibs = links.filter((l) => l.link_id === me.link_id && l.submission_id !== submission.id);
+  if (sibs.length === 0 && !(cfg && cfg.followUpForm)) return null;
+  return (
+    <div className="mt-2 rounded-md border px-2.5 py-2" style={{ borderColor: GOLD, background: "#FFFBEA" }}>
+      <div className="text-[10px] uppercase font-bold mb-1" style={{ color: INK, fontFamily: "IBM Plex Mono, monospace" }}>Linked Forms</div>
+      {sibs.map((l) => (
+        <div key={l.submission_id} className="flex items-center justify-between gap-2 text-[12px] mb-1">
+          <span className="min-w-0 truncate">{l.form_title} <span style={{ color: STEEL }}>({new Date(l.submitted_at).toLocaleDateString()})</span></span>
+          {l.filled_pdf_url && <button onClick={() => window.open(l.filled_pdf_url, "_blank")} className="text-[10px] font-bold uppercase px-2 py-1 rounded-sm flex-shrink-0" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>View</button>}
+        </div>
+      ))}
+      {sibs.length === 0 && cfg && cfg.followUpForm && (
+        <div className="text-[11px]" style={{ color: ALERT }}>No {cfg.followUpForm} has been completed for this yet.</div>
+      )}
+    </div>
+  );
+}
+
 function MySubmissionsScreen({ user }) {
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const links = useFormLinks(user);
 
   useEffect(() => {
     async function load() {
@@ -9294,6 +9342,7 @@ function MySubmissionsScreen({ user }) {
               </button>
             ))}
           </div>
+          <LinkedFormsBlock submission={s} links={links} />
         </div>
       ))}
       {!loading && submissions.length === 0 && (
@@ -9306,6 +9355,7 @@ function MySubmissionsScreen({ user }) {
 function SubmittedFormsScreen({ user }) {
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const links = useFormLinks(user);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [searchText, setSearchText] = useState("");
   const [formFilter, setFormFilter] = useState("");
@@ -9393,6 +9443,7 @@ function SubmittedFormsScreen({ user }) {
               </button>
             ))}
           </div>
+          <LinkedFormsBlock submission={s} links={links} />
           <button
             onClick={() => doDelete(s.id)}
             className="w-full mt-2 text-[10px] font-bold uppercase py-1.5 rounded-sm"
