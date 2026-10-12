@@ -5836,17 +5836,18 @@ const FORMS_DEFAULT = [
       "Purpose of Excavation / Drilling / Boring",
       "Location of Excavation / Drilling / Boring",
       "Depth", "Width / Diameter", "Length",
-      "Utility Locate Reference #",
       "Submit a photo of the marked utilities in the specific work area",
-      "Ticket Refresh Date 1", "Ticket Number 1",
-      "Ticket Refresh Date 2", "Ticket Number 2",
+      "Ticket Date", "Ticket Number",
+      "Ticket Refresh Date 1", "Ticket Refresh Number 1",
     ],
+    prefillNameFields: ["Requested By"],
     choiceGroups: [
       { label: "Safe Guarding Used", items: ["Safety Fence", "Handrails", "Cover", "N/A"] },
     ],
     statusGroups: [
       {
         label: "Locate Flags / Paint Marks Visible",
+        refNumbers: "Utility Locate Reference #",
         options: ["Yes", "N/A"],
         items: ["Electric", "Gas", "Communications", "Water", "Sewer", "Pipeline", "NTI", "NTEMP", "Telephone (TX-DOT)", "Storm Water / Slurry", "Other Utility 1", "Other Utility 2"],
       },
@@ -6569,7 +6570,7 @@ function AboutForm({ form }) {
   );
 }
 
-function StatusGroup({ group, values, onChange }) {
+function StatusGroup({ group, values, onChange, refs, onRef }) {
   return (
     <div>
       <div className="text-[11px] uppercase font-bold mb-1.5" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{group.label}</div>
@@ -6577,7 +6578,8 @@ function StatusGroup({ group, values, onChange }) {
       {optionLegend(group.options) && <div className="text-[11px] mb-1.5 leading-snug" style={{ color: STEEL }}>{optionLegend(group.options)}</div>}
       <div className="space-y-1.5">
         {group.items.map((item, i) => (
-          <div key={i} className="flex items-center justify-between gap-2 bg-[#FCFCFA] rounded-sm px-2 py-1.5 border" style={{ borderColor: "#E4E2DA" }}>
+          <div key={i} className="bg-[#FCFCFA] rounded-sm px-2 py-1.5 border" style={{ borderColor: "#E4E2DA" }}>
+          <div className="flex items-center justify-between gap-2">
             <span className="text-[12px] flex-1">{item}</span>
             <div className="flex gap-1 flex-shrink-0">
               {group.options.map((opt) => {
@@ -6598,6 +6600,16 @@ function StatusGroup({ group, values, onChange }) {
                 );
               })}
             </div>
+          </div>
+          {group.refNumbers && onRef && (
+            <input
+              value={(refs || {})[i] || ""}
+              onChange={(e) => onRef(i, e.target.value)}
+              placeholder={group.refNumbers}
+              className="w-full mt-1.5 rounded-md border px-2 py-1 text-[12px] bg-white"
+              style={{ borderColor: "#C9C6BC" }}
+            />
+          )}
           </div>
         ))}
       </div>
@@ -7349,7 +7361,7 @@ async function stampSubmitted(bytes, label) {
   return await doc.save();
 }
 
-async function buildGenericFormPdf({ form, slug, projectName, standardValues, fieldValues, choiceValues, statusValues, signatures, longFields, submittedAt, photos }) {
+async function buildGenericFormPdf({ form, slug, projectName, standardValues, fieldValues, choiceValues, statusValues, signatures, longFields, submittedAt, photos, statusRefs }) {
   const { StandardFonts, rgb } = await import("pdf-lib");
   const doc = await PDFDocument.create();
   const sans = await doc.embedFont(StandardFonts.Helvetica);
@@ -7483,6 +7495,11 @@ async function buildGenericFormPdf({ form, slug, projectName, standardValues, fi
       for (let j = 0; j < per && i + j < g.items.length; j++) {
         const idx = i + j, v = sv[idx] || "N/A", x = M + j * cw;
         page.drawText(clean(g.items[idx]).slice(0, 38), { x: x + 4, y: y - 11, size: 9, font: sans, color: ink });
+        const rf = g.refNumbers ? (((statusRefs || {})[gi] || {})[idx] || "").trim() : "";
+        if (g.refNumbers) {
+          const rt = clean(rf ? `Ref #: ${rf}` : "Ref #: -").slice(0, 30);
+          page.drawText(rt, { x: x + 92, y: y - 11, size: 8.5, font: sansB, color: ink });
+        }
         page.drawText(v, { x: x + cw - 12 - sansB.widthOfTextAtSize(v, 9), y: y - 11, size: 9, font: sansB, color: v === "Yes" ? rgb(0.12, 0.48, 0.2) : v === "No" ? rgb(0.78, 0.07, 0.18) : grey });
       }
       y -= 15;
@@ -7965,6 +7982,7 @@ function FillFormModal({ form, onClose, user }) {
     return initial;
   });
   const [statusValues, setStatusValues] = useState({});
+  const [statusRefs, setStatusRefs] = useState({});
   const [choiceValues, setChoiceValues] = useState({});
   const [sigEmpty, setSigEmpty] = useState(true);
   const signatureCanvasRef = useRef(null);
@@ -7976,6 +7994,22 @@ function FillFormModal({ form, onClose, user }) {
   const [proofFiles, setProofFiles] = useState([]);
   const [fieldPhotos, setFieldPhotos] = useState({});
   const photoInputRefs = useRef({});
+  // Fields that mirror the Name box (e.g. "Requested By"): copy it in, and keep following it until edited by hand
+  const prevNameRef = useRef(null);
+  useEffect(() => {
+    const labels = form.prefillNameFields || [];
+    if (!labels.length) return;
+    setValues((v) => {
+      const next = { ...v };
+      labels.forEach((l) => {
+        const i = (form.fields || []).indexOf(l);
+        if (i === -1) return;
+        if (!next[i] || next[i] === prevNameRef.current) next[i] = standardValues.name;
+      });
+      return next;
+    });
+    prevNameRef.current = standardValues.name;
+  }, [standardValues.name]);
   const proofInputRef = useRef(null);
   const [logoFile, setLogoFile] = useState(null);
   const [logoPreview, setLogoPreview] = useState(null);
@@ -8033,7 +8067,7 @@ function FillFormModal({ form, onClose, user }) {
     (form.fields || []).forEach((f, i) => lines.push(`${f}: ${form.photoFields && form.photoFields[f] ? `${(fieldPhotos[f] || []).length} photo(s) attached` : (values[i] || "")}`));
     (form.statusGroups || []).forEach((group, gi) => {
       lines.push("", group.label + ":");
-      group.items.forEach((item, ii) => lines.push(`  ${item}: ${(svToUse[gi] || {})[ii] || "—"}`));
+      group.items.forEach((item, ii) => lines.push(`  ${item}: ${(svToUse[gi] || {})[ii] || "—"}${group.refNumbers && ((statusRefs[gi] || {})[ii] || "").trim() ? `  (${group.refNumbers} ${(statusRefs[gi] || {})[ii].trim()})` : ""}`));
     });
     (form.choiceGroups || []).forEach((group, gi) => {
       const chosenIdx = choiceValues[gi];
@@ -8101,7 +8135,7 @@ function FillFormModal({ form, onClose, user }) {
       try {
         const filledBytes = await buildGenericFormPdf({
           form, slug: activeProjectId, projectName: projName, standardValues, fieldValues: values,
-          choiceValues, statusValues: effectiveStatusValues, longFields: form.genericPdfLongFields, submittedAt, photos: photoBytes,
+          choiceValues, statusValues: effectiveStatusValues, longFields: form.genericPdfLongFields, submittedAt, photos: photoBytes, statusRefs,
           signatures: [
             { label: (form.signatureLabels && form.signatureLabels[0]) || "Signature", dataUrl: signatureCanvasRef.current ? signatureCanvasRef.current.toDataURL("image/png") : null },
             ...(form.requiresTwoSignatures ? [{ label: (form.signatureLabels && form.signatureLabels[1]) || "Signature 2", dataUrl: signature2CanvasRef.current ? signature2CanvasRef.current.toDataURL("image/png") : null }] : []),
@@ -8344,7 +8378,7 @@ function FillFormModal({ form, onClose, user }) {
         await supabase.rpc("submit_form", {
           p_token: user.sessionToken,
           p_form_title: form.title,
-          p_data: { ...standardValues, submittedAtLabel: submittedAt, fields: values, statusValues: effectiveStatusValues, choiceValues, stepValues, filledPdfUrl, proofDocUrls, category },
+          p_data: { ...standardValues, submittedAtLabel: submittedAt, statusRefs, refreshes: [], fields: values, statusValues: effectiveStatusValues, choiceValues, stepValues, filledPdfUrl, proofDocUrls, category },
           p_signature: null,
         });
       } catch (e) {
@@ -8565,7 +8599,7 @@ function FillFormModal({ form, onClose, user }) {
           )}
 
           {(form.statusGroups || []).map((group, gi) => (
-            <StatusGroup key={gi} group={group} values={statusValues[gi] || {}} onChange={(itemIdx, opt) => setStatus(gi, itemIdx, opt)} />
+            <StatusGroup key={gi} group={group} values={statusValues[gi] || {}} onChange={(itemIdx, opt) => setStatus(gi, itemIdx, opt)} refs={statusRefs[gi] || {}} onRef={(itemIdx, val) => setStatusRefs((r) => ({ ...r, [gi]: { ...(r[gi] || {}), [itemIdx]: val } }))} />
           ))}
 
           {form.referenceTable && (
@@ -8724,8 +8758,167 @@ function FillFormModal({ form, onClose, user }) {
   );
 }
 
+// Adds a "Ticket Refresh Log" page to the end of a submitted Utility Locate Permit PDF
+async function appendTicketRefreshLog(baseBytes, { original, refreshes, startNumber }) {
+  const { StandardFonts, rgb } = await import("pdf-lib");
+  const doc = await PDFDocument.load(baseBytes);
+  const sans = await doc.embedFont(StandardFonts.Helvetica);
+  const sansB = await doc.embedFont(StandardFonts.HelveticaBold);
+  const clean = (t) => String(t == null ? "" : t).replace(/[^\n -\u00ff]/g, "?");
+  const ink = rgb(0.1, 0.1, 0.1), gold = rgb(0.98, 0.78, 0.02), grey = rgb(0.4, 0.42, 0.45), line = rgb(0.8, 0.79, 0.75);
+  const W = 612, H = 792, M = 36;
+  const page = doc.addPage([W, H]);
+  page.drawRectangle({ x: 0, y: H - 44, width: W, height: 44, color: ink });
+  const t = "TICKET REFRESH LOG";
+  page.drawText(t, { x: W - M - sansB.widthOfTextAtSize(t, 14), y: H - 28, size: 14, font: sansB, color: gold });
+  page.drawText("UTILITY LOCATE PERMIT", { x: M, y: H - 28, size: 10, font: sansB, color: rgb(1, 1, 1) });
+  let y = H - 70;
+  const cols = [M, M + 150, M + 290, M + 380];
+  ["Entry", "Ticket Number", "Date", "Entered by / Time"].forEach((h, i) => page.drawText(h.toUpperCase(), { x: cols[i], y, size: 7.5, font: sansB, color: grey }));
+  y -= 6; page.drawLine({ start: { x: M, y }, end: { x: W - M, y }, thickness: 0.8, color: ink });
+  const rows = [{ a: "Original ticket", b: original.number || "-", c: original.date || "-", d: "" }].concat(
+    refreshes.map((r, i) => ({
+      a: `Ticket Refresh Number ${startNumber + i}`, b: r.number || "-", c: r.date || "-",
+      d: `${r.by || ""}  ${r.at ? new Date(r.at).toLocaleString("en-US", { month: "2-digit", day: "2-digit", year: "numeric", hour: "numeric", minute: "2-digit" }) : ""}`,
+    })));
+  rows.forEach((r) => {
+    y -= 18;
+    page.drawText(clean(r.a).slice(0, 30), { x: cols[0], y, size: 9.5, font: sansB, color: ink });
+    page.drawText(clean(r.b).slice(0, 26), { x: cols[1], y, size: 9.5, font: sans, color: ink });
+    page.drawText(clean(r.c).slice(0, 18), { x: cols[2], y, size: 9.5, font: sans, color: ink });
+    page.drawText(clean(r.d).slice(0, 40), { x: cols[3], y, size: 8.5, font: sans, color: grey });
+    page.drawLine({ start: { x: M, y: y - 5 }, end: { x: W - M, y: y - 5 }, thickness: 0.3, color: line });
+  });
+  return await doc.save();
+}
+
+function UtilityPermitRenewals({ user, projectName }) {
+  const { notifyEmail } = useContext(ProjectContext);
+  const [open, setOpen] = useState(false);
+  const [permits, setPermits] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [activeId, setActiveId] = useState(null);
+  const [num, setNum] = useState("");
+  const [date, setDate] = useState(new Date().toLocaleDateString());
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  const form = FORMS_DEFAULT.find((f) => f.title === "Utility Locate Permit");
+  const idx = (label) => String((form.fields || []).indexOf(label));
+
+  const load = async () => {
+    setLoading(true);
+    const { data } = await supabase.rpc("list_utility_permits", { p_token: user.sessionToken });
+    setPermits(Array.isArray(data) ? data : []);
+    setLoading(false);
+  };
+  useEffect(() => { if (open) load(); }, [open]);
+
+  const info = (p) => {
+    const f = p.fields || {};
+    const initialRefresh = (f[idx("Ticket Refresh Number 1")] || "").trim();
+    return {
+      location: f[idx("Location of Excavation / Drilling / Boring")] || "-",
+      ticket: f[idx("Ticket Number")] || "",
+      ticketDate: f[idx("Ticket Date")] || "",
+      startNumber: initialRefresh ? 2 : 1,
+      initialRefresh,
+      initialRefreshDate: f[idx("Ticket Refresh Date 1")] || "",
+    };
+  };
+
+  const save = async (p) => {
+    if (!num.trim()) return;
+    setBusy(true); setMsg("");
+    try {
+      const { data } = await supabase.rpc("add_ticket_refresh", { p_token: user.sessionToken, p_submission_id: p.id, p_number: num.trim(), p_date: date });
+      if (!data) { setMsg("Couldn't save. Please try again."); setBusy(false); return; }
+      const inf = info(p);
+      // Rebuild the PDF: original + one log page listing every refresh
+      let newUrl = null;
+      try {
+        const baseRes = await fetch(data.base_pdf_url);
+        const baseBytes = new Uint8Array(await baseRes.arrayBuffer());
+        const all = [];
+        if (inf.initialRefresh) all.push({ number: inf.initialRefresh, date: inf.initialRefreshDate, by: p.submitted_by, at: p.submitted_at });
+        const bytes = await appendTicketRefreshLog(baseBytes, {
+          original: { number: inf.ticket, date: inf.ticketDate },
+          refreshes: all.concat(data.refreshes), startNumber: 1,
+        });
+        const path = `submission-${Date.now()}-utility-locate-permit-refreshed.pdf`;
+        const blob = new Blob([bytes], { type: "application/pdf" });
+        const { error: upErr } = await supabase.storage.from("documents").upload(path, blob);
+        if (!upErr) {
+          const { data: u } = supabase.storage.from("documents").getPublicUrl(path);
+          newUrl = u && u.publicUrl ? u.publicUrl : null;
+          if (newUrl) await supabase.rpc("set_submission_pdf", { p_token: user.sessionToken, p_submission_id: p.id, p_pdf_url: newUrl });
+        }
+      } catch (e) { /* the refresh is saved even if the PDF could not be rebuilt */ }
+      if (notifyEmail) {
+        sendFormEmail({
+          toEmail: notifyEmail, formTitle: "Utility Locate Permit - Ticket Refresh",
+          fieldsText: `Permit submitted by: ${p.submitted_by}\nLocation: ${inf.location}\nOriginal ticket: ${inf.ticket || "-"}\nTicket Refresh Number: ${num.trim()}\nDate: ${date}${newUrl ? `\n\nUpdated PDF: ${newUrl}` : ""}`,
+          submittedBy: user?.name || "Unknown", projectName: projectName || "",
+        });
+      }
+      setNum(""); setActiveId(null); setMsg("Ticket refresh added.");
+      await load();
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="bg-white rounded-md p-3 border mb-3" style={{ borderColor: GOLD }}>
+      <button onClick={() => setOpen((o) => !o)} className="w-full flex items-center justify-between text-left">
+        <div>
+          <div className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 500 }}>Utility Locate Permit - Add Ticket Refresh</div>
+          <div className="text-[11px] leading-snug" style={{ color: STEEL }}>Locate tickets renew every 14 days. Open a permit you already submitted and add the new ticket.</div>
+        </div>
+        <span className="text-[10px] font-bold uppercase ml-2" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{open ? "Hide" : "Open"}</span>
+      </button>
+      {open && (
+        <div className="mt-3">
+          {loading && <div className="text-[12px]" style={{ color: STEEL }}>Loading…</div>}
+          {msg && <div className="text-[11px] mb-2" style={{ color: STEEL }}>{msg}</div>}
+          {permits.map((p) => {
+            const inf = info(p);
+            const last = (p.refreshes || []).length ? p.refreshes[p.refreshes.length - 1] : null;
+            const nextNo = inf.startNumber + (p.refreshes || []).length;
+            return (
+              <div key={p.id} className="border rounded-md p-2.5 mb-2" style={{ borderColor: "#E4E2DA" }}>
+                <div className="text-[12px] font-bold">{inf.location}</div>
+                <div className="text-[10px]" style={{ color: STEEL }}>{p.submitted_by} · {new Date(p.submitted_at).toLocaleDateString()} · Ticket {inf.ticket || "-"}</div>
+                <div className="text-[10px]" style={{ color: STEEL }}>
+                  {(p.refreshes || []).length === 0 && !inf.initialRefresh ? "No refreshes yet" : `Latest: ${last ? `${last.number} (${last.date})` : `${inf.initialRefresh} (${inf.initialRefreshDate})`}`}
+                  {(p.refreshes || []).length + (inf.initialRefresh ? 1 : 0) > 0 ? ` · ${(p.refreshes || []).length + (inf.initialRefresh ? 1 : 0)} refresh(es)` : ""}
+                </div>
+                {activeId === p.id ? (
+                  <div className="mt-2">
+                    <label className="text-[10px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Ticket Refresh Number {nextNo}</label>
+                    <input value={num} onChange={(e) => setNum(e.target.value)} className="w-full mt-1 mb-2 rounded-md border px-2.5 py-1.5 text-[13px]" style={{ borderColor: "#C9C6BC" }} />
+                    <label className="text-[10px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Date</label>
+                    <input value={date} onChange={(e) => setDate(e.target.value)} className="w-full mt-1 mb-2 rounded-md border px-2.5 py-1.5 text-[13px]" style={{ borderColor: "#C9C6BC" }} />
+                    <div className="flex gap-2">
+                      <button disabled={busy || !num.trim()} onClick={() => save(p)} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm" style={{ background: GOLD, color: INK, opacity: busy || !num.trim() ? 0.5 : 1, fontFamily: "IBM Plex Mono, monospace" }}>{busy ? "Saving…" : "Save Refresh"}</button>
+                      <button onClick={() => setActiveId(null)} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Cancel</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex gap-2 mt-2">
+                    <button onClick={() => { setActiveId(p.id); setNum(""); setDate(new Date().toLocaleDateString()); setMsg(""); }} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>Add Ticket Refresh</button>
+                    {p.filled_pdf_url && <button onClick={() => window.open(p.filled_pdf_url, "_blank")} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>View PDF</button>}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {!loading && permits.length === 0 && <div className="text-[12px]" style={{ color: STEEL }}>No Utility Locate Permits submitted in the last 90 days.</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function FormsScreen({ user, go, activeProjectId }) {
-  const { sheetUrls } = useContext(ProjectContext);
+  const { sheetUrls, name: projDisplayName } = useContext(ProjectContext);
   const [openForm, setOpenForm] = useState(null);
   const [viewingPdf, setViewingPdf] = useState(null);
   const [downloaded, setDownloaded] = useState({});
@@ -8761,6 +8954,9 @@ function FormsScreen({ user, go, activeProjectId }) {
         </div>
       </div>
       {loading && <div className="text-[12px] mb-2" style={{ color: STEEL }}>Loading…</div>}
+      {user && user.sessionToken && forms.some((f) => f.title === "Utility Locate Permit") && (
+        <UtilityPermitRenewals user={user} projectName={projDisplayName} />
+      )}
       <div className="space-y-2">
         {forms.map((f, i) => (
           <div key={i} className="bg-white rounded-md p-3 border" style={{ borderColor: "#E4E2DA" }}>
