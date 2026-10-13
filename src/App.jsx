@@ -660,6 +660,7 @@ function HomeScreen({ go, user, activeProjectId }) {
               message: row.message,
               checklist: row.checklist || null,
               pinned: !!row.pinned,
+              videoUrl: row.video_path ? (supabase.storage.from("documents").getPublicUrl(row.video_path).data || {}).publicUrl || null : null,
             }))
       );
       setLoadingPosts(false);
@@ -814,6 +815,9 @@ function HomeScreen({ go, user, activeProjectId }) {
                 <span className="text-[10px] flex-shrink-0 ml-2" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{p.date}</span>
               </div>
               <div className="text-[12px]" style={{ color: "#333" }}>{p.message}</div>
+              {p.videoUrl && (
+                <video src={p.videoUrl} controls playsInline preload="metadata" className="w-full rounded-md mt-2" style={{ background: "#000", aspectRatio: "16 / 9" }} />
+              )}
               {p.checklist && p.checklist.length > 0 && (
                 <div className="mt-2 space-y-1">
                   {p.checklist.map((item, ci) => (
