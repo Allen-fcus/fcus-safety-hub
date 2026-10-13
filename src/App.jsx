@@ -8156,7 +8156,11 @@ function LifeThreateningPicker({ pick, onChange }) {
   const names = Object.keys(LIFE_THREATENING);
   const toggleH = (h) => {
     const has = p.h.includes(h);
-    onChange({ ...p, h: has ? p.h.filter((x) => x !== h) : names.filter((n) => p.h.includes(n) || n === h), c: has ? p.c.filter((c) => !LIFE_THREATENING[h].includes(c)) : p.c });
+    const nh = has ? p.h.filter((x) => x !== h) : names.filter((n) => p.h.includes(n) || n === h);
+    const stillUsed = new Set(nh.flatMap((x) => LIFE_THREATENING[x]));
+    // New hazard: all of its controls come up already selected. Removed hazard: drop the controls only it used.
+    const nc = has ? p.c.filter((c) => stillUsed.has(c)) : [...p.c, ...LIFE_THREATENING[h].filter((c) => !p.c.includes(c))];
+    onChange({ ...p, h: nh, c: nc });
   };
   const toggleC = (c) => onChange({ ...p, c: p.c.includes(c) ? p.c.filter((x) => x !== c) : [...p.c, c] });
   const lab = { color: STEEL, fontFamily: "IBM Plex Mono, monospace" };
@@ -8171,7 +8175,8 @@ function LifeThreateningPicker({ pick, onChange }) {
         })}
       </div>
       <label className="text-[10px] uppercase font-bold block mt-3" style={lab}>Select Life Saving Controls</label>
-      {p.h.length === 0 && <div className="text-[11px] mt-1" style={{ color: STEEL }}>Pick a life-threatening hazard above and its lifesaving controls appear here. If none apply to this task, leave this blank.</div>}
+      {p.h.length === 0 && <div className="text-[11px] mt-1" style={{ color: STEEL }}>Pick a life-threatening hazard above and its lifesaving controls appear here, already selected. If none apply to this task, leave this blank.</div>}
+      {p.h.length > 0 && <div className="text-[10px] mt-0.5" style={{ color: STEEL }}>All controls are pre-selected. Review them and uncheck any that do not apply to this job.</div>}
       {p.h.map((h) => (
         <div key={h} className="mt-1.5 rounded-md border p-2" style={{ borderColor: "#E4E2DA", background: "white" }}>
           <div className="text-[11px] font-bold mb-1">{h}</div>
@@ -8201,7 +8206,9 @@ function HazardControlPicker({ pick, onChange, suggest }) {
   const toggleH = (h) => {
     const has = p.h.includes(h);
     const nh = has ? p.h.filter((x) => x !== h) : [...p.h, h];
-    const nc = has ? p.c.filter((c) => !HAZARD_LIBRARY[h].includes(c)) : p.c;
+    const stillUsed = new Set(nh.flatMap((x) => HAZARD_LIBRARY[x] || []));
+    // New hazard: its controls come up already ticked. Removed hazard: drop the controls only it used.
+    const nc = has ? p.c.filter((c) => stillUsed.has(c)) : [...p.c, ...HAZARD_LIBRARY[h].filter((c) => !p.c.includes(c))];
     onChange({ ...p, h: nh, c: nc });
   };
   const toggleC = (c) => onChange({ ...p, c: p.c.includes(c) ? p.c.filter((x) => x !== c) : [...p.c, c] });
@@ -8233,7 +8240,8 @@ function HazardControlPicker({ pick, onChange, suggest }) {
       <input value={p.xh} onChange={(e) => onChange({ ...p, xh: e.target.value })} placeholder="Other hazards not listed (optional)" className="w-full mt-1.5 rounded-md border px-2.5 py-1.5 text-[12px]" style={{ borderColor: "#C9C6BC" }} />
 
       <label className="text-[10px] uppercase font-bold block mt-3" style={lab}>Actions taken to prevent hazards — tick each control that is in place</label>
-      {p.h.length === 0 && <div className="text-[11px] mt-1" style={{ color: STEEL }}>Pick a hazard above and its controls appear here.</div>}
+      {p.h.length === 0 && <div className="text-[11px] mt-1" style={{ color: STEEL }}>Pick a hazard above and its controls appear here, already ticked.</div>}
+      {p.h.length > 0 && <div className="text-[10px] mt-0.5" style={{ color: STEEL }}>All controls are pre-ticked. Review them and untick any that are not in place for this job.</div>}
       {p.h.map((h) => (
         <div key={h} className="mt-1.5 rounded-md border p-2" style={{ borderColor: "#E4E2DA", background: "white" }}>
           <div className="text-[11px] font-bold mb-1">{h}</div>
