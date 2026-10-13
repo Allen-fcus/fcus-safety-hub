@@ -6028,16 +6028,17 @@ const FORMS_DEFAULT = [
     genericPdfWrap: true,
     genericPdfCols: 1,
     genericPdfLongFields: ["Purpose of Activity", "Location of Activity", "Owner of Utility & Point of Contact", "Equipment to Be Used"],
-    prefillNameFields: ["Requested By"],
+    prefillNameFields: ["Competent Person (Requested By)", "Crew Supervisor"],
     requiresProof: true,
     proofLabel: "Supporting Documentation",
     proofRequired: false,
     requiresTwoSignatures: true,
     signatureLabels: ["Operator Signature", "Supervisor Signature"],
     fields: [
-      "Requested By", "Competent Person", "Start Time", "End Time",
-      "Purpose of Activity", "Location of Activity", "Supervisor Completing the Form",
-      "Height of Power Line (ft)", "Voltage (kV)", "Owner of Utility & Point of Contact", "Equipment to Be Used",
+      "Competent Person (Requested By)", "Crew Supervisor", "Start Time", "End Time",
+      "Purpose of Activity", "Location of Activity",
+      "Owner of Utility & Point of Contact", "Equipment to Be Used",
+      "Height of Power Line (ft)", "Voltage (kV)",
     ],
     referenceTable: {
       title: "Table A — Minimum Clearance Distance (Reference)",
@@ -6053,7 +6054,7 @@ const FORMS_DEFAULT = [
     },
     choiceGroups: [
       { label: "Safety Option Chosen", items: ["De-energize and Ground", "Maintain 20' Clearance", "Table A Clearance"] },
-      { label: "Method of Protection", items: ["Dedicated Spotter", "Proximity Alarm", "Encroachment Warning Device", "Encroachment Limiting Device", "Insulating Link/Device"] },
+      { label: "Method of Protection", multi: true, items: ["Dedicated Spotter", "Proximity Alarm", "Encroachment Warning Device", "Encroachment Limiting Device", "Insulating Link/Device"] },
     ],
   },
   {
@@ -6554,6 +6555,8 @@ const FIELD_HINTS = {
   "purpose of activity": "What the work near the power line is for.",
   "location of activity": "Where the work near the power line will take place.",
   "supervisor completing the form": "Name of the supervisor filling out this permit.",
+  "competent person (requested by)": "Competent person requesting this permit. Fills in with your name; change it if someone else is the competent person.",
+  "crew supervisor": "Name of the crew supervisor. Fills in with the name of the person completing this form.",
   "height of power line (ft)": "Height of the line above ground, in feet. Use this to find the clearance distance in Table A.",
   "voltage (kv)": "Line voltage in kilovolts. Use it with Table A to find the minimum clearance distance.",
   "owner of utility & point of contact": "Utility company that owns the line and the person to contact there.",
@@ -6747,10 +6750,10 @@ function ChoiceGroup({ group, value, onChange }) {
   return (
     <div>
       <div className="text-[11px] uppercase font-bold mb-1.5" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{group.label}</div>
-      <div className="text-[11px] mb-1.5 leading-snug" style={{ color: STEEL }}>Select the one answer that applies.</div>
+      <div className="text-[11px] mb-1.5 leading-snug" style={{ color: STEEL }}>{group.multi ? "Select all that apply." : "Select the one answer that applies."}</div>
       <div className="space-y-1.5">
         {group.items.map((item, i) => {
-          const active = value === i;
+          const active = group.multi ? Array.isArray(value) && value.includes(i) : value === i;
           return (
             <button
               key={i}
@@ -7650,7 +7653,8 @@ async function buildGenericFormPdf({ form, slug, projectName, standardValues, fi
   // choice groups
   (form.choiceGroups || []).forEach((g, gi) => {
     need(40);
-    const chosen = choiceValues[gi] != null ? g.items[choiceValues[gi]] : "-";
+    const cv = choiceValues[gi];
+    const chosen = Array.isArray(cv) ? (cv.length ? cv.map((k) => g.items[k]).join(", ") : "-") : (cv != null ? g.items[cv] : "-");
     y -= kv(g.label, chosen, M, CW);
   });
   y -= 6;
@@ -8416,7 +8420,13 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
     setStatusValues((v) => ({ ...v, [groupIdx]: { ...(v[groupIdx] || {}), [itemIdx]: opt } }));
   };
   const setChoice = (groupIdx, itemIdx) => {
-    setChoiceValues((v) => ({ ...v, [groupIdx]: itemIdx }));
+    const multi = form.choiceGroups && form.choiceGroups[groupIdx] && form.choiceGroups[groupIdx].multi;
+    setChoiceValues((v) => {
+      if (!multi) return { ...v, [groupIdx]: itemIdx };
+      const cur = Array.isArray(v[groupIdx]) ? v[groupIdx] : [];
+      const next = cur.includes(itemIdx) ? cur.filter((x) => x !== itemIdx) : [...cur, itemIdx].sort((a, b) => a - b);
+      return { ...v, [groupIdx]: next };
+    });
   };
 
   const buildFieldsText = (overrideStatusValues, submittedAtLabel) => {
@@ -8436,7 +8446,8 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
     });
     (form.choiceGroups || []).forEach((group, gi) => {
       const chosenIdx = choiceValues[gi];
-      lines.push("", `${group.label}: ${chosenIdx != null ? group.items[chosenIdx] : "—"}`);
+      const txt = Array.isArray(chosenIdx) ? (chosenIdx.length ? chosenIdx.map((k) => group.items[k]).join(", ") : "—") : (chosenIdx != null ? group.items[chosenIdx] : "—");
+      lines.push("", `${group.label}: ${txt}`);
     });
     if (linkRef) lines.push("", `Linked Ref #: ${linkRef} (${form.linkLabel || "linked forms"})`);
     if (form.mediaUpload) lines.push("", `${form.mediaUpload.label}: ${mediaFiles.length} file(s) attached`);
