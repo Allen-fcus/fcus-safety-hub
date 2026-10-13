@@ -5772,7 +5772,7 @@ const FORMS_DEFAULT = [
   {
     title: "Job Hazard Analysis",
     pdfFillTemplate: "job-hazard-analysis",
-    crewSignatures: { field: "Crew Members Involved (list names)" },
+    personSignatures: [{ field: "Crew Members Involved (list names)", heading: "Crew Members & Signatures", noun: "Crew member", pdfTitle: "CREW MEMBER SIGNATURES" }],
     signatureLabels: ["Supervisor Signature"],
     equipmentSelectFields: { "Machinery to be Used": "multi" },
     description: "Identifies task-specific hazards and the controls in place to prevent them, completed before work begins.",
@@ -6010,12 +6010,12 @@ const FORMS_DEFAULT = [
     genericPdfNeutral: true,
     linkLabel: "Confined Space Evaluation + Entry Permit",
     genericPdfLongFields: [
-      "Confined Space Location/Description/ID Number", "Purpose of Entry", "Reason Permit Canceled",
+      "Confined Space Location/Description/ID Number", "Purpose of Entry",
       "Rescue and Emergency Services", "Communication Procedures", "Special Requirements - Other (list)",
       "Test Instrument(s) Used (Name, Model, Serial No., Date Last Calibrated)",
       "Name(s) of Person(s) Testing", "Authorized Entrants", "Authorized Attendants",
     ],
-    timeFields: ["Time In", "Time Out", "Permit Canceled Time", "Test Start Time", "Test Stop Time", "Pre Entry Time", "Central Notified Before Entrance - Time", "Central Notified After Entrance - Time"],
+    timeFields: ["Time In", "Test Start Time", "Test Stop Time", "Pre Entry Time", "Central Notified Before Entrance - Time", "Central Notified After Entrance - Time"],
     trailingFieldLabels: [
       "Test Start Time", "Test Stop Time",
       "Oxygen (%)", "LEL (%)", "Carbon Monoxide (PPM)", "Hydrogen Sulfide (PPM)", "Other Reading",
@@ -6024,10 +6024,14 @@ const FORMS_DEFAULT = [
       "Central Notified Before Entrance - Time", "Central Notified After Entrance - Time",
       "Special Requirements - Other (list)", "Authorized Entrants", "Authorized Attendants",
     ],
-    bigTextFields: ["Authorized Entrants", "Authorized Attendants", "Communication Procedures", "Rescue and Emergency Services"],
+    personSignatures: [
+      { field: "Authorized Entrants", heading: "Authorized Entrants & Signatures", noun: "Entrant", pdfTitle: "AUTHORIZED ENTRANTS", startRows: 2 },
+      { field: "Authorized Attendants", heading: "Authorized Attendants & Signatures", noun: "Attendant", pdfTitle: "AUTHORIZED ATTENDANTS", startRows: 1 },
+    ],
+    genericPdfHideFields: ["Authorized Entrants", "Authorized Attendants"],
+    closeoutNote: "Time Out and permit cancellation are recorded later from Forms > Close Out / Cancel Permit.",
+    bigTextFields: ["Communication Procedures", "Rescue and Emergency Services"],
     bigTextHints: {
-      "Authorized Entrants": "One name per line.",
-      "Authorized Attendants": "One name per line.",
       "Communication Procedures": "How the attendant and entrants will communicate (radio, voice, hand signals).",
       "Rescue and Emergency Services": "Who will perform rescue and how they are contacted (name and phone).",
     },
@@ -6038,7 +6042,7 @@ const FORMS_DEFAULT = [
     signatureLabels: ["Permit Authorization Signature"],
     fields: [
       "Confined Space Location/Description/ID Number", "Purpose of Entry",
-      "Time In", "Time Out", "Permit Canceled Time", "Reason Permit Canceled",
+      "Time In",
       "Supervisor", "Rescue and Emergency Services", "Communication Procedures",
       "Test Start Time", "Test Stop Time",
       "Oxygen (%)", "LEL (%)", "Carbon Monoxide (PPM)", "Hydrogen Sulfide (PPM)", "Other Reading",
@@ -7585,7 +7589,7 @@ async function stampSubmitted(bytes, label) {
   return await doc.save();
 }
 
-async function buildGenericFormPdf({ form, slug, projectName, standardValues, fieldValues, choiceValues, statusValues, signatures, longFields, submittedAt, photos, statusRefs, mediaCount, linkRef }) {
+async function buildGenericFormPdf({ form, slug, projectName, standardValues, fieldValues, choiceValues, statusValues, signatures, longFields, submittedAt, photos, statusRefs, mediaCount, linkRef, groupSigs }) {
   const { StandardFonts, rgb } = await import("pdf-lib");
   const doc = await PDFDocument.create();
   const sans = await doc.embedFont(StandardFonts.Helvetica);
@@ -7671,7 +7675,7 @@ async function buildGenericFormPdf({ form, slug, projectName, standardValues, fi
   // fields: short ones two-up, long ones full width
   const long = new Set(longFields || []);
   const photoMap = photos || {};
-  const items = (form.fields || []).map((label, i) => ({ label, value: photoMap[label] ? `${photoMap[label].length} photo(s) attached - see below` : (fieldValues[i] || ""), full: long.has(label) || String(fieldValues[i] || "").length > 34 }));
+  const items = (form.fields || []).map((label, i) => ({ label, i })).filter((x) => !(form.genericPdfHideFields || []).includes(x.label)).map(({ label, i }) => ({ label, value: photoMap[label] ? `${photoMap[label].length} photo(s) attached - see below` : (fieldValues[i] || ""), full: long.has(label) || String(fieldValues[i] || "").length > 34 }));
   let k = 0;
   while (k < items.length) {
     const a = items[k];
@@ -7820,7 +7824,7 @@ async function buildGenericFormPdf({ form, slug, projectName, standardValues, fi
           const rt = clean(rf ? `Ref #: ${rf}` : "Ref #: -").slice(0, 30);
           page.drawText(rt, { x: x + 92, y: y - 11, size: 8.5, font: sansB, color: ink });
         }
-        page.drawText(v, { x: x + cw - 12 - sansB.widthOfTextAtSize(v, 9), y: y - 11, size: 9, font: sansB, color: (v === "Yes" || v === "OK") ? rgb(0.12, 0.48, 0.2) : (v === "No" || v === "Bad") ? rgb(0.78, 0.07, 0.18) : grey });
+        page.drawText(v, { x: x + cw - 12 - sansB.widthOfTextAtSize(v, 9), y: y - 11, size: 9, font: sansB, color: form.genericPdfNeutral ? ink : (v === "Yes" || v === "OK") ? rgb(0.12, 0.48, 0.2) : (v === "No" || v === "Bad") ? rgb(0.78, 0.07, 0.18) : grey });
       }
       y -= 15;
       page.drawLine({ start: { x: M, y: y + 1 }, end: { x: W - M, y: y + 1 }, thickness: 0.3, color: line });
@@ -7829,6 +7833,35 @@ async function buildGenericFormPdf({ form, slug, projectName, standardValues, fi
     y -= 6;
   });
   if (form.genericPdfPhotosLast) await drawPhotos();
+
+  // named people with signatures (entrants, attendants, crew)
+  for (const grp of (groupSigs || [])) {
+    if (!grp.people || !grp.people.length) continue;
+    need(70);
+    page.drawRectangle({ x: M, y: y - 14, width: CW, height: 14, color: pale });
+    page.drawText(clean(grp.title), { x: M + 4, y: y - 10, size: 7.5, font: sansB, color: ink });
+    y -= 20;
+    const perRow = 3, gw = CW / perRow;
+    for (let i = 0; i < grp.people.length; i += perRow) {
+      need(62);
+      for (let j = 0; j < perRow && i + j < grp.people.length; j++) {
+        const c = grp.people[i + j], x = M + j * gw;
+        if (c.dataUrl) {
+          try {
+            const bin = atob(c.dataUrl.split(",")[1]); const bytes = new Uint8Array(bin.length);
+            for (let k = 0; k < bin.length; k++) bytes[k] = bin.charCodeAt(k);
+            const img = await doc.embedPng(bytes);
+            const sc = Math.min((gw - 24) / img.width, 36 / img.height);
+            page.drawImage(img, { x: x + 4, y: y - 4 - img.height * sc, width: img.width * sc, height: img.height * sc });
+          } catch (e) { /* signature image optional */ }
+        }
+        page.drawLine({ start: { x: x + 4, y: y - 42 }, end: { x: x + gw - 20, y: y - 42 }, thickness: 0.5, color: ink });
+        page.drawText(clean(c.name).slice(0, 38), { x: x + 4, y: y - 52, size: 8, font: sans, color: grey });
+      }
+      y -= 62;
+    }
+    y -= 6;
+  }
 
   // signatures
   const sigs = (signatures || []).filter((x) => x);
@@ -8425,17 +8458,23 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
   const signatureCanvasRef = useRef(null);
   const [sig2Empty, setSig2Empty] = useState(true);
   const signature2CanvasRef = useRef(null);
-  const [crewRows, setCrewRowsState] = useState([{ id: 1, name: "" }, { id: 2, name: "" }]);
+  const personGroups = form.personSignatures || [];
+  const [crewRowsMap, setCrewRowsMap] = useState({});
   const [crewSigEmpty, setCrewSigEmpty] = useState({});
   const crewRefs = useRef({});
-  const getCrewRef = (id) => (crewRefs.current[id] = crewRefs.current[id] || { current: null });
-  const crewIdx = form.crewSignatures ? (form.fields || []).indexOf(form.crewSignatures.field) : -1;
-  const setCrewRows = (rows) => {
-    setCrewRowsState(rows);
-    if (crewIdx >= 0) setValues((v) => ({ ...v, [crewIdx]: rows.map((r) => r.name.trim()).filter(Boolean).join("\n") }));
+  const getCrewRef = (key) => (crewRefs.current[key] = crewRefs.current[key] || { current: null });
+  const rowsFor = (gi) => crewRowsMap[gi] || Array.from({ length: (personGroups[gi] && personGroups[gi].startRows) || 2 }, (_, k) => ({ id: k + 1, name: "" }));
+  const setRowsFor = (gi, rows) => {
+    setCrewRowsMap((m) => ({ ...m, [gi]: rows }));
+    const idx = (form.fields || []).indexOf(personGroups[gi].field);
+    if (idx >= 0) setValues((v) => ({ ...v, [idx]: rows.map((r) => r.name.trim()).filter(Boolean).join("\n") }));
   };
-  const namedCrew = crewRows.filter((r) => r.name.trim());
-  const crewMissing = !!form.crewSignatures && (namedCrew.length === 0 || namedCrew.some((r) => crewSigEmpty[r.id] !== false));
+  const namedFor = (gi) => rowsFor(gi).filter((r) => r.name.trim());
+  const crewMissing = personGroups.some((g, gi) => namedFor(gi).length === 0 || namedFor(gi).some((r) => crewSigEmpty[`${gi}:${r.id}`] !== false));
+  const groupSigData = () => personGroups.map((g, gi) => ({
+    title: g.pdfTitle || g.heading.toUpperCase(),
+    people: namedFor(gi).map((r) => { const ref = getCrewRef(`${gi}:${r.id}`); return { name: r.name.trim(), dataUrl: ref.current ? ref.current.toDataURL("image/png") : null }; }),
+  }));
   const [pdfGenerating, setPdfGenerating] = useState(false);
   const [pdfGenerated, setPdfGenerated] = useState(false);
   const [pdfError, setPdfError] = useState("");
@@ -8673,7 +8712,7 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
       try {
         const filledBytes = await buildGenericFormPdf({
           form, slug: activeProjectId, projectName: projName, standardValues, fieldValues: values,
-          choiceValues, statusValues: effectiveStatusValues, longFields: form.genericPdfLongFields, submittedAt, photos: photoBytes, statusRefs, mediaCount: mediaFiles.length, linkRef,
+          choiceValues, statusValues: effectiveStatusValues, longFields: form.genericPdfLongFields, submittedAt, photos: photoBytes, statusRefs, mediaCount: mediaFiles.length, linkRef, groupSigs: groupSigData(),
           signatures: [
             { label: (form.signatureLabels && form.signatureLabels[0]) || "Signature", dataUrl: signatureCanvasRef.current ? signatureCanvasRef.current.toDataURL("image/png") : null },
             ...(form.requiresTwoSignatures ? [{ label: (form.signatureLabels && form.signatureLabels[1]) || "Signature 2", dataUrl: signature2CanvasRef.current ? signature2CanvasRef.current.toDataURL("image/png") : null }] : []),
@@ -8710,7 +8749,7 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
           form, slug: activeProjectId, projectName: projName, standardValues, fieldValues: values,
           stepValues, stepCount, statusValues: effectiveStatusValues, conditions, signatureDataUrl,
           pick: stepPicks[0] || { h: [], c: [], xh: "", xc: "" }, lifePick, submittedAt,
-          crew: namedCrew.map((r) => ({ name: r.name.trim(), dataUrl: getCrewRef(r.id).current ? getCrewRef(r.id).current.toDataURL("image/png") : null })),
+          crew: (groupSigData()[0] || { people: [] }).people,
         });
         const blob = new Blob([filledBytes], { type: "application/pdf" });
         const localUrl = URL.createObjectURL(blob);
@@ -9044,7 +9083,7 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
 
           {(form.fields || []).map((f, i) => {
             if ((form.trailingFieldLabels || []).includes(f)) return null;
-            if (form.crewSignatures && f === form.crewSignatures.field) return null;
+            if (personGroups.some((g) => g.field === f)) return null;
             return (
               <div key={i}>
                 <label className="text-[11px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{f}</label>
@@ -9297,56 +9336,59 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
             </div>
           )}
 
-          {form.crewSignatures && (
-            <div>
+          {personGroups.map((g, gi) => {
+            const rows = rowsFor(gi);
+            return (
+            <div key={gi}>
               <label className="text-[11px] uppercase font-bold flex items-center gap-1" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>
-                <Users size={12} /> Crew Members &amp; Signatures
+                <Users size={12} /> {g.heading}
               </label>
-              <FieldHint label={form.crewSignatures.field} />
-              <div className="text-[10px] mb-2" style={{ color: STEEL }}>Enter each crew member's name. A signature box appears for each name. Add as many as you need.</div>
+              <FieldHint label={g.field} />
+              <div className="text-[10px] mb-2" style={{ color: STEEL }}>Enter each name. A signature box appears for each name. Add as many as you need.</div>
               <div className="space-y-3">
-                {crewRows.map((r, ri) => (
+                {rows.map((r, ri) => (
                   <div key={r.id} className="rounded-md border p-2.5" style={{ borderColor: "#C9C6BC" }}>
                     <div className="flex items-center gap-2">
                       <input
                         value={r.name}
-                        placeholder={`Crew member ${ri + 1} name`}
+                        placeholder={`${g.noun} ${ri + 1} name`}
                         onChange={(e) => {
                           const name = e.target.value;
-                          if (!name.trim()) setCrewSigEmpty((m) => ({ ...m, [r.id]: true }));
-                          setCrewRows(crewRows.map((x) => (x.id === r.id ? { ...x, name } : x)));
+                          if (!name.trim()) setCrewSigEmpty((m) => ({ ...m, [`${gi}:${r.id}`]: true }));
+                          setRowsFor(gi, rows.map((x) => (x.id === r.id ? { ...x, name } : x)));
                         }}
                         className="flex-1 rounded-md border px-2.5 py-1.5 text-[13px]" style={{ borderColor: "#C9C6BC" }}
                       />
-                      {crewRows.length > 1 && (
-                        <button aria-label="Remove crew member" onClick={() => {
-                          delete crewRefs.current[r.id];
-                          setCrewSigEmpty((m) => { const n = { ...m }; delete n[r.id]; return n; });
-                          setCrewRows(crewRows.filter((x) => x.id !== r.id));
+                      {rows.length > 1 && (
+                        <button aria-label="Remove" onClick={() => {
+                          delete crewRefs.current[`${gi}:${r.id}`];
+                          setCrewSigEmpty((m) => { const n = { ...m }; delete n[`${gi}:${r.id}`]; return n; });
+                          setRowsFor(gi, rows.filter((x) => x.id !== r.id));
                         }}><X size={16} color={STEEL} /></button>
                       )}
                     </div>
                     {r.name.trim() && (
                       <div className="mt-2">
                         <div className="text-[10px] uppercase font-bold mb-1" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Signature - {r.name.trim()}</div>
-                        <SignaturePad autoName={r.name.trim()} onChange={(emp) => setCrewSigEmpty((m) => ({ ...m, [r.id]: emp }))} canvasRef={getCrewRef(r.id)} />
+                        <SignaturePad autoName={r.name.trim()} onChange={(emp) => setCrewSigEmpty((m) => ({ ...m, [`${gi}:${r.id}`]: emp }))} canvasRef={getCrewRef(`${gi}:${r.id}`)} />
                       </div>
                     )}
                   </div>
                 ))}
               </div>
-              <button onClick={() => setCrewRows([...crewRows, { id: Math.max(0, ...crewRows.map((x) => x.id)) + 1, name: "" }])} className="w-full mt-2 rounded-md border-2 border-dashed py-2 text-[12px] font-bold" style={{ borderColor: "#C9C6BC", color: STEEL }}>
-                + Add Crew Member
+              <button onClick={() => setRowsFor(gi, [...rows, { id: Math.max(0, ...rows.map((x) => x.id)) + 1, name: "" }])} className="w-full mt-2 rounded-md border-2 border-dashed py-2 text-[12px] font-bold" style={{ borderColor: "#C9C6BC", color: STEEL }}>
+                + Add {g.noun}
               </button>
             </div>
-          )}
+            );
+          })}
 
           <div>
             <label className="text-[11px] uppercase font-bold flex items-center gap-1" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>
-              <PenLine size={12} /> {form.crewSignatures ? ((form.signatureLabels && form.signatureLabels[0]) || "Supervisor Signature") : form.requiresTwoSignatures ? (form.signatureLabels && form.signatureLabels[0]) || "Signature 1" : "Signature"}
+              <PenLine size={12} /> {personGroups.length > 0 ? ((form.signatureLabels && form.signatureLabels[0]) || "Supervisor Signature") : form.requiresTwoSignatures ? (form.signatureLabels && form.signatureLabels[0]) || "Signature 1" : "Signature"}
             </label>
             <div className="mt-1">
-              <SignaturePad {...(form.crewSignatures ? { autoName: (standardValues.name || "").trim() } : {})} onChange={setSigEmpty} canvasRef={signatureCanvasRef} />
+              <SignaturePad {...(personGroups.length > 0 ? { autoName: (standardValues.name || "").trim() } : {})} onChange={setSigEmpty} canvasRef={signatureCanvasRef} />
             </div>
           </div>
 
@@ -9553,11 +9595,176 @@ function UtilityPermitRenewals({ user, projectName, onClose }) {
   );
 }
 
+// Adds a "Permit Closeout" page to a submitted Confined Space Entry Permit PDF
+async function appendCloseoutLog(baseBytes, { location, closeouts }) {
+  const { StandardFonts, rgb } = await import("pdf-lib");
+  const doc = await PDFDocument.load(baseBytes);
+  const sans = await doc.embedFont(StandardFonts.Helvetica);
+  const sansB = await doc.embedFont(StandardFonts.HelveticaBold);
+  const clean = (t) => String(t == null ? "" : t).replace(/[\u2013\u2014]/g, "-").replace(/[^\n -\u00ff]/g, "?");
+  const ink = rgb(0.1, 0.1, 0.1), gold = rgb(0.98, 0.78, 0.02), grey = rgb(0.4, 0.42, 0.45), line = rgb(0.8, 0.79, 0.75);
+  const W = 612, H = 792, M = 36;
+  const page = doc.addPage([W, H]);
+  page.drawRectangle({ x: 0, y: H - 44, width: W, height: 44, color: ink });
+  const t = "PERMIT CLOSEOUT";
+  page.drawText(t, { x: W - M - sansB.widthOfTextAtSize(t, 14), y: H - 28, size: 14, font: sansB, color: gold });
+  page.drawText("CONFINED SPACE ENTRY PERMIT", { x: M, y: H - 28, size: 10, font: sansB, color: rgb(1, 1, 1) });
+  let y = H - 70;
+  page.drawText("LOCATION / DESCRIPTION / ID", { x: M, y, size: 7.5, font: sansB, color: grey });
+  y -= 14;
+  page.drawText(clean(location || "-").slice(0, 90), { x: M, y, size: 10.5, font: sansB, color: ink });
+  y -= 24;
+  closeouts.forEach((c, n) => {
+    const stamp = c.at ? new Date(c.at).toLocaleString("en-US", { month: "2-digit", day: "2-digit", year: "numeric", hour: "numeric", minute: "2-digit" }) : "";
+    page.drawText(clean(`ENTRY ${n + 1}`), { x: M, y, size: 7.5, font: sansB, color: grey });
+    page.drawText(clean(`${c.by || ""}   ${stamp}`), { x: M + 70, y, size: 8, font: sans, color: grey });
+    y -= 16;
+    const rows = [];
+    if (c.time_out) rows.push(["Time Out", c.time_out]);
+    if (c.canceled_time || c.reason) rows.push(["Permit Canceled Time", c.canceled_time || "-"], ["Reason Permit Canceled", c.reason || "-"]);
+    rows.forEach(([a, b]) => {
+      page.drawText(clean(a), { x: M, y, size: 9.5, font: sansB, color: ink });
+      const words = clean(b).split(/\s+/); let cur = "", first = true;
+      const flush = () => { page.drawText(cur, { x: M + 150, y, size: 9.5, font: sans, color: ink }); y -= 13; };
+      words.forEach((w) => { const tl = cur ? cur + " " + w : w; if (sans.widthOfTextAtSize(tl, 9.5) > W - M - (M + 150)) { flush(); cur = w; } else cur = tl; });
+      flush();
+    });
+    y -= 4;
+    page.drawLine({ start: { x: M, y }, end: { x: W - M, y }, thickness: 0.3, color: line });
+    y -= 16;
+  });
+  return await doc.save();
+}
+
+function ConfinedSpaceCloseout({ user, projectName, onClose }) {
+  const { notifyEmail } = useContext(ProjectContext);
+  const [permits, setPermits] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [activeId, setActiveId] = useState(null);
+  const [timeOut, setTimeOut] = useState("");
+  const [cancel, setCancel] = useState(false);
+  const [cancelTime, setCancelTime] = useState("");
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  const form = FORMS_DEFAULT.find((f) => f.title === "Confined Space Entry Permit");
+  const idx = (label) => String((form.fields || []).indexOf(label));
+  const nowLabel = () => new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  const to24 = (lbl) => { const m = (lbl || "").match(/^(\d{1,2}):(\d\d) (AM|PM)$/i); if (!m) return ""; let h = parseInt(m[1], 10) % 12; if (m[3].toUpperCase() === "PM") h += 12; return `${String(h).padStart(2, "0")}:${m[2]}`; };
+  const from24 = (v) => { if (!v) return ""; let [h, mi] = v.split(":").map(Number); const ap = h >= 12 ? "PM" : "AM"; h = h % 12 || 12; return `${h}:${String(mi).padStart(2, "0")} ${ap}`; };
+
+  const load = async () => {
+    setLoading(true);
+    const { data } = await supabase.rpc("list_confined_space_permits", { p_token: user.sessionToken });
+    setPermits(Array.isArray(data) ? data : []);
+    setLoading(false);
+  };
+  useEffect(() => { load(); }, []);
+
+  const locationOf = (p) => (p.fields || {})[idx("Confined Space Location/Description/ID Number")] || "-";
+  const isCanceled = (p) => (p.closeouts || []).some((c) => c.canceled_time || c.reason);
+  const lastTimeOut = (p) => { const l = (p.closeouts || []).filter((c) => c.time_out).slice(-1)[0]; return l ? l.time_out : ""; };
+
+  const save = async (p) => {
+    if (!timeOut && !cancel) return;
+    if (cancel && !reason.trim()) return;
+    setBusy(true); setMsg("");
+    try {
+      const { data } = await supabase.rpc("add_confined_space_closeout", {
+        p_token: user.sessionToken, p_submission_id: p.id,
+        p_time_out: timeOut || "", p_cancel_time: cancel ? (cancelTime || nowLabel()) : "", p_reason: cancel ? reason.trim() : "",
+      });
+      if (!data) { setMsg("Couldn't save. Please try again."); setBusy(false); return; }
+      let newUrl = null;
+      try {
+        const baseRes = await fetch(data.base_pdf_url);
+        const baseBytes = new Uint8Array(await baseRes.arrayBuffer());
+        const bytes = await appendCloseoutLog(baseBytes, { location: locationOf(p), closeouts: data.closeouts });
+        const path = `submission-${Date.now()}-confined-space-permit-closeout.pdf`;
+        const { error: upErr } = await supabase.storage.from("documents").upload(path, new Blob([bytes], { type: "application/pdf" }));
+        if (!upErr) {
+          const { data: u } = supabase.storage.from("documents").getPublicUrl(path);
+          newUrl = u && u.publicUrl ? u.publicUrl : null;
+          if (newUrl) await supabase.rpc("set_submission_pdf", { p_token: user.sessionToken, p_submission_id: p.id, p_pdf_url: newUrl });
+        }
+      } catch (e) { /* the closeout is saved even if the PDF could not be rebuilt */ }
+      if (notifyEmail) {
+        sendFormEmail({
+          toEmail: notifyEmail, formTitle: `Confined Space Entry Permit - ${cancel ? "Permit Canceled" : "Time Out"}`,
+          fieldsText: `Permit submitted by: ${p.submitted_by}\nLocation: ${locationOf(p)}\n${timeOut ? `Time Out: ${timeOut}\n` : ""}${cancel ? `Permit Canceled Time: ${cancelTime || nowLabel()}\nReason Permit Canceled: ${reason.trim()}\n` : ""}${newUrl ? `\nUpdated PDF: ${newUrl}` : ""}`,
+          submittedBy: user?.name || "Unknown", projectName: projectName || "",
+        });
+      }
+      setActiveId(null); setMsg(cancel ? "Permit canceled." : "Time out recorded.");
+      await load();
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/80 p-4">
+      <div className="bg-white rounded-md w-full max-w-sm flex flex-col overflow-hidden" style={{ maxHeight: "85vh" }}>
+        <div className="flex items-center justify-between px-4 py-3" style={{ background: INK }}>
+          <div>
+            <div className="text-[14px]" style={{ color: GOLD, fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>Close Out / Cancel Permit</div>
+            <div className="text-[10px]" style={{ color: "#E4E2DA" }}>Confined Space Entry Permit</div>
+          </div>
+          <button onClick={onClose} aria-label="Close"><X size={18} color="white" /></button>
+        </div>
+        <div className="overflow-y-auto px-4 py-3">
+          {loading && <div className="text-[12px]" style={{ color: STEEL }}>Loading...</div>}
+          {msg && <div className="text-[11px] mb-2" style={{ color: STEEL }}>{msg}</div>}
+          {permits.map((p) => (
+            <div key={p.id} className="border rounded-md p-2.5 mb-2" style={{ borderColor: isCanceled(p) ? "#C9C6BC" : "#E4E2DA", background: isCanceled(p) ? "#F4F3EF" : "white" }}>
+              <div className="text-[12px] font-bold">{locationOf(p)}</div>
+              <div className="text-[10px]" style={{ color: STEEL }}>{p.submitted_by} - {new Date(p.submitted_at).toLocaleString([], { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" })}</div>
+              <div className="text-[10px] font-bold" style={{ color: isCanceled(p) ? ALERT : STEEL }}>
+                {isCanceled(p) ? "CANCELED" : "OPEN"}{lastTimeOut(p) ? ` - Time Out ${lastTimeOut(p)}` : ""}
+              </div>
+              {activeId === p.id ? (
+                <div className="mt-2">
+                  <label className="text-[10px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Time Out</label>
+                  <div className="flex gap-2 mt-1 mb-2">
+                    <input type="time" value={to24(timeOut)} onChange={(e) => setTimeOut(from24(e.target.value))} className="flex-1 rounded-md border px-2.5 py-1.5 text-[13px]" style={{ borderColor: "#C9C6BC" }} />
+                    <button onClick={() => setTimeOut(nowLabel())} className="text-[10px] font-bold uppercase px-2 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Now</button>
+                  </div>
+                  <button onClick={() => { setCancel((c) => !c); setCancelTime(nowLabel()); }} className="w-full flex items-center justify-between rounded-md p-2 border mb-2" style={{ borderColor: cancel ? ALERT : "#E4E2DA", background: cancel ? "#FCEFEF" : "#FCFCFA" }}>
+                    <span className="text-[12px] font-bold">Cancel this permit</span>
+                    <div className="w-9 h-5 rounded-full flex items-center px-0.5" style={{ background: cancel ? ALERT : "#E4E2DA", justifyContent: cancel ? "flex-end" : "flex-start" }}><div className="w-4 h-4 rounded-full bg-white" /></div>
+                  </button>
+                  {cancel && (
+                    <div>
+                      <label className="text-[10px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Permit Canceled Time</label>
+                      <input type="time" value={to24(cancelTime)} onChange={(e) => setCancelTime(from24(e.target.value))} className="w-full mt-1 mb-2 rounded-md border px-2.5 py-1.5 text-[13px]" style={{ borderColor: "#C9C6BC" }} />
+                      <label className="text-[10px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Reason Permit Canceled <span style={{ color: ALERT }}>*</span></label>
+                      <textarea rows={3} value={reason} onChange={(e) => setReason(e.target.value)} className="w-full mt-1 mb-2 rounded-md border px-2.5 py-1.5 text-[13px]" style={{ borderColor: "#C9C6BC" }} />
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <button disabled={busy || (!timeOut && !cancel) || (cancel && !reason.trim())} onClick={() => save(p)} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm" style={{ background: GOLD, color: INK, opacity: busy || (!timeOut && !cancel) || (cancel && !reason.trim()) ? 0.5 : 1, fontFamily: "IBM Plex Mono, monospace" }}>{busy ? "Saving..." : "Save"}</button>
+                    <button onClick={() => setActiveId(null)} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Cancel</button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex gap-2 mt-2">
+                  {!isCanceled(p) && <button onClick={() => { setActiveId(p.id); setTimeOut(""); setCancel(false); setCancelTime(""); setReason(""); setMsg(""); }} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>Time Out / Cancel</button>}
+                  {p.filled_pdf_url && <button onClick={() => window.open(p.filled_pdf_url, "_blank")} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>View PDF</button>}
+                </div>
+              )}
+            </div>
+          ))}
+          {!loading && permits.length === 0 && <div className="text-[12px]" style={{ color: STEEL }}>No Confined Space Entry Permits submitted in the last 30 days.</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function FormsScreen({ user, go, activeProjectId }) {
   const { sheetUrls, name: projDisplayName } = useContext(ProjectContext);
   const [openForm, setOpenForm] = useState(null);
   const [openPrefill, setOpenPrefill] = useState(null);
   const [showRefresh, setShowRefresh] = useState(false);
+  const [showCloseout, setShowCloseout] = useState(false);
   const [viewingPdf, setViewingPdf] = useState(null);
   const [downloaded, setDownloaded] = useState({});
   const [formsRaw, loading] = useSheetData(sheetUrls.forms, FORMS_DEFAULT, (row) => ({
@@ -9594,6 +9801,7 @@ function FormsScreen({ user, go, activeProjectId }) {
         </div>
       </div>
       {loading && <div className="text-[12px] mb-2" style={{ color: STEEL }}>Loading…</div>}
+      {showCloseout && <ConfinedSpaceCloseout user={user} projectName={projDisplayName} onClose={() => setShowCloseout(false)} />}
       {showRefresh && <UtilityPermitRenewals user={user} projectName={projDisplayName} onClose={() => setShowRefresh(false)} />}
       <div className="space-y-2">
         {forms.map((f, i) => (
@@ -9616,6 +9824,11 @@ function FormsScreen({ user, go, activeProjectId }) {
                 {downloaded[i] ? <CheckCircle2 size={13} color={GOLD} /> : <Download size={13} />} {downloaded[i] ? "Saved" : "Download"}
               </button>
             </div>
+            {f.title === "Confined Space Entry Permit" && user && user.sessionToken && (
+              <button onClick={() => setShowCloseout(true)} className="w-full mt-2 text-center text-[10px] font-bold uppercase px-2 py-1.5 rounded-sm border-2" style={{ borderColor: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>
+                Close Out / Cancel Permit
+              </button>
+            )}
             {f.title === "Utility Locate Permit" && user && user.sessionToken && (
               <button onClick={() => setShowRefresh(true)} className="w-full mt-2 text-center text-[10px] font-bold uppercase px-2 py-1.5 rounded-sm border-2" style={{ borderColor: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>
                 Ticket Refresh (14-day)
