@@ -5767,6 +5767,8 @@ const FORMS_DEFAULT = [
   {
     title: "Job Hazard Analysis",
     pdfFillTemplate: "job-hazard-analysis",
+    crewSignatures: { field: "Crew Members Involved (list names)" },
+    signatureLabels: ["Supervisor Signature"],
     equipmentSelectFields: { "Machinery to be Used": "multi" },
     description: "Identifies task-specific hazards and the controls in place to prevent them, completed before work begins.",
     pdfLink: "https://drive.google.com/file/d/1mnudZbn3_LlA95Brg-Fktb0pTP4bzsaP/preview",
@@ -7753,7 +7755,7 @@ async function buildGenericFormPdf({ form, slug, projectName, standardValues, fi
 }
 
 // Generated Job Hazard Analysis PDF (landscape letter): header, job info, task steps table, checklists, signature.
-async function buildJhaPdf({ form, slug, projectName, standardValues, fieldValues, stepValues, stepCount, statusValues, conditions, signatureDataUrl, pick, lifePick, submittedAt }) {
+async function buildJhaPdf({ form, slug, projectName, standardValues, fieldValues, stepValues, stepCount, statusValues, conditions, signatureDataUrl, pick, lifePick, submittedAt, crew }) {
   const { StandardFonts, rgb } = await import("pdf-lib");
   const doc = await PDFDocument.create();
   const sans = await doc.embedFont(StandardFonts.Helvetica);
@@ -7909,9 +7911,37 @@ async function buildJhaPdf({ form, slug, projectName, standardValues, fieldValue
     y -= 6;
   });
 
-  // ---- signature ----
+  // ---- crew signatures ----
+  if (crew && crew.length) {
+    need(30);
+    page.drawRectangle({ x: M, y: y - 14, width: W - 2 * M, height: 14, color: pale });
+    page.drawText("CREW MEMBER SIGNATURES", { x: M + 4, y: y - 10, size: 7.5, font: sansB, color: ink });
+    y -= 20;
+    const perRow = 3, cw = (W - 2 * M) / perRow;
+    for (let i = 0; i < crew.length; i += perRow) {
+      need(62);
+      for (let j = 0; j < perRow && i + j < crew.length; j++) {
+        const c = crew[i + j], x = M + j * cw;
+        if (c.dataUrl) {
+          try {
+            const bin = atob(c.dataUrl.split(",")[1]); const bytes = new Uint8Array(bin.length);
+            for (let k = 0; k < bin.length; k++) bytes[k] = bin.charCodeAt(k);
+            const img = await doc.embedPng(bytes);
+            const sc = Math.min((cw - 24) / img.width, 36 / img.height);
+            page.drawImage(img, { x: x + 4, y: y - 4 - img.height * sc, width: img.width * sc, height: img.height * sc });
+          } catch (e) { /* signature image optional */ }
+        }
+        page.drawLine({ start: { x: x + 4, y: y - 42 }, end: { x: x + cw - 20, y: y - 42 }, thickness: 0.5, color: ink });
+        page.drawText(clean(c.name).slice(0, 38), { x: x + 4, y: y - 52, size: 8, font: sans, color: grey });
+      }
+      y -= 62;
+    }
+    y -= 6;
+  }
+
+  // ---- supervisor signature (last) ----
   need(80);
-  page.drawText("SIGNATURE", { x: M, y: y - 10, size: 7.5, font: sansB, color: grey });
+  page.drawText(crew ? "SUPERVISOR SIGNATURE" : "SIGNATURE", { x: M, y: y - 10, size: 7.5, font: sansB, color: grey });
   if (signatureDataUrl) {
     try {
       const bin = atob(signatureDataUrl.split(",")[1]); const bytes = new Uint8Array(bin.length);
@@ -8289,6 +8319,17 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
   const signatureCanvasRef = useRef(null);
   const [sig2Empty, setSig2Empty] = useState(true);
   const signature2CanvasRef = useRef(null);
+  const [crewRows, setCrewRowsState] = useState([{ id: 1, name: "" }, { id: 2, name: "" }]);
+  const [crewSigEmpty, setCrewSigEmpty] = useState({});
+  const crewRefs = useRef({});
+  const getCrewRef = (id) => (crewRefs.current[id] = crewRefs.current[id] || { current: null });
+  const crewIdx = form.crewSignatures ? (form.fields || []).indexOf(form.crewSignatures.field) : -1;
+  const setCrewRows = (rows) => {
+    setCrewRowsState(rows);
+    if (crewIdx >= 0) setValues((v) => ({ ...v, [crewIdx]: rows.map((r) => r.name.trim()).filter(Boolean).join("\n") }));
+  };
+  const namedCrew = crewRows.filter((r) => r.name.trim());
+  const crewMissing = !!form.crewSignatures && (namedCrew.length === 0 || namedCrew.some((r) => crewSigEmpty[r.id] !== false));
   const [pdfGenerating, setPdfGenerating] = useState(false);
   const [pdfGenerated, setPdfGenerated] = useState(false);
   const [pdfError, setPdfError] = useState("");
@@ -8545,6 +8586,7 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
           form, slug: activeProjectId, projectName: projName, standardValues, fieldValues: values,
           stepValues, stepCount, statusValues: effectiveStatusValues, conditions, signatureDataUrl,
           pick: stepPicks[0] || { h: [], c: [], xh: "", xc: "" }, lifePick, submittedAt,
+          crew: namedCrew.map((r) => ({ name: r.name.trim(), dataUrl: getCrewRef(r.id).current ? getCrewRef(r.id).current.toDataURL("image/png") : null })),
         });
         const blob = new Blob([filledBytes], { type: "application/pdf" });
         const localUrl = URL.createObjectURL(blob);
@@ -8878,6 +8920,7 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
 
           {(form.fields || []).map((f, i) => {
             if ((form.trailingFieldLabels || []).includes(f)) return null;
+            if (form.crewSignatures && f === form.crewSignatures.field) return null;
             return (
               <div key={i}>
                 <label className="text-[11px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{f}</label>
@@ -9130,9 +9173,53 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
             </div>
           )}
 
+          {form.crewSignatures && (
+            <div>
+              <label className="text-[11px] uppercase font-bold flex items-center gap-1" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>
+                <Users size={12} /> Crew Members &amp; Signatures
+              </label>
+              <FieldHint label={form.crewSignatures.field} />
+              <div className="text-[10px] mb-2" style={{ color: STEEL }}>Enter each crew member's name. A signature box appears for each name. Add as many as you need.</div>
+              <div className="space-y-3">
+                {crewRows.map((r, ri) => (
+                  <div key={r.id} className="rounded-md border p-2.5" style={{ borderColor: "#C9C6BC" }}>
+                    <div className="flex items-center gap-2">
+                      <input
+                        value={r.name}
+                        placeholder={`Crew member ${ri + 1} name`}
+                        onChange={(e) => {
+                          const name = e.target.value;
+                          if (!name.trim()) setCrewSigEmpty((m) => ({ ...m, [r.id]: true }));
+                          setCrewRows(crewRows.map((x) => (x.id === r.id ? { ...x, name } : x)));
+                        }}
+                        className="flex-1 rounded-md border px-2.5 py-1.5 text-[13px]" style={{ borderColor: "#C9C6BC" }}
+                      />
+                      {crewRows.length > 1 && (
+                        <button aria-label="Remove crew member" onClick={() => {
+                          delete crewRefs.current[r.id];
+                          setCrewSigEmpty((m) => { const n = { ...m }; delete n[r.id]; return n; });
+                          setCrewRows(crewRows.filter((x) => x.id !== r.id));
+                        }}><X size={16} color={STEEL} /></button>
+                      )}
+                    </div>
+                    {r.name.trim() && (
+                      <div className="mt-2">
+                        <div className="text-[10px] uppercase font-bold mb-1" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Signature - {r.name.trim()}</div>
+                        <SignaturePad onChange={(emp) => setCrewSigEmpty((m) => ({ ...m, [r.id]: emp }))} canvasRef={getCrewRef(r.id)} />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <button onClick={() => setCrewRows([...crewRows, { id: Math.max(0, ...crewRows.map((x) => x.id)) + 1, name: "" }])} className="w-full mt-2 rounded-md border-2 border-dashed py-2 text-[12px] font-bold" style={{ borderColor: "#C9C6BC", color: STEEL }}>
+                + Add Crew Member
+              </button>
+            </div>
+          )}
+
           <div>
             <label className="text-[11px] uppercase font-bold flex items-center gap-1" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>
-              <PenLine size={12} /> {form.requiresTwoSignatures ? (form.signatureLabels && form.signatureLabels[0]) || "Signature 1" : "Signature"}
+              <PenLine size={12} /> {form.crewSignatures ? ((form.signatureLabels && form.signatureLabels[0]) || "Supervisor Signature") : form.requiresTwoSignatures ? (form.signatureLabels && form.signatureLabels[0]) || "Signature 1" : "Signature"}
             </label>
             <div className="mt-1">
               <SignaturePad onChange={setSigEmpty} canvasRef={signatureCanvasRef} />
@@ -9160,7 +9247,7 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
             return (
               <button
                 disabled={
-                  sigEmpty || (form.requiresTwoSignatures && sig2Empty) || submitting ||
+                  sigEmpty || (form.requiresTwoSignatures && sig2Empty) || submitting || crewMissing ||
                   proofMissing || Object.keys(form.photoFields || {}).some((l) => form.photoFields[l] !== "optional" && (fieldPhotos[l] || []).length === 0) ||
                   (form.requiresLogo && !logoFile) ||
                   (form.allFieldsRequired && (form.fields || []).some((label, i) => !/\(if applicable\)/i.test(label) && !(values[i] || "").trim()))
