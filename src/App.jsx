@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo, createContext, useContext } from "react";
 import Papa from "papaparse";
-import { Wallet, Home, BookOpen, PlayCircle, ClipboardCheck, FileText, ChevronRight, Download, CheckCircle2, Circle, X, Play, ShieldAlert, Clock, Eraser, Send, PenLine, Users, Eye, BadgeCheck, LogOut, Loader2, CalendarDays, MapPin, Megaphone, Pin, ExternalLink, Lock, AlertTriangle, Camera, Phone, MessageSquare, ImagePlus, Volume2, VolumeX, Pause } from "lucide-react";
+import { Wallet, Home, BookOpen, PlayCircle, ClipboardCheck, FileText, ChevronRight, Download, CheckCircle2, Circle, X, Play, ShieldAlert, Clock, Eraser, Send, PenLine, Users, Eye, BadgeCheck, LogOut, Loader2, CalendarDays, MapPin, Megaphone, Pin, ExternalLink, Lock, AlertTriangle, Camera, Phone, MessageSquare, ImagePlus, Volume2, VolumeX, Pause, Truck } from "lucide-react";
 import { supabase, loadProjectMap, projectIdForSlug, projectSlugForId } from "./supabaseClient.js";
 import { PDFDocument } from "pdf-lib";
 import QRCode from "qrcode";
@@ -627,6 +627,7 @@ function HomeScreen({ go, user, activeProjectId }) {
     { key: "reports", label: t("weeklyReport"), desc: t("weeklyReportDesc"), icon: AlertTriangle, count: `${WEEKLY_REPORTS_DEFAULT.length} posted` },
     { key: "toolbox", label: t("toolboxTalks"), desc: t("toolboxDesc"), icon: PlayCircle, count: "12 videos" },
     { key: "workplans", label: t("workPlans"), desc: t("workPlansDesc"), icon: ClipboardCheck, count: `${fallbacks.workPlans.length} plans` },
+    { key: "truckdriver", label: "Truck Drivers", desc: "Driver onboarding: drug screen, CDL, safety video, badge", icon: Truck, count: "Onboarding" },
     { key: "personnel", label: t("personnelLookup"), desc: t("personnelDesc"), icon: Users, count: `${fallbacks.personnel.length} on file` },
     { key: "emergency", label: t("emergencyContacts"), desc: t("emergencyDesc"), icon: Phone, count: t("alwaysAvailable") },
     ...(LABOR_LAWS_PROJECTS.includes(activeProjectId) ? [{ key: "laborlaws", label: t("laborLaws"), desc: t("laborLawsDesc"), icon: ShieldAlert, count: t("alwaysAvailable") }] : []),
@@ -12825,6 +12826,9 @@ function LoginModal({ onLogin, onClose, activeProjectId }) {
               >
                 {loading ? "Checking…" : "Log In"}
               </button>
+              {activeProjectId && activeProjectId !== "safety-hub" && (
+                <a href={`${window.location.pathname}?project=${activeProjectId}&screen=truckdriver`} className="block text-center mt-3 text-[11px] underline" style={{ color: STEEL }}>Truck driver? Start onboarding</a>
+              )}
             </>
           )}
         </div>
@@ -13200,11 +13204,537 @@ function BadgeModal({ user, onClose, onLogout }) {
   );
 }
 
+// ============================================================
+// TRUCK DRIVERS: public onboarding (drug screen affidavit, CDL + selfie, training video),
+// admin review, separate TD- badge, public badge verification.
+// Truck driver badges live in their own table and never mix with regular personnel badges.
+// ============================================================
+const TRUCK_DRIVER_VIDEO_PATH = "truck-driver-orientation.mp4";
+const TRUCK_DRIVER_AFFIDAVIT_FORM = {
+  title: "Truck Driver Drug Screen Affidavit",
+  fields: ["Driver Name", "Company / Carrier", "CDL Number", "CDL State", "Date Drug Screen Was Completed", "Collection Facility / Lab", "Result", "Certification"],
+  genericPdfLongFields: ["Collection Facility / Lab", "Certification"],
+  statusGroups: [],
+  choiceGroups: [],
+};
+const TRUCK_DRIVER_CERTIFY = "I certify that I completed a drug screen within the last 30 days, that the result was NEGATIVE, and that the information I have provided is true and correct. I understand that a positive or missing result, or false information, will prevent me from receiving a truck driver badge.";
+
+function tdDriverStorageKey(slug) { return `safetyhub_td_${slug}`; }
+function tdVerifyLink(slug, token) { return `${window.location.origin}${window.location.pathname}?project=${slug}&screen=verifytruckdriver&v=${token}`; }
+
+// Dark badge card shown to the approved driver and to admins
+function TruckDriverBadgeCard({ driver, projectSlug, projectName }) {
+  const qr = useBadgeQr(driver.verify_token ? tdVerifyLink(projectSlug, driver.verify_token) : "");
+  const lab = { color: "#B7B3A6", fontFamily: "IBM Plex Mono, monospace", fontSize: 8.5, letterSpacing: "0.06em", textTransform: "uppercase" };
+  const val = { color: "white", fontFamily: "Oswald, sans-serif", fontWeight: 500, fontSize: 15 };
+  return (
+    <div className="rounded-2xl overflow-hidden mx-auto" style={{ maxWidth: 320, background: "linear-gradient(160deg,#1c1c1c 0%,#0b0b0b 100%)", border: "1px solid #2b2b2b", boxShadow: "0 10px 30px rgba(0,0,0,0.35)" }}>
+      <div className="p-4">
+        <div className="flex items-center justify-between mb-3">
+          <ProjectLogo projectId={projectSlug} maxHeight={30} fallback={<div className="text-white text-[12px]">{projectName}</div>} />
+          <div className="text-[10px] font-bold uppercase px-2 py-1 rounded-sm" style={{ background: driver.active === false ? ALERT : GOLD, color: driver.active === false ? "white" : INK, fontFamily: "IBM Plex Mono, monospace" }}>{driver.active === false ? "Inactive" : "Truck Driver"}</div>
+        </div>
+        <div className="flex items-center gap-3 mb-3">
+          {driver.selfie_url || driver.photo_url
+            ? <img src={driver.selfie_url || driver.photo_url} alt="" className="rounded-full object-cover flex-shrink-0" style={{ width: 68, height: 68, border: "2px solid #444" }} />
+            : <div className="rounded-full flex items-center justify-center flex-shrink-0 font-bold" style={{ width: 68, height: 68, background: "#2b2b2b", color: GOLD, fontSize: 22 }}>{(driver.name || "?").split(" ").map((w) => w[0]).slice(0, 2).join("")}</div>}
+          <div className="min-w-0"><div style={lab}>Name</div><div style={{ ...val, fontSize: 20 }}>{driver.name}</div></div>
+        </div>
+        <div className="flex gap-6 mb-3">
+          <div><div style={lab}>Badge</div><div style={{ ...val, color: GOLD }}>{driver.badge_number}</div></div>
+          <div className="min-w-0"><div style={lab}>Company</div><div style={val}>{driver.company || "-"}</div></div>
+        </div>
+        <div className="mb-3"><div style={lab}>Project</div><div style={val}>{projectName}</div></div>
+        <div className="mx-auto rounded-lg flex items-center justify-center" style={{ background: "white", width: 150, height: 150 }}>
+          {qr ? <img src={qr} alt="QR" style={{ width: 134, height: 134 }} /> : null}
+        </div>
+        <div className="text-center mt-2" style={{ ...lab, fontSize: 8 }}>Scan to verify - not a crew badge</div>
+      </div>
+    </div>
+  );
+}
+
+function TruckDriverAffidavitStep({ driver, projectSlug, projectName, onSaved }) {
+  const [f, setF] = useState({ name: driver.name || "", company: driver.company || "", cdl: driver.cdl_number || "", state: driver.cdl_state || "", date: "", lab: "" });
+  const [negative, setNegative] = useState(false);
+  const [sigEmpty, setSigEmpty] = useState(true);
+  const sigRef = useRef(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const ready = f.name.trim() && f.company.trim() && f.cdl.trim() && f.date && f.lab.trim() && negative && !sigEmpty;
+  const inp = "w-full mt-1 mb-3 rounded-md border px-2.5 py-2 text-[14px]";
+  const lbl = { color: STEEL, fontFamily: "IBM Plex Mono, monospace" };
+  const save = async () => {
+    setBusy(true); setErr("");
+    try {
+      const [y, m, d] = f.date.split("-");
+      const dateLabel = `${m}/${d}/${y}`;
+      const bytes = await buildGenericFormPdf({
+        form: TRUCK_DRIVER_AFFIDAVIT_FORM, slug: projectSlug, projectName,
+        standardValues: { name: f.name.trim(), subcontractor: f.company.trim(), date: dateLabel },
+        fieldValues: { 0: f.name.trim(), 1: f.company.trim(), 2: f.cdl.trim(), 3: f.state.trim(), 4: dateLabel, 5: f.lab.trim(), 6: "NEGATIVE (passed)", 7: TRUCK_DRIVER_CERTIFY },
+        choiceValues: {}, statusValues: {}, longFields: TRUCK_DRIVER_AFFIDAVIT_FORM.genericPdfLongFields,
+        submittedAt: fmtSubmittedAt(new Date()), photos: {},
+        signatures: [{ label: "Driver Signature", dataUrl: sigRef.current ? sigRef.current.toDataURL("image/png") : null }],
+      });
+      const path = `truck-driver-affidavit-${driver.id}-${Date.now()}.pdf`;
+      const { error: upErr } = await supabase.storage.from("documents").upload(path, new Blob([bytes], { type: "application/pdf" }), { contentType: "application/pdf" });
+      if (upErr) throw new Error(upErr.message || "Upload failed");
+      const { data: u } = supabase.storage.from("documents").getPublicUrl(path);
+      const { data: ok } = await supabase.rpc("td_save_affidavit", { p_id: driver.id, p_pdf_url: u.publicUrl, p_data: { ...f, result: "NEGATIVE", signedAt: new Date().toISOString() } });
+      if (!ok) throw new Error("Could not save. Please try again.");
+      const { data: fresh } = await supabase.rpc("td_get", { p_id: driver.id });
+      onSaved(fresh);
+    } catch (e) { setErr(e && e.message ? e.message : "Something went wrong."); }
+    setBusy(false);
+  };
+  return (
+    <div>
+      <div className="text-[12px] mb-3" style={{ color: STEEL }}>Complete this drug screen affidavit. It becomes a signed PDF that is stored on your badge record.</div>
+      <label className="text-[10px] uppercase font-bold" style={lbl}>Driver Name</label>
+      <input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} className={inp} style={{ borderColor: "#C9C6BC" }} />
+      <label className="text-[10px] uppercase font-bold" style={lbl}>Company / Carrier</label>
+      <input value={f.company} onChange={(e) => setF({ ...f, company: e.target.value })} className={inp} style={{ borderColor: "#C9C6BC" }} />
+      <div className="flex gap-2">
+        <div className="flex-1"><label className="text-[10px] uppercase font-bold" style={lbl}>CDL Number</label><input value={f.cdl} onChange={(e) => setF({ ...f, cdl: e.target.value })} className={inp} style={{ borderColor: "#C9C6BC" }} /></div>
+        <div style={{ width: 80 }}><label className="text-[10px] uppercase font-bold" style={lbl}>State</label><input value={f.state} onChange={(e) => setF({ ...f, state: e.target.value })} className={inp} style={{ borderColor: "#C9C6BC" }} maxLength={2} autoCapitalize="characters" /></div>
+      </div>
+      <label className="text-[10px] uppercase font-bold" style={lbl}>Date Drug Screen Was Completed</label>
+      <input type="date" max={new Date().toLocaleDateString("en-CA")} value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} className={inp} style={{ borderColor: "#C9C6BC" }} />
+      <label className="text-[10px] uppercase font-bold" style={lbl}>Collection Facility / Lab</label>
+      <input value={f.lab} onChange={(e) => setF({ ...f, lab: e.target.value })} className={inp} style={{ borderColor: "#C9C6BC" }} />
+      <button onClick={() => setNegative((n) => !n)} className="w-full text-left flex items-start gap-2 rounded-md border p-2.5 mb-3" style={{ borderColor: negative ? GOLD : "#C9C6BC", background: negative ? "#FFF8E1" : "white" }}>
+        {negative ? <CheckCircle2 size={18} color={GOLD} className="flex-shrink-0 mt-0.5" /> : <Circle size={18} color={STEEL} className="flex-shrink-0 mt-0.5" />}
+        <span className="text-[12px] leading-snug">{TRUCK_DRIVER_CERTIFY}</span>
+      </button>
+      <label className="text-[10px] uppercase font-bold flex items-center gap-1" style={lbl}><PenLine size={12} /> Driver Signature</label>
+      <div className="mt-1 mb-3"><SignaturePad autoName={f.name.trim()} onChange={setSigEmpty} canvasRef={sigRef} /></div>
+      {err && <div className="text-[11px] mb-2" style={{ color: ALERT }}>{err}</div>}
+      <button disabled={!ready || busy} onClick={save} className="w-full rounded-md py-3 text-sm font-bold disabled:opacity-40" style={{ background: GOLD, color: INK, fontFamily: "Oswald, sans-serif" }}>{busy ? "Saving..." : "Sign & Save Affidavit"}</button>
+    </div>
+  );
+}
+
+function TruckDriverPhotosStep({ driver, onSaved }) {
+  const [cdl, setCdl] = useState(null);
+  const [selfie, setSelfie] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const cdlRef = useRef(null), selfieRef = useRef(null);
+  const pick = (setter) => (e) => { const file = e.target.files && e.target.files[0]; if (file) setter({ file, url: URL.createObjectURL(file) }); e.target.value = ""; };
+  const upload = async (item, name) => {
+    const bytes = await fileToJpegBytes(item.file);
+    const path = `truck-driver/${driver.id}/${name}-${Date.now()}.jpg`;
+    const { error } = await supabase.storage.from("badge-photos").upload(path, new Blob([bytes], { type: "image/jpeg" }), { contentType: "image/jpeg" });
+    if (error) throw new Error(error.message || "Photo upload failed");
+    return supabase.storage.from("badge-photos").getPublicUrl(path).data.publicUrl;
+  };
+  const save = async () => {
+    setBusy(true); setErr("");
+    try {
+      const cdlUrl = await upload(cdl, "cdl");
+      const selfieUrl = await upload(selfie, "selfie");
+      const { data: ok } = await supabase.rpc("td_save_photos", { p_id: driver.id, p_cdl_url: cdlUrl, p_selfie_url: selfieUrl });
+      if (!ok) throw new Error("Could not save. Please try again.");
+      const { data: fresh } = await supabase.rpc("td_get", { p_id: driver.id });
+      onSaved(fresh);
+    } catch (e) { setErr(e && e.message ? e.message : "Something went wrong."); }
+    setBusy(false);
+  };
+  const box = (title, hint, item, ref, setter, capture, round) => (
+    <div className="mb-4">
+      <div className="text-[10px] uppercase font-bold mb-1" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{title}</div>
+      <div className="text-[11px] mb-1.5" style={{ color: STEEL }}>{hint}</div>
+      <input ref={ref} type="file" accept="image/*" capture={capture} className="hidden" onChange={pick(setter)} />
+      {item ? (
+        <div className="flex items-center gap-3">
+          <img src={item.url} alt="" className={round ? "rounded-full object-cover" : "rounded-md object-cover"} style={{ width: round ? 84 : 140, height: round ? 84 : 90, border: `2px solid ${GOLD}` }} />
+          <button onClick={() => ref.current && ref.current.click()} className="text-[11px] font-bold uppercase px-3 py-2 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Retake</button>
+        </div>
+      ) : (
+        <button onClick={() => ref.current && ref.current.click()} className="w-full rounded-md border-2 border-dashed py-4 flex flex-col items-center gap-1" style={{ borderColor: "#C9C6BC" }}>
+          <Camera size={20} color={STEEL} /><span className="text-[11px]" style={{ color: STEEL }}>Take or Upload a Photo</span>
+        </button>
+      )}
+    </div>
+  );
+  return (
+    <div>
+      {box("Photo of your CDL (front)", "Lay the license flat in good light. Every word and number must be readable.", cdl, cdlRef, setCdl, "environment", false)}
+      {box("Selfie for your badge", "Face the camera, no hat or sunglasses. This photo prints on your badge.", selfie, selfieRef, setSelfie, "user", true)}
+      {err && <div className="text-[11px] mb-2" style={{ color: ALERT }}>{err}</div>}
+      <button disabled={!cdl || !selfie || busy} onClick={save} className="w-full rounded-md py-3 text-sm font-bold disabled:opacity-40" style={{ background: GOLD, color: INK, fontFamily: "Oswald, sans-serif" }}>{busy ? "Uploading..." : "Save Photos"}</button>
+    </div>
+  );
+}
+
+function TruckDriverVideoStep({ driver, onUpdated }) {
+  const videoUrl = (supabase.storage.from("documents").getPublicUrl(TRUCK_DRIVER_VIDEO_PATH).data || {}).publicUrl;
+  const vref = useRef(null);
+  const maxRef = useRef(driver.video_seconds || 0);
+  const lastReport = useRef(0);
+  const [pct, setPct] = useState(driver.video_duration ? Math.min(100, Math.round(((driver.video_seconds || 0) / driver.video_duration) * 100)) : 0);
+  const [failed, setFailed] = useState(false);
+  const [done, setDone] = useState(!!driver.video_done);
+  const report = async (completed) => {
+    const v = vref.current; if (!v || !v.duration) return;
+    lastReport.current = Date.now();
+    const { data } = await supabase.rpc("td_video_progress", { p_id: driver.id, p_seconds: Math.floor(maxRef.current), p_duration: Math.floor(v.duration), p_completed: !!completed });
+    if (data) { if (data.video_done) setDone(true); onUpdated(data); }
+  };
+  return (
+    <div>
+      <div className="text-[12px] mb-2" style={{ color: STEEL }}>Watch the full safety video (about 20 minutes). You cannot skip ahead. If you leave, come back with your resume code and it picks up where you stopped.</div>
+      {failed ? (
+        <div className="rounded-md p-3 text-[12px]" style={{ background: "#FCEFEF", color: ALERT }}>The training video is not available yet. Please check back soon.</div>
+      ) : (
+        <video
+          ref={vref} src={videoUrl} controls playsInline preload="metadata" controlsList="nodownload noplaybackrate" disablePictureInPicture
+          className="w-full rounded-md bg-black" style={{ aspectRatio: "16 / 9" }}
+          onError={() => setFailed(true)}
+          onLoadedMetadata={(e) => { const v = e.currentTarget; if (!done && maxRef.current > 5 && maxRef.current < v.duration - 2) v.currentTime = maxRef.current; }}
+          onSeeking={(e) => { const v = e.currentTarget; if (!done && v.currentTime > maxRef.current + 1.5) v.currentTime = maxRef.current; }}
+          onTimeUpdate={(e) => {
+            const v = e.currentTarget;
+            if (!v.duration) return;
+            if (!v.seeking && v.currentTime <= maxRef.current + 2 && v.currentTime > maxRef.current) maxRef.current = v.currentTime;
+            setPct(Math.min(100, Math.round((maxRef.current / v.duration) * 100)));
+            if (!done && Date.now() - lastReport.current > 20000) report(false);
+          }}
+          onPause={() => { if (!done) report(false); }}
+          onEnded={() => { maxRef.current = vref.current ? vref.current.duration : maxRef.current; report(true); }}
+        />
+      )}
+      <div className="mt-2 h-2 rounded-full overflow-hidden" style={{ background: "#E4E2DA" }}><div style={{ width: `${done ? 100 : pct}%`, height: "100%", background: done ? "#2E7D32" : GOLD }} /></div>
+      <div className="text-[11px] mt-1 font-bold" style={{ color: done ? "#2E7D32" : STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{done ? "Video completed" : `${pct}% watched - watch to the end to finish`}</div>
+    </div>
+  );
+}
+
+function TruckDriverScreen({ activeProjectId, user, go }) {
+  const proj = useContext(ProjectContext) || {};
+  const [driver, setDriver] = useState(undefined);
+  const [openStep, setOpenStep] = useState(null);
+  const [resume, setResume] = useState("");
+  const [mode, setMode] = useState("start");
+  const [f, setF] = useState({ name: "", phone: "", email: "", company: "", cdl: "", state: "" });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const inp = "w-full mt-1 mb-3 rounded-md border px-2.5 py-2 text-[14px]";
+  const lbl = { color: STEEL, fontFamily: "IBM Plex Mono, monospace" };
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      let id = null;
+      try { id = localStorage.getItem(tdDriverStorageKey(activeProjectId)); } catch (e) { /* ignore */ }
+      if (!id) { setDriver(null); return; }
+      const { data } = await supabase.rpc("td_get", { p_id: id });
+      if (!cancelled) setDriver(data || null);
+    })();
+    return () => { cancelled = true; };
+  }, [activeProjectId]);
+
+  const remember = (d) => { try { localStorage.setItem(tdDriverStorageKey(activeProjectId), d.id); } catch (e) { /* ignore */ } };
+  const start = async () => {
+    setBusy(true); setErr("");
+    await loadProjectMap();
+    const pid = projectIdForSlug(activeProjectId);
+    if (!pid) { setBusy(false); setErr("We couldn't tell which project this is for. Open the link from the project's QR code."); return; }
+    const { data } = await supabase.rpc("td_start", { p_project_id: pid, p_name: f.name, p_phone: f.phone, p_email: f.email, p_company: f.company, p_cdl_number: f.cdl, p_cdl_state: f.state });
+    setBusy(false);
+    if (!data) { setErr("Something went wrong. Please try again."); return; }
+    remember(data); setDriver(data);
+  };
+  const doResume = async () => {
+    setBusy(true); setErr("");
+    const { data } = await supabase.rpc("td_resume", { p_code: resume });
+    setBusy(false);
+    if (!data) { setErr("That code wasn't found. Check it and try again."); return; }
+    remember(data); setDriver(data);
+  };
+  const forget = () => { try { localStorage.removeItem(tdDriverStorageKey(activeProjectId)); } catch (e) { /* ignore */ } setDriver(null); setMode("start"); };
+  const refresh = async () => { const { data } = await supabase.rpc("td_get", { p_id: driver.id }); if (data) setDriver(data); };
+
+  const wrap = (children) => <div className="px-4 pt-4 pb-10" style={{ background: "#F4F3EF", minHeight: "100%" }}><div className="max-w-md mx-auto">{children}</div></div>;
+  const head = (
+    <div className="mb-3">
+      <div className="text-[18px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>Truck Driver Onboarding</div>
+      <div className="text-[11px]" style={{ color: STEEL }}>{proj.name}</div>
+    </div>
+  );
+  const adminBtn = user && user.canAddPersonnel && (
+    <button onClick={() => go("managetruckdrivers")} className="w-full mb-3 text-[11px] font-bold uppercase py-2.5 rounded-md" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>Review Truck Drivers</button>
+  );
+
+  if (driver === undefined) return wrap(<div className="text-[12px]" style={{ color: STEEL }}>Loading...</div>);
+
+  if (!driver) {
+    return wrap(<>
+      {head}{adminBtn}
+      <div className="rounded-md border p-3 mb-4" style={{ borderColor: GOLD, background: "#FFFBEA" }}>
+        <div className="text-[11px] uppercase font-bold mb-1" style={lbl}>What you will do</div>
+        <ol className="text-[12px] leading-snug list-decimal pl-4" style={{ color: "#333" }}>
+          <li>Sign a drug screen affidavit</li>
+          <li>Photo of your CDL and a selfie for your badge</li>
+          <li>Watch the 20 minute safety video</li>
+          <li>We review everything and issue your truck driver badge</li>
+        </ol>
+      </div>
+      <div className="flex rounded-md overflow-hidden border mb-3" style={{ borderColor: "#C9C6BC" }}>
+        {[["start", "New driver"], ["resume", "I have a code"]].map(([m, l]) => (
+          <button key={m} onClick={() => { setMode(m); setErr(""); }} className="flex-1 py-2 text-[11px] font-bold uppercase" style={{ background: mode === m ? GOLD : "white", color: mode === m ? INK : STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{l}</button>
+        ))}
+      </div>
+      {mode === "start" ? (<>
+        <label className="text-[10px] uppercase font-bold" style={lbl}>Full Name</label>
+        <input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} className={inp} style={{ borderColor: "#C9C6BC" }} />
+        <label className="text-[10px] uppercase font-bold" style={lbl}>Phone Number</label>
+        <input type="tel" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} className={inp} style={{ borderColor: "#C9C6BC" }} />
+        <label className="text-[10px] uppercase font-bold" style={lbl}>Email</label>
+        <input type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} className={inp} style={{ borderColor: "#C9C6BC" }} />
+        <label className="text-[10px] uppercase font-bold" style={lbl}>Company / Carrier</label>
+        <input value={f.company} onChange={(e) => setF({ ...f, company: e.target.value })} className={inp} style={{ borderColor: "#C9C6BC" }} />
+        <div className="flex gap-2">
+          <div className="flex-1"><label className="text-[10px] uppercase font-bold" style={lbl}>CDL Number</label><input value={f.cdl} onChange={(e) => setF({ ...f, cdl: e.target.value })} className={inp} style={{ borderColor: "#C9C6BC" }} /></div>
+          <div style={{ width: 80 }}><label className="text-[10px] uppercase font-bold" style={lbl}>State</label><input value={f.state} maxLength={2} autoCapitalize="characters" onChange={(e) => setF({ ...f, state: e.target.value })} className={inp} style={{ borderColor: "#C9C6BC" }} /></div>
+        </div>
+        {err && <div className="text-[11px] mb-2" style={{ color: ALERT }}>{err}</div>}
+        <button disabled={busy || !f.name.trim() || !f.phone.trim() || !f.company.trim() || !f.cdl.trim()} onClick={start} className="w-full rounded-md py-3 text-sm font-bold disabled:opacity-40" style={{ background: GOLD, color: INK, fontFamily: "Oswald, sans-serif" }}>{busy ? "Starting..." : "Start Onboarding"}</button>
+      </>) : (<>
+        <label className="text-[10px] uppercase font-bold" style={lbl}>Resume Code</label>
+        <input value={resume} onChange={(e) => setResume(e.target.value.toUpperCase())} autoCapitalize="characters" className={inp} style={{ borderColor: "#C9C6BC", letterSpacing: "0.12em" }} />
+        {err && <div className="text-[11px] mb-2" style={{ color: ALERT }}>{err}</div>}
+        <button disabled={busy || resume.trim().length < 6} onClick={doResume} className="w-full rounded-md py-3 text-sm font-bold disabled:opacity-40" style={{ background: GOLD, color: INK, fontFamily: "Oswald, sans-serif" }}>{busy ? "Checking..." : "Continue"}</button>
+      </>)}
+    </>);
+  }
+
+  const editable = driver.status === "in_progress" || driver.status === "rejected";
+  const steps = [
+    { key: "affidavit", title: "Drug Screen Affidavit", done: driver.affidavit_done, locked: false },
+    { key: "photos", title: "CDL Photo and Badge Selfie", done: driver.photos_done, locked: false },
+    { key: "video", title: "Safety Video (20 min)", done: driver.video_done, locked: !driver.affidavit_done || !driver.photos_done },
+  ];
+  const allDone = steps.every((s) => s.done);
+  const current = openStep || (steps.find((s) => !s.done && !s.locked) || {}).key || null;
+
+  return wrap(<>
+    {head}{adminBtn}
+    <div className="rounded-md border px-3 py-2 mb-3 flex items-center justify-between" style={{ borderColor: "#E4E2DA", background: "white" }}>
+      <div><div className="text-[13px] font-bold">{driver.name}</div><div className="text-[10px]" style={{ color: STEEL }}>{driver.company}</div></div>
+      <div className="text-right"><div className="text-[9px] uppercase" style={{ color: STEEL }}>Resume code</div><div className="text-[14px] font-bold" style={{ letterSpacing: "0.1em", fontFamily: "IBM Plex Mono, monospace" }}>{driver.resume_code}</div></div>
+    </div>
+    <div className="text-[10px] mb-3" style={{ color: STEEL }}>Save this code. You can finish later on any phone by choosing "I have a code".</div>
+
+    {driver.status === "approved" && (<>
+      <div className="rounded-md px-3 py-2 mb-3 text-[12px] font-bold text-center" style={{ background: "#EEF7EF", color: "#1F6B2C" }}>Approved. Your truck driver badge is ready.</div>
+      <TruckDriverBadgeCard driver={driver} projectSlug={activeProjectId} projectName={proj.name} />
+      <div className="text-[10px] text-center mt-2" style={{ color: STEEL }}>Take a screenshot to keep your badge on your phone.</div>
+    </>)}
+    {driver.status === "submitted" && (
+      <div className="rounded-md px-3 py-3 mb-3 text-[12px]" style={{ background: "#FFFBEA", border: `1px solid ${GOLD}` }}>
+        <div className="font-bold mb-0.5">Submitted for review</div>
+        Our safety team is reviewing your documents and video completion. Use your resume code to check back here. Your badge will appear on this page once approved.
+      </div>
+    )}
+    {driver.status === "rejected" && (
+      <div className="rounded-md px-3 py-3 mb-3 text-[12px]" style={{ background: "#FCEFEF", color: ALERT }}>
+        <div className="font-bold mb-0.5">Changes needed</div>{driver.review_notes || "Please redo the items below and submit again."}
+      </div>
+    )}
+
+    {driver.status !== "approved" && steps.map((s, i) => (
+      <div key={s.key} className="rounded-md border mb-2 bg-white" style={{ borderColor: current === s.key ? GOLD : "#E4E2DA", opacity: s.locked ? 0.55 : 1 }}>
+        <button disabled={s.locked || !editable} onClick={() => setOpenStep(current === s.key ? "none" : s.key)} className="w-full flex items-center gap-2 px-3 py-2.5 text-left">
+          {s.done ? <CheckCircle2 size={18} color="#2E7D32" /> : <Circle size={18} color={STEEL} />}
+          <span className="flex-1 text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 500 }}>{i + 1}. {s.title}</span>
+          {s.locked && <Lock size={14} color={STEEL} />}
+        </button>
+        {current === s.key && editable && !s.locked && (
+          <div className="px-3 pb-3">
+            {s.key === "affidavit" && <TruckDriverAffidavitStep driver={driver} projectSlug={activeProjectId} projectName={proj.name} onSaved={(d) => { setDriver(d); setOpenStep(null); }} />}
+            {s.key === "photos" && <TruckDriverPhotosStep driver={driver} onSaved={(d) => { setDriver(d); setOpenStep(null); }} />}
+            {s.key === "video" && <TruckDriverVideoStep driver={driver} onUpdated={(d) => setDriver((old) => ({ ...old, ...d }))} />}
+          </div>
+        )}
+      </div>
+    ))}
+
+    {editable && (
+      <button disabled={!allDone || busy} onClick={async () => { setBusy(true); const { data } = await supabase.rpc("td_submit", { p_id: driver.id }); setBusy(false); if (data) setDriver(data); else { setErr("Finish every step first."); await refresh(); } }} className="w-full mt-2 rounded-md py-3 text-sm font-bold disabled:opacity-40" style={{ background: GOLD, color: INK, fontFamily: "Oswald, sans-serif" }}>
+        {busy ? "Submitting..." : "Submit for Review"}
+      </button>
+    )}
+    {err && <div className="text-[11px] mt-2" style={{ color: ALERT }}>{err}</div>}
+    <button onClick={forget} className="mt-4 text-[11px] underline" style={{ color: STEEL }}>Not you? Start over on this device</button>
+  </>);
+}
+
+// ---- Admin: review truck driver onboarding and badges ----
+function TruckDriverAdminCard({ d, user, projectSlug, projectName, onChanged }) {
+  const [open, setOpen] = useState(false);
+  const [rejecting, setRejecting] = useState(false);
+  const [notes, setNotes] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [showBadge, setShowBadge] = useState(false);
+  const act = async (action, n) => {
+    setBusy(true);
+    await supabase.rpc("review_truck_driver", { p_token: user.sessionToken, p_id: d.id, p_action: action, p_notes: n || null });
+    setBusy(false); setRejecting(false); setNotes(""); onChanged();
+  };
+  const tone = { submitted: ["#B7791F", "AWAITING REVIEW"], approved: [d.active === false ? ALERT : "#2E7D32", d.active === false ? "INACTIVE" : "APPROVED"], rejected: [ALERT, "SENT BACK"], in_progress: [STEEL, "IN PROGRESS"] }[d.status] || [STEEL, d.status];
+  const btn = "text-[10px] font-bold uppercase py-1.5 rounded-sm";
+  const mono = { fontFamily: "IBM Plex Mono, monospace" };
+  return (
+    <div className="bg-white rounded-md border mb-2" style={{ borderColor: "#E4E2DA" }}>
+      <button onClick={() => setOpen((o) => !o)} className="w-full flex items-center gap-3 p-3 text-left">
+        {d.selfie_url ? <img src={d.selfie_url} alt="" className="w-11 h-11 rounded-full object-cover flex-shrink-0" /> : <div className="w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: "#E4E2DA" }}><Camera size={16} color={STEEL} /></div>}
+        <div className="min-w-0 flex-1">
+          <div className="text-[14px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{d.name}{d.badge_number ? ` - ${d.badge_number}` : ""}</div>
+          <div className="text-[11px] truncate" style={{ color: STEEL }}>{d.company || "-"}</div>
+        </div>
+        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-sm flex-shrink-0" style={{ color: "white", background: tone[0], ...mono }}>{tone[1]}</span>
+      </button>
+      {open && (
+        <div className="px-3 pb-3">
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] mb-3" style={{ color: STEEL }}>
+            <div>Phone: {d.phone || "-"}</div><div>Email: {d.email || "-"}</div>
+            <div>CDL: {d.cdl_number || "-"} {d.cdl_state || ""}</div><div>Started: {new Date(d.created_at).toLocaleDateString()}</div>
+          </div>
+          <div className="rounded-md border p-2 mb-3" style={{ borderColor: "#E4E2DA" }}>
+            <div className="text-[10px] uppercase font-bold mb-1" style={{ color: STEEL, ...mono }}>Documents on this driver's badge</div>
+            <div className="flex flex-wrap gap-2 mb-2">
+              <button disabled={!d.affidavit_pdf_url} onClick={() => window.open(d.affidavit_pdf_url, "_blank")} className={`${btn} px-3 border`} style={{ borderColor: "#C9C6BC", color: d.affidavit_pdf_url ? INK : "#9AA0A6", ...mono }}>{d.affidavit_pdf_url ? "Drug Screen Affidavit" : "Affidavit - missing"}</button>
+              <button disabled={!d.cdl_photo_url} onClick={() => window.open(d.cdl_photo_url, "_blank")} className={`${btn} px-3 border`} style={{ borderColor: "#C9C6BC", color: d.cdl_photo_url ? INK : "#9AA0A6", ...mono }}>{d.cdl_photo_url ? "CDL Photo" : "CDL - missing"}</button>
+              <button disabled={!d.selfie_url} onClick={() => window.open(d.selfie_url, "_blank")} className={`${btn} px-3 border`} style={{ borderColor: "#C9C6BC", color: d.selfie_url ? INK : "#9AA0A6", ...mono }}>{d.selfie_url ? "Selfie" : "Selfie - missing"}</button>
+            </div>
+            {d.cdl_photo_url && <img src={d.cdl_photo_url} alt="CDL" className="w-full rounded-md mb-2" style={{ maxHeight: 220, objectFit: "contain", background: "#F4F3EF" }} />}
+            <div className="text-[11px] font-bold" style={{ color: d.video_completed_at ? "#2E7D32" : ALERT }}>
+              {d.video_completed_at ? `Safety video completed ${new Date(d.video_completed_at).toLocaleString()}` : `Safety video not completed${d.video_duration ? ` (${Math.round(((d.video_seconds || 0) / d.video_duration) * 100)}% watched)` : ""}`}
+            </div>
+            {d.affidavit_signed_at && <div className="text-[10px]" style={{ color: STEEL }}>Affidavit signed {new Date(d.affidavit_signed_at).toLocaleString()}</div>}
+            {d.reviewed_at && <div className="text-[10px]" style={{ color: STEEL }}>Reviewed by {d.reviewed_by || "-"} on {new Date(d.reviewed_at).toLocaleDateString()}{d.review_notes ? ` - ${d.review_notes}` : ""}</div>}
+          </div>
+          {d.status === "submitted" && !rejecting && (
+            <div className="flex gap-2">
+              <button disabled={busy} onClick={() => act("approve")} className={`flex-1 ${btn} disabled:opacity-50`} style={{ background: GOLD, color: INK, ...mono }}>{busy ? "Working..." : "Approve & Issue Badge"}</button>
+              <button disabled={busy} onClick={() => setRejecting(true)} className={`flex-1 ${btn} border`} style={{ borderColor: ALERT, color: ALERT, ...mono }}>Send Back</button>
+            </div>
+          )}
+          {rejecting && (
+            <div>
+              <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="What does the driver need to fix?" className="w-full rounded-md border px-2.5 py-1.5 text-[13px] mb-2" style={{ borderColor: "#C9C6BC" }} />
+              <div className="flex gap-2">
+                <button disabled={busy || !notes.trim()} onClick={() => act("reject", notes)} className={`flex-1 ${btn} disabled:opacity-50`} style={{ background: ALERT, color: "white", ...mono }}>Send Back to Driver</button>
+                <button onClick={() => setRejecting(false)} className={`flex-1 ${btn} border`} style={{ borderColor: "#C9C6BC", color: STEEL, ...mono }}>Cancel</button>
+              </div>
+            </div>
+          )}
+          {d.status === "approved" && (
+            <>
+              <div className="flex gap-2">
+                <button onClick={() => setShowBadge((s) => !s)} className={`flex-1 ${btn}`} style={{ background: GOLD, color: INK, ...mono }}>{showBadge ? "Hide Badge" : "View Badge"}</button>
+                <button disabled={busy} onClick={() => act(d.active === false ? "reactivate" : "deactivate")} className={`flex-1 ${btn} border`} style={{ borderColor: d.active === false ? "#2E7D32" : ALERT, color: d.active === false ? "#2E7D32" : ALERT, ...mono }}>{d.active === false ? "Reactivate" : "Deactivate"}</button>
+              </div>
+              {showBadge && <div className="mt-3"><TruckDriverBadgeCard driver={d} projectSlug={projectSlug} projectName={projectName} /></div>}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ManageTruckDriversScreen({ user, activeProjectId, go }) {
+  const proj = useContext(ProjectContext) || {};
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState("submitted");
+  const link = `${window.location.origin}${window.location.pathname}?project=${activeProjectId}&screen=truckdriver`;
+  const qr = useBadgeQr(link, 400);
+  const load = async () => {
+    setLoading(true);
+    const { data } = await supabase.rpc("list_truck_drivers_admin", { p_token: user.sessionToken });
+    setRows(Array.isArray(data) ? data : []);
+    setLoading(false);
+  };
+  useEffect(() => { load(); }, [user?.sessionToken]);
+  const counts = { submitted: 0, approved: 0, in_progress: 0, rejected: 0 };
+  rows.forEach((r) => { if (counts[r.status] !== undefined) counts[r.status]++; });
+  const shown = rows.filter((r) => r.status === filter);
+  const chips = [["submitted", "Awaiting Review"], ["approved", "Badges"], ["in_progress", "In Progress"], ["rejected", "Sent Back"]];
+  const exportCsv = () => exportToCsv(`truck-driver-badges-${new Date().toISOString().slice(0, 10)}.csv`, rows.filter((r) => r.status === "approved"), [
+    { label: "Badge", get: (r) => r.badge_number }, { label: "Name", get: (r) => r.name }, { label: "Company", get: (r) => r.company },
+    { label: "Phone", get: (r) => r.phone }, { label: "Email", get: (r) => r.email }, { label: "CDL Number", get: (r) => r.cdl_number }, { label: "CDL State", get: (r) => r.cdl_state },
+    { label: "Video Completed", get: (r) => (r.video_completed_at ? new Date(r.video_completed_at).toLocaleString() : "") },
+    { label: "Badge Issued", get: (r) => (r.badge_issued_at ? new Date(r.badge_issued_at).toLocaleDateString() : "") },
+    { label: "Active", get: (r) => (r.active === false ? "No" : "Yes") },
+  ]);
+  return (
+    <div className="px-4 pt-4 pb-8" style={{ background: "#F4F3EF", minHeight: "100%" }}>
+      <div className="bg-white rounded-md p-3 border mb-3 text-center" style={{ borderColor: "#E4E2DA" }}>
+        <div className="text-[12px] mb-2" style={{ color: STEEL }}>Give drivers this QR code or link. It opens truck driver onboarding directly, no login needed.</div>
+        {qr ? <img src={qr} alt="QR" className="mx-auto" style={{ width: 170, height: 170 }} /> : null}
+        <div className="text-[10px] mt-1 break-all" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{link}</div>
+        {qr && <a href={qr} download="truck-driver-onboarding-qr.png" className="inline-block mt-2 text-[11px] font-bold uppercase px-3 py-2 rounded-sm" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>Download QR Code</a>}
+      </div>
+      <div className="flex gap-1.5 mb-3 overflow-x-auto">
+        {chips.map(([k, l]) => (
+          <button key={k} onClick={() => setFilter(k)} className="flex-shrink-0 text-[10px] font-bold uppercase px-2.5 py-1.5 rounded-sm" style={{ background: filter === k ? GOLD : "white", color: filter === k ? INK : STEEL, border: `1px solid ${filter === k ? GOLD : "#C9C6BC"}`, fontFamily: "IBM Plex Mono, monospace" }}>{l} ({counts[k]})</button>
+        ))}
+      </div>
+      {filter === "approved" && counts.approved > 0 && (
+        <button onClick={exportCsv} className="w-full mb-3 text-[10px] font-bold uppercase py-2 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Export Truck Driver Badges (CSV)</button>
+      )}
+      {loading && <div className="text-[12px]" style={{ color: STEEL }}>Loading...</div>}
+      {shown.map((d) => <TruckDriverAdminCard key={d.id} d={d} user={user} projectSlug={activeProjectId} projectName={proj.name} onChanged={load} />)}
+      {!loading && shown.length === 0 && <div className="text-[12px] text-center py-6" style={{ color: STEEL }}>Nothing here yet.</div>}
+      <div className="text-[10px] text-center mt-4" style={{ color: STEEL }}>Truck driver badges (TD numbers) are kept separate from crew badges and never appear in Personnel.</div>
+    </div>
+  );
+}
+
+// Public page opened by scanning a truck driver badge QR
+function TruckDriverVerifyScreen() {
+  const [info, setInfo] = useState(undefined);
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get("v");
+  useEffect(() => {
+    if (!token) { setInfo(null); return; }
+    supabase.rpc("verify_truck_driver", { p_verify: token }).then(({ data, error }) => setInfo(error || !data ? null : data));
+  }, [token]);
+  return (
+    <div className="px-4 pt-5 pb-10" style={{ background: "#F4F3EF", minHeight: "100%" }}>
+      <div className="max-w-sm mx-auto">
+        {info === undefined && <div className="text-center text-[13px]" style={{ color: STEEL }}>Loading badge...</div>}
+        {info === null && <div className="text-center text-[13px]" style={{ color: ALERT }}>This truck driver badge link isn't valid.</div>}
+        {info && (
+          <div className="rounded-md p-4 text-center" style={{ background: "white", border: "1px solid #E4E2DA" }}>
+            <div className="flex justify-center mb-3"><ProjectLogo projectId={info.project_slug} maxHeight={34} fallback={<div className="text-[12px] font-bold">{info.project_name}</div>} /></div>
+            <div className="inline-block text-[10px] font-bold uppercase px-2 py-1 rounded-sm mb-3" style={{ background: info.active ? "#2E7D32" : ALERT, color: "white", fontFamily: "IBM Plex Mono, monospace" }}>{info.active ? "Active - Truck Driver" : "Inactive"}</div>
+            {info.photo_url
+              ? <img src={info.photo_url} alt="" className="mx-auto rounded-full object-cover mb-2" style={{ width: 96, height: 96 }} />
+              : <div className="mx-auto rounded-full flex items-center justify-center mb-2 text-[28px] font-bold" style={{ width: 96, height: 96, background: INK, color: GOLD }}>{(info.name || "?").split(" ").map((w) => w[0]).slice(0, 2).join("")}</div>}
+            <div className="text-[20px] font-bold" style={{ fontFamily: "Oswald, sans-serif" }}>{info.name}</div>
+            <div className="grid grid-cols-2 gap-2 text-left mt-3">
+              <div><div className="text-[9px] uppercase" style={{ color: STEEL }}>Badge</div><div className="text-[13px] font-bold">{info.badge_number}</div></div>
+              <div><div className="text-[9px] uppercase" style={{ color: STEEL }}>Company</div><div className="text-[13px] font-bold">{info.company || "-"}</div></div>
+              <div><div className="text-[9px] uppercase" style={{ color: STEEL }}>Safety Video</div><div className="text-[13px] font-bold">{info.video_completed_at ? new Date(info.video_completed_at).toLocaleDateString() : "-"}</div></div>
+              <div><div className="text-[9px] uppercase" style={{ color: STEEL }}>Project</div><div className="text-[13px] font-bold">{info.project_name}</div></div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ---- App shell ----
 // Screens that stay public everywhere, on purpose — blocking these
 // would defeat the reason they exist (emergency info, anonymous
 // reporting, and the Labor Law QR code that anyone can scan).
-const ALWAYS_PUBLIC_SCREENS = ["emergency", "concern", "laborlaws", "trafficcontrol", "meetingsignin", "orientationsignin", "hsstandards", "orientationschedule", "verifybadge"];
+const ALWAYS_PUBLIC_SCREENS = ["emergency", "concern", "laborlaws", "trafficcontrol", "meetingsignin", "orientationsignin", "hsstandards", "orientationschedule", "verifybadge", "truckdriver", "verifytruckdriver"];
 // Normally-gated screens for every project.
 const BASE_GATED_SCREENS = ["forms", "safetyplan", "toolbox", "workplans", "mysubmissions", "preconstruction", "quarterlymonthly", "training", "meetings"];
 // Projects where EVERYTHING (except the always-public screens above)
@@ -13425,6 +13955,9 @@ export default function SafetyHubPrototype() {
     manageweeklyreport: "Manage Weekly Report",
     managesubmittedforms: "Submitted Forms",
     mysubmissions: "My Submissions",
+    truckdriver: "Truck Driver Onboarding",
+    managetruckdrivers: "Truck Drivers",
+    verifytruckdriver: "Truck Driver Badge",
     orientationsignin: "Orientation Sign-In",
     manageorientationsignins: "Review Sign-Ins",
     orientationschedule: "Schedule an Orientation",
@@ -13645,6 +14178,9 @@ export default function SafetyHubPrototype() {
             {screen === "manageworkplans" && <ManageWorkPlansScreen user={user} />}
             {screen === "emergency" && <EmergencyContactsScreen user={user} go={go} activeProjectId={activeProjectId} />}
             {screen === "manageemergency" && <ManageEmergencyContactsScreen user={user} />}
+            {screen === "truckdriver" && <TruckDriverScreen activeProjectId={activeProjectId} user={user} go={go} />}
+            {screen === "managetruckdrivers" && <ManageTruckDriversScreen user={user} activeProjectId={activeProjectId} go={go} />}
+            {screen === "verifytruckdriver" && <TruckDriverVerifyScreen />}
             {screen === "orientationsignin" && <OrientationSignInScreen activeProjectId={activeProjectId} />}
             {screen === "manageorientationsignins" && <ManageOrientationSignInsScreen user={user} activeProjectId={activeProjectId} />}
             {screen === "orientationschedule" && <OrientationScheduleScreen activeProjectId={activeProjectId} />}
