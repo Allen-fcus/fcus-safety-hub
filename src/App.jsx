@@ -7668,8 +7668,18 @@ async function buildGenericFormPdf({ form, slug, projectName, standardValues, fi
       const sc = Math.min((first ? 150 : 90) / logo.width, (first ? 40 : 20) / logo.height);
       page.drawImage(logo, { x: M, y: H - bh + (bh - logo.height * sc) / 2, width: logo.width * sc, height: logo.height * sc });
     }
-    const sz = first ? 14 : 10;
-    page.drawText(title, { x: W - M - sansB.widthOfTextAtSize(title, sz), y: H - bh / 2 - sz / 3, size: sz, font: sansB, color: gold });
+    let sz = first ? 14 : 10;
+    const logoW = logo ? Math.min((first ? 150 : 90), (first ? 40 : 20) * logo.width / logo.height) : 0;
+    const avail = W - 2 * M - (logo ? logoW + 16 : 0);
+    while (sz > 7.5 && sansB.widthOfTextAtSize(title, sz) > avail) sz -= 0.5;
+    if (sansB.widthOfTextAtSize(title, sz) <= avail) {
+      page.drawText(title, { x: W - M - sansB.widthOfTextAtSize(title, sz), y: H - bh / 2 - sz / 3, size: sz, font: sansB, color: gold });
+    } else {
+      // still too wide: split into two right-aligned lines
+      const words = title.split(" "); let l1 = "", l2 = "";
+      words.forEach((w) => { if (!l2 && sansB.widthOfTextAtSize((l1 + " " + w).trim(), sz) <= avail) l1 = (l1 + " " + w).trim(); else l2 = (l2 + " " + w).trim(); });
+      [l1, l2].forEach((ln, k) => page.drawText(ln, { x: W - M - sansB.widthOfTextAtSize(ln, sz), y: H - bh / 2 + (k === 0 ? 2 : -sz - 1), size: sz, font: sansB, color: gold }));
+    }
     return H - bh;
   };
   const newPage = () => { page = doc.addPage([W, H]); y = band(false) - 16; };
@@ -13474,6 +13484,16 @@ function TruckDriverScreen({ activeProjectId, user, go }) {
     if (!data) { setErr("Something went wrong. Please try again."); return; }
     remember(data); setDriver(data);
   };
+  const [badgeNo, setBadgeNo] = useState("");
+  const [badgePin, setBadgePin] = useState("");
+  const doBadgeLogin = async () => {
+    setBusy(true); setErr("");
+    await loadProjectMap();
+    const { data } = await supabase.rpc("td_badge_login", { p_project_id: projectIdForSlug(activeProjectId), p_badge: badgeNo, p_pin: badgePin });
+    setBusy(false);
+    if (!data) { setErr("Badge number or PIN didn't match."); return; }
+    remember(data); setDriver(data);
+  };
   const doResume = async () => {
     setBusy(true); setErr("");
     const { data } = await supabase.rpc("td_resume", { p_code: resume });
@@ -13510,7 +13530,7 @@ function TruckDriverScreen({ activeProjectId, user, go }) {
         </ol>
       </div>
       <div className="flex rounded-md overflow-hidden border mb-3" style={{ borderColor: "#C9C6BC" }}>
-        {[["start", "New driver"], ["resume", "I have a code"]].map(([m, l]) => (
+        {[["start", "New driver"], ["resume", "I have a code"], ["badge", "I have a badge"]].map(([m, l]) => (
           <button key={m} onClick={() => { setMode(m); setErr(""); }} className="flex-1 py-2 text-[11px] font-bold uppercase" style={{ background: mode === m ? GOLD : "white", color: mode === m ? INK : STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{l}</button>
         ))}
       </div>
@@ -13529,6 +13549,13 @@ function TruckDriverScreen({ activeProjectId, user, go }) {
         </div>
         {err && <div className="text-[11px] mb-2" style={{ color: ALERT }}>{err}</div>}
         <button disabled={busy || !f.name.trim() || !f.phone.trim() || !f.company.trim() || !f.cdl.trim()} onClick={start} className="w-full rounded-md py-3 text-sm font-bold disabled:opacity-40" style={{ background: GOLD, color: INK, fontFamily: "Oswald, sans-serif" }}>{busy ? "Starting..." : "Start Onboarding"}</button>
+      </>) : mode === "badge" ? (<>
+        <label className="text-[10px] uppercase font-bold" style={lbl}>Badge Number</label>
+        <input value={badgeNo} onChange={(e) => setBadgeNo(e.target.value.toUpperCase())} autoCapitalize="characters" placeholder="TD0001" className={inp} style={{ borderColor: "#C9C6BC" }} />
+        <label className="text-[10px] uppercase font-bold" style={lbl}>PIN</label>
+        <input value={badgePin} onChange={(e) => setBadgePin(e.target.value.replace(/\D/g, "").slice(0, 4))} inputMode="numeric" type="password" className={inp} style={{ borderColor: "#C9C6BC", letterSpacing: "0.3em" }} />
+        {err && <div className="text-[11px] mb-2" style={{ color: ALERT }}>{err}</div>}
+        <button disabled={busy || !badgeNo.trim() || badgePin.length < 4} onClick={doBadgeLogin} className="w-full rounded-md py-3 text-sm font-bold disabled:opacity-40" style={{ background: GOLD, color: INK, fontFamily: "Oswald, sans-serif" }}>{busy ? "Checking..." : "Open My Badge"}</button>
       </>) : (<>
         <label className="text-[10px] uppercase font-bold" style={lbl}>Resume Code</label>
         <input value={resume} onChange={(e) => setResume(e.target.value.toUpperCase())} autoCapitalize="characters" className={inp} style={{ borderColor: "#C9C6BC", letterSpacing: "0.12em" }} />
@@ -13556,7 +13583,11 @@ function TruckDriverScreen({ activeProjectId, user, go }) {
     <div className="text-[10px] mb-3" style={{ color: STEEL }}>Save this code. You can finish later on any phone by choosing "I have a code".</div>
 
     {driver.status === "approved" && (<>
-      <div className="rounded-md px-3 py-2 mb-3 text-[12px] font-bold text-center" style={{ background: "#EEF7EF", color: "#1F6B2C" }}>Approved. Your truck driver badge is ready.</div>
+      <div className="rounded-md px-3 py-2 mb-3 text-[12px] text-center" style={{ background: "#EEF7EF", color: "#1F6B2C" }}>
+        <div className="font-bold">Approved. Your truck driver badge is ready.</div>
+        <div className="mt-1">Badge <b>{driver.badge_number}</b>{driver.pin ? <> &middot; PIN <b style={{ letterSpacing: "0.12em" }}>{driver.pin}</b></> : null}</div>
+        <div className="text-[10px]" style={{ color: STEEL }}>Keep your badge number and PIN. Use them under "I have a badge" to reopen this badge anytime.</div>
+      </div>
       <TruckDriverBadgeCard driver={driver} projectSlug={activeProjectId} projectName={proj.name} />
       <div className="text-[10px] text-center mt-2" style={{ color: STEEL }}>Take a screenshot to keep your badge on your phone.</div>
     </>)}
@@ -13628,6 +13659,7 @@ function TruckDriverAdminCard({ d, user, projectSlug, projectName, onChanged }) 
         <div className="px-3 pb-3">
           <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] mb-3" style={{ color: STEEL }}>
             <div>Phone: {d.phone || "-"}</div><div>Email: {d.email || "-"}</div>
+            {d.badge_number && <div>Badge: <b>{d.badge_number}</b></div>}{d.pin && <div>PIN: <b>{d.pin}</b></div>}
             <div>CDL: {d.cdl_number || "-"} {d.cdl_state || ""}</div><div>Started: {new Date(d.created_at).toLocaleDateString()}</div>
           </div>
           <div className="rounded-md border p-2 mb-3" style={{ borderColor: "#E4E2DA" }}>
@@ -13690,7 +13722,10 @@ function ManageTruckDriversScreen({ user, activeProjectId, go }) {
   useEffect(() => { load(); }, [user?.sessionToken]);
   const counts = { submitted: 0, approved: 0, in_progress: 0, rejected: 0 };
   rows.forEach((r) => { if (counts[r.status] !== undefined) counts[r.status]++; });
-  const shown = rows.filter((r) => r.status === filter);
+  const [q, setQ] = useState("");
+  const qn = q.trim().toLowerCase();
+  const searching = qn.length > 0;
+  const shown = rows.filter((r) => (searching ? [r.name, r.company, r.badge_number, r.phone, r.cdl_number].some((v) => String(v || "").toLowerCase().includes(qn)) : r.status === filter));
   const chips = [["submitted", "Awaiting Review"], ["approved", "Badges"], ["in_progress", "In Progress"], ["rejected", "Sent Back"]];
   const exportCsv = () => exportToCsv(`truck-driver-badges-${new Date().toISOString().slice(0, 10)}.csv`, rows.filter((r) => r.status === "approved"), [
     { label: "Badge", get: (r) => r.badge_number }, { label: "Name", get: (r) => r.name }, { label: "Company", get: (r) => r.company },
@@ -13707,7 +13742,9 @@ function ManageTruckDriversScreen({ user, activeProjectId, go }) {
         <div className="text-[10px] mt-1 break-all" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{link}</div>
         {qr && <a href={qr} download="truck-driver-onboarding-qr.png" className="inline-block mt-2 text-[11px] font-bold uppercase px-3 py-2 rounded-sm" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>Download QR Code</a>}
       </div>
-      <div className="flex gap-1.5 mb-3 overflow-x-auto">
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search driver name, employer, or badge #" className="w-full rounded-md border px-3 py-2 text-[13px] mb-2" style={{ borderColor: "#C9C6BC", background: "white" }} />
+      {searching && <div className="text-[10px] mb-2" style={{ color: STEEL }}>{shown.length} match{shown.length === 1 ? "" : "es"} across all statuses</div>}
+      <div className="flex gap-1.5 mb-3 overflow-x-auto" style={{ opacity: searching ? 0.4 : 1 }}>
         {chips.map(([k, l]) => (
           <button key={k} onClick={() => setFilter(k)} className="flex-shrink-0 text-[10px] font-bold uppercase px-2.5 py-1.5 rounded-sm" style={{ background: filter === k ? GOLD : "white", color: filter === k ? INK : STEEL, border: `1px solid ${filter === k ? GOLD : "#C9C6BC"}`, fontFamily: "IBM Plex Mono, monospace" }}>{l} ({counts[k]})</button>
         ))}
@@ -14057,6 +14094,7 @@ export default function SafetyHubPrototype() {
     { key: "toolbox", icon: PlayCircle, label: t("toolboxTalks") },
     { key: "workplans", icon: ClipboardCheck, label: t("workPlans") },
     { key: "personnel", icon: Users, label: t("personnelLookup") },
+    { key: "truckdriver", icon: Truck, label: "Truck Drivers" },
     { key: "emergency", icon: Phone, label: t("emergencyContacts") },
     ...(LABOR_LAWS_PROJECTS.includes(activeProjectId) ? [{ key: "laborlaws", icon: ShieldAlert, label: t("laborLaws") }] : []),
     ...(TRAFFIC_CONTROL_PROJECTS.includes(activeProjectId) ? [{ key: "trafficcontrol", icon: ShieldAlert, label: "Traffic Control" }] : []),
