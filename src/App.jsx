@@ -6084,6 +6084,9 @@ const FORMS_DEFAULT = [
     title: "Hot Work Permit",
     description: "Authorizes welding, cutting, or other hot work once required fire safety precautions are confirmed in place.",
     pdfLink: "https://drive.google.com/file/d/14v_Nb87T7pNCTjWxaxd_JTUDAu89O6V-/preview",
+    pdfLinkByProject: {
+      "sh99-houston": "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/sh99-hot-work-permit.pdf",
+    },
     pdfFillTemplate: "generic-form-pdf",
     genericPdfWrap: true,
     genericPdfLongFields: ["Location of Work", "Description of Work", "Equipment to be Used", "Special Conditions (if any)"],
