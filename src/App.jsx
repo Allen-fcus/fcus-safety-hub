@@ -6067,10 +6067,12 @@ const FORMS_DEFAULT = [
     genericPdfLegend: "S = Satisfactory    U = Unsatisfactory    N/A = Not applicable",
     genericPdfLongFields: ["Deficiencies / Comments"],
     signatureLabels: ["Inspector Signature"],
-    trailingFieldLabels: ["Deficiencies / Comments"],
+    trailingFieldLabels: ["Deficiencies / Comments", "Photos of Deficiencies"],
     bigTextFields: ["Deficiencies / Comments"],
     bigTextHints: { "Deficiencies / Comments": "Describe any unsatisfactory (U) items and corrective action, or write None." },
-    fields: ["Unit No.", "Make", "Model", "Serial No.", "Hours", "Deficiencies / Comments"],
+    dateFields: ["Annual Inspection Expires"],
+    photoFields: { "Photos of Deficiencies": "optional" },
+    fields: ["Unit No.", "Make", "Model", "Serial No.", "Hours", "Annual Inspection Expires", "Deficiencies / Comments", "Photos of Deficiencies"],
     statusGroups: [
       {
         label: "Overall",
@@ -8943,7 +8945,11 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
               <div key={i}>
                 <label className="text-[11px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{f}</label>
                 <FieldHint label={f} />
-                {form.sameDayPair && (f === form.sameDayPair.begin || f === form.sameDayPair.end) ? (
+                {(form.dateFields || []).includes(f) ? (
+                  <input type="date" className="w-full mt-1 rounded-md border px-2.5 py-1.5 text-[13px]" style={{ borderColor: "#C9C6BC" }}
+                    value={(() => { const m = (values[i] || "").match(/^(\d\d)\/(\d\d)\/(\d{4})$/); return m ? `${m[3]}-${m[1]}-${m[2]}` : ""; })()}
+                    onChange={(e) => { const [y, mo, d] = e.target.value.split("-"); setValues((v) => ({ ...v, [i]: e.target.value ? `${mo}/${d}/${y}` : "" })); }} />
+                ) : form.sameDayPair && (f === form.sameDayPair.begin || f === form.sameDayPair.end) ? (
                   f === form.sameDayPair.begin ? (
                     <input type="datetime-local" value={sdBegin} className="w-full mt-1 rounded-md border px-2.5 py-1.5 text-[13px]" style={{ borderColor: "#C9C6BC" }}
                       onChange={(e) => onSameDayBegin(e.target.value, i)} />
