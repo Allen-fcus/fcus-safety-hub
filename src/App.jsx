@@ -5846,7 +5846,34 @@ const FORMS_DEFAULT = [
     pdfLink: "https://drive.google.com/file/d/1e-gtaeZ4mZge8_-Tqkkl6tpgQyFOqhR-/preview",
     pdfFillTemplate: "generic-form-pdf",
     genericPdfLongFields: ["Purpose of Excavation / Drilling / Boring", "Location of Excavation / Drilling / Boring"],
-    projects: ["nti-sylvania", "nti-golden-triangle"],
+    pdfLinkByProject: {
+      "nashville": "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/fcw24-utility-locate-permit.pdf",
+    },
+    statusItemsByProject: {
+      "sh99-houston": [["Electric", "Gas", "Communications", "Water", "Sewer", "Pipeline", "Telephone (TX-DOT)", "Storm Water / Slurry", "Other Utility 1", "Other Utility 2"]],
+    },
+    // Tennessee (FCW24): Tennessee 811 rules. 3 working days notice (max 10), ticket valid 15 calendar days from the legal start date, update requested 3 working days before expiry.
+    projectOverrides: {
+      nashville: {
+        ticketRules: {
+          noticeDays: 3, maxAdvanceDays: 10, validDays: 15, renewLeadDays: 3,
+          startField: "Legal Start Date (Ticket)", ticketDateField: "Ticket Date (811 Requested)",
+          expiresField: "Ticket Expires (15 calendar days)", renewByField: "Request Ticket Update By (3 working days before expiry)",
+          updateLabel: "Ticket Update", numberField: "Ticket Number",
+        },
+        dateFields: ["Start Date", "Completion Date", "Ticket Date (811 Requested)", "Legal Start Date (Ticket)", "Ticket Expires (15 calendar days)", "Request Ticket Update By (3 working days before expiry)"],
+        fields: [
+          "Requested By", "Competent Person", "Start Date", "Completion Date",
+          "Purpose of Excavation / Drilling / Boring",
+          "Location of Excavation / Drilling / Boring",
+          "Depth", "Width / Diameter", "Length",
+          "Submit a photo of the marked utilities in the specific work area",
+          "Ticket Number", "Ticket Date (811 Requested)", "Legal Start Date (Ticket)",
+          "Ticket Expires (15 calendar days)", "Request Ticket Update By (3 working days before expiry)",
+        ],
+        statusItems: [["Electric", "Gas", "Communications", "Water", "Sewer", "Pipeline", "Telephone", "TDOT 615-350-4200", "Storm Water / Slurry"]],
+      },
+    },
     linkLabel: "Daily Excavation Checklist + Utility Locate Permit",
     photoFields: { "Submit a photo of the marked utilities in the specific work area": true },
     requiresTwoSignatures: true,
@@ -6003,7 +6030,7 @@ const FORMS_DEFAULT = [
       "nti-sylvania": "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/nti-confined-space-permit.pdf",
       "nti-golden-triangle": "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/nti-confined-space-permit.pdf",
       "sh99-houston": "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/sh99-confined-space-permit.pdf",
-      "nashville": "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/sh99-confined-space-permit.pdf",
+      "nashville": "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/fcw24-confined-space-permit.pdf",
     },
     pdfFillTemplate: "generic-form-pdf",
     genericPdfWrap: true,
@@ -6086,6 +6113,7 @@ const FORMS_DEFAULT = [
     pdfLink: "https://drive.google.com/file/d/14v_Nb87T7pNCTjWxaxd_JTUDAu89O6V-/preview",
     pdfLinkByProject: {
       "sh99-houston": "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/sh99-hot-work-permit.pdf",
+      "nashville": "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/fcw24-hot-work-permit.pdf",
     },
     pdfFillTemplate: "generic-form-pdf",
     genericPdfWrap: true,
@@ -8625,6 +8653,29 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
     setValues((v) => ({ ...v, [ei]: sdFmt(sdBegin.slice(0, 10), t) }));
   };
 
+  const tr = form.ticketRules;
+  const trStartIdx = tr ? (form.fields || []).indexOf(tr.startField) : -1;
+  const trTicketIdx = tr ? (form.fields || []).indexOf(tr.ticketDateField) : -1;
+  const trStartVal = trStartIdx >= 0 ? values[trStartIdx] || "" : "";
+  useEffect(() => {
+    if (!tr) return;
+    const d = parseUsDate(trStartVal);
+    const ei = (form.fields || []).indexOf(tr.expiresField), ri = (form.fields || []).indexOf(tr.renewByField);
+    if (!d) return;
+    const exp = new Date(d.getTime()); exp.setDate(exp.getDate() + tr.validDays);
+    setValues((v) => ({ ...v, [ei]: fmtUsDate(exp), [ri]: fmtUsDate(addWorkingDays(exp, -tr.renewLeadDays)) }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trStartVal]);
+  const ticketNotice = (() => {
+    if (!tr) return null;
+    const td = parseUsDate(values[trTicketIdx] || ""), sd = parseUsDate(trStartVal);
+    if (!td || !sd) return null;
+    const n = workingDaysBetween(td, sd);
+    if (n < tr.noticeDays) return { bad: true, text: `Tennessee 811 requires at least ${tr.noticeDays} working days notice. This start date is only ${n} working day(s) after the ticket was requested.` };
+    if (n > tr.maxAdvanceDays) return { bad: true, text: `A ticket can be requested up to ${tr.maxAdvanceDays} working days in advance. This start date is ${n} working days after the ticket was requested.` };
+    return { bad: false, text: `${n} working days notice - meets the ${tr.noticeDays} working day Tennessee 811 requirement.` };
+  })();
+
   const renderTimeInput = (i) => (
     <input type="time" className="w-full mt-1 rounded-md border px-2.5 py-1.5 text-[13px]" style={{ borderColor: "#C9C6BC" }}
       value={(() => { const m = (values[i] || "").match(/^(\d{1,2}):(\d\d) (AM|PM)$/); if (!m) return ""; let h = parseInt(m[1], 10) % 12; if (m[3] === "PM") h += 12; return `${String(h).padStart(2, "0")}:${m[2]}`; })()}
@@ -9089,6 +9140,14 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
             if (personGroups.some((g) => g.field === f)) return null;
             return (
               <div key={i}>
+                {tr && f === tr.numberField && (
+                  <div className="rounded-md border px-2.5 py-2 mb-2" style={{ borderColor: GOLD, background: "#FFFBEA" }}>
+                    <div className="text-[10px] uppercase font-bold mb-1" style={{ fontFamily: "IBM Plex Mono, monospace" }}>Tennessee 811 Rules</div>
+                    <div className="text-[11px] leading-snug" style={{ color: "#333" }}>
+                      Notify Tennessee 811 at least {tr.noticeDays} working days (excluding weekends and state holidays) before digging, and no more than {tr.maxAdvanceDays} working days ahead. Every subcontractor digging must hold its own ticket. A ticket is valid {tr.validDays} calendar days from the legal start date. If work runs longer, request a ticket update at least {tr.renewLeadDays} working days before it expires.
+                    </div>
+                  </div>
+                )}
                 <label className="text-[11px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{f}</label>
                 <FieldHint label={f} />
                 {(form.timeFields || []).includes(f) ? renderTimeInput(i) : (form.dateFields || []).includes(f) ? renderDateInput(i) : form.sameDayPair && (f === form.sameDayPair.begin || f === form.sameDayPair.end) ? (
@@ -9126,6 +9185,9 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
                 )}
                 {i === 0 && form.noteBelowFirstField && (
                   <div className="text-[10px] mt-1.5 mb-1" style={{ color: STEEL }}>{form.noteBelowFirstField}</div>
+                )}
+                {tr && f === tr.startField && ticketNotice && (
+                  <div className="text-[11px] mt-1.5 rounded-md px-2 py-1.5" style={{ background: ticketNotice.bad ? "#FCEFEF" : "#EEF7EF", color: ticketNotice.bad ? ALERT : "#1F6B2C" }}>{ticketNotice.text}</div>
                 )}
               </div>
             );
@@ -9436,7 +9498,7 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
 }
 
 // Adds a "Ticket Refresh Log" page to the end of a submitted Utility Locate Permit PDF
-async function appendTicketRefreshLog(baseBytes, { original, refreshes, startNumber }) {
+async function appendTicketRefreshLog(baseBytes, { original, refreshes, startNumber, label = "Ticket Refresh" }) {
   const { StandardFonts, rgb } = await import("pdf-lib");
   const doc = await PDFDocument.load(baseBytes);
   const sans = await doc.embedFont(StandardFonts.Helvetica);
@@ -9446,7 +9508,7 @@ async function appendTicketRefreshLog(baseBytes, { original, refreshes, startNum
   const W = 612, H = 792, M = 36;
   const page = doc.addPage([W, H]);
   page.drawRectangle({ x: 0, y: H - 44, width: W, height: 44, color: ink });
-  const t = "TICKET REFRESH LOG";
+  const t = `${label.toUpperCase()} LOG`;
   page.drawText(t, { x: W - M - sansB.widthOfTextAtSize(t, 14), y: H - 28, size: 14, font: sansB, color: gold });
   page.drawText("UTILITY LOCATE PERMIT", { x: M, y: H - 28, size: 10, font: sansB, color: rgb(1, 1, 1) });
   let y = H - 70;
@@ -9455,7 +9517,7 @@ async function appendTicketRefreshLog(baseBytes, { original, refreshes, startNum
   y -= 6; page.drawLine({ start: { x: M, y }, end: { x: W - M, y }, thickness: 0.8, color: ink });
   const rows = [{ a: "Original ticket", b: original.number || "-", c: original.date || "-", d: "" }].concat(
     refreshes.map((r, i) => ({
-      a: `Ticket Refresh Number ${startNumber + i}`, b: r.number || "-", c: r.date || "-",
+      a: `${label} Number ${startNumber + i}`, b: r.number || "-", c: r.date || "-",
       d: `${r.by || ""}  ${r.at ? new Date(r.at).toLocaleString("en-US", { month: "2-digit", day: "2-digit", year: "numeric", hour: "numeric", minute: "2-digit" }) : ""}`,
     })));
   rows.forEach((r) => {
@@ -9470,7 +9532,7 @@ async function appendTicketRefreshLog(baseBytes, { original, refreshes, startNum
 }
 
 function UtilityPermitRenewals({ user, projectName, onClose }) {
-  const { notifyEmail } = useContext(ProjectContext);
+  const { notifyEmail, id: modalProjectId } = useContext(ProjectContext);
   const open = true;
   const [permits, setPermits] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -9479,8 +9541,11 @@ function UtilityPermitRenewals({ user, projectName, onClose }) {
   const [date, setDate] = useState(new Date().toLocaleDateString());
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
-  const form = FORMS_DEFAULT.find((f) => f.title === "Utility Locate Permit");
+  const form = resolveFormForProject(FORMS_DEFAULT.find((f) => f.title === "Utility Locate Permit"), modalProjectId);
+  const rules = form.ticketRules || null;
+  const upLabel = rules ? rules.updateLabel : "Ticket Refresh";
   const idx = (label) => String((form.fields || []).indexOf(label));
+  const lenientDate = (str) => { const m = String(str || "").match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); return m ? new Date(parseInt(m[3], 10), parseInt(m[1], 10) - 1, parseInt(m[2], 10)) : null; };
 
   const load = async () => {
     setLoading(true);
@@ -9496,11 +9561,22 @@ function UtilityPermitRenewals({ user, projectName, onClose }) {
     return {
       location: f[idx("Location of Excavation / Drilling / Boring")] || "-",
       ticket: f[idx("Ticket Number")] || "",
-      ticketDate: f[idx("Ticket Date")] || "",
+      ticketDate: f[idx(rules ? rules.startField : "Ticket Date")] || "",
       startNumber: initialRefresh ? 2 : 1,
       initialRefresh,
       initialRefreshDate: f[idx("Ticket Refresh Date 1")] || "",
     };
+  };
+
+  // Tennessee: validity restarts from the latest update date (or the legal start date); update is due 3 working days before expiry
+  const tnDates = (p) => {
+    if (!rules) return null;
+    const last = (p.refreshes || []).length ? p.refreshes[p.refreshes.length - 1] : null;
+    const base = (last && lenientDate(last.date)) || lenientDate((p.fields || {})[idx(rules.startField)]);
+    if (!base) return null;
+    const exp = new Date(base.getTime()); exp.setDate(exp.getDate() + rules.validDays);
+    const due = addWorkingDays(exp, -rules.renewLeadDays);
+    return { exp: fmtUsDate(exp), due: fmtUsDate(due), overdue: due < new Date(new Date().setHours(0, 0, 0, 0)) };
   };
 
   const save = async (p) => {
@@ -9519,7 +9595,7 @@ function UtilityPermitRenewals({ user, projectName, onClose }) {
         if (inf.initialRefresh) all.push({ number: inf.initialRefresh, date: inf.initialRefreshDate, by: p.submitted_by, at: p.submitted_at });
         const bytes = await appendTicketRefreshLog(baseBytes, {
           original: { number: inf.ticket, date: inf.ticketDate },
-          refreshes: all.concat(data.refreshes), startNumber: 1,
+          refreshes: all.concat(data.refreshes), startNumber: 1, label: upLabel,
         });
         const path = `submission-${Date.now()}-utility-locate-permit-refreshed.pdf`;
         const blob = new Blob([bytes], { type: "application/pdf" });
@@ -9532,12 +9608,12 @@ function UtilityPermitRenewals({ user, projectName, onClose }) {
       } catch (e) { /* the refresh is saved even if the PDF could not be rebuilt */ }
       if (notifyEmail) {
         sendFormEmail({
-          toEmail: notifyEmail, formTitle: "Utility Locate Permit - Ticket Refresh",
-          fieldsText: `Permit submitted by: ${p.submitted_by}\nLocation: ${inf.location}\nOriginal ticket: ${inf.ticket || "-"}\nTicket Refresh Number: ${num.trim()}\nDate: ${date}${newUrl ? `\n\nUpdated PDF: ${newUrl}` : ""}`,
+          toEmail: notifyEmail, formTitle: `Utility Locate Permit - ${upLabel}`,
+          fieldsText: `Permit submitted by: ${p.submitted_by}\nLocation: ${inf.location}\nOriginal ticket: ${inf.ticket || "-"}\n${upLabel} Number: ${num.trim()}\nDate: ${date}${newUrl ? `\n\nUpdated PDF: ${newUrl}` : ""}`,
           submittedBy: user?.name || "Unknown", projectName: projectName || "",
         });
       }
-      setNum(""); setActiveId(null); setMsg("Ticket refresh added.");
+      setNum(""); setActiveId(null); setMsg(`${upLabel} added.`);
       await load();
     } finally { setBusy(false); }
   };
@@ -9547,8 +9623,8 @@ function UtilityPermitRenewals({ user, projectName, onClose }) {
       <div className="bg-white rounded-md w-full max-w-sm flex flex-col overflow-hidden" style={{ maxHeight: "85vh" }}>
       <div className="flex items-center justify-between px-4 py-3" style={{ background: INK }}>
         <div>
-          <div className="text-[14px]" style={{ color: GOLD, fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>Ticket Refresh</div>
-          <div className="text-[10px]" style={{ color: "#E4E2DA" }}>Utility Locate Permit - tickets renew every 14 days</div>
+          <div className="text-[14px]" style={{ color: GOLD, fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{upLabel}</div>
+          <div className="text-[10px]" style={{ color: "#E4E2DA" }}>{rules ? `Utility Locate Permit - valid ${rules.validDays} calendar days, request update ${rules.renewLeadDays} working days before expiry` : "Utility Locate Permit - tickets renew every 14 days"}</div>
         </div>
         <button onClick={onClose} aria-label="Close"><X size={18} color="white" /></button>
       </div>
@@ -9566,23 +9642,26 @@ function UtilityPermitRenewals({ user, projectName, onClose }) {
                 <div className="text-[12px] font-bold">{inf.location}</div>
                 <div className="text-[10px]" style={{ color: STEEL }}>{p.submitted_by} · {new Date(p.submitted_at).toLocaleDateString()} · Ticket {inf.ticket || "-"}</div>
                 <div className="text-[10px]" style={{ color: STEEL }}>
-                  {(p.refreshes || []).length === 0 && !inf.initialRefresh ? "No refreshes yet" : `Latest: ${last ? `${last.number} (${last.date})` : `${inf.initialRefresh} (${inf.initialRefreshDate})`}`}
+                  {(p.refreshes || []).length === 0 && !inf.initialRefresh ? "No updates yet" : `Latest: ${last ? `${last.number} (${last.date})` : `${inf.initialRefresh} (${inf.initialRefreshDate})`}`}
                   {(p.refreshes || []).length + (inf.initialRefresh ? 1 : 0) > 0 ? ` · ${(p.refreshes || []).length + (inf.initialRefresh ? 1 : 0)} refresh(es)` : ""}
                 </div>
+                {(() => { const tn = tnDates(p); return tn ? (
+                  <div className="text-[10px] font-bold" style={{ color: tn.overdue ? ALERT : STEEL }}>Expires {tn.exp} - request update by {tn.due}{tn.overdue ? " (due now)" : ""}</div>
+                ) : null; })()}
                 {activeId === p.id ? (
                   <div className="mt-2">
-                    <label className="text-[10px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Ticket Refresh Number {nextNo}</label>
+                    <label className="text-[10px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{upLabel} Number {nextNo}</label>
                     <input value={num} onChange={(e) => setNum(e.target.value)} className="w-full mt-1 mb-2 rounded-md border px-2.5 py-1.5 text-[13px]" style={{ borderColor: "#C9C6BC" }} />
                     <label className="text-[10px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Date</label>
                     <input value={date} onChange={(e) => setDate(e.target.value)} className="w-full mt-1 mb-2 rounded-md border px-2.5 py-1.5 text-[13px]" style={{ borderColor: "#C9C6BC" }} />
                     <div className="flex gap-2">
-                      <button disabled={busy || !num.trim()} onClick={() => save(p)} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm" style={{ background: GOLD, color: INK, opacity: busy || !num.trim() ? 0.5 : 1, fontFamily: "IBM Plex Mono, monospace" }}>{busy ? "Saving…" : "Save Refresh"}</button>
+                      <button disabled={busy || !num.trim()} onClick={() => save(p)} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm" style={{ background: GOLD, color: INK, opacity: busy || !num.trim() ? 0.5 : 1, fontFamily: "IBM Plex Mono, monospace" }}>{busy ? "Saving…" : `Save ${rules ? "Update" : "Refresh"}`}</button>
                       <button onClick={() => setActiveId(null)} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Cancel</button>
                     </div>
                   </div>
                 ) : (
                   <div className="flex gap-2 mt-2">
-                    <button onClick={() => { setActiveId(p.id); setNum(""); setDate(new Date().toLocaleDateString()); setMsg(""); }} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>Add Ticket Refresh</button>
+                    <button onClick={() => { setActiveId(p.id); setNum(""); setDate(new Date().toLocaleDateString()); setMsg(""); }} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>Add {upLabel}</button>
                     {p.filled_pdf_url && <button onClick={() => window.open(p.filled_pdf_url, "_blank")} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>View PDF</button>}
                   </div>
                 )}
@@ -9762,6 +9841,41 @@ function ConfinedSpaceCloseout({ user, projectName, onClose }) {
   );
 }
 
+// Applies project-specific differences (blank copy link, item lists, Tennessee ticket rules) to a form definition
+function resolveFormForProject(f, pid) {
+  let out = f;
+  if (out.pdfLinkByProject && out.pdfLinkByProject[pid]) out = { ...out, pdfLink: out.pdfLinkByProject[pid] };
+  const ov = out.statusItemsByProject && out.statusItemsByProject[pid];
+  if (ov) out = { ...out, statusGroups: (out.statusGroups || []).map((g, gi) => (ov[gi] ? { ...g, items: ov[gi] } : g)) };
+  const po = out.projectOverrides && out.projectOverrides[pid];
+  if (po) {
+    out = { ...out, ...po };
+    if (po.statusItems) out.statusGroups = (out.statusGroups || []).map((g, gi) => (po.statusItems[gi] ? { ...g, items: po.statusItems[gi] } : g));
+    delete out.statusItems;
+  }
+  return out;
+}
+
+// Working-day helpers (Saturdays and Sundays are skipped; state holidays are not calculated)
+function parseUsDate(str) {
+  const m = String(str || "").match(/^(\d\d)\/(\d\d)\/(\d{4})$/);
+  return m ? new Date(parseInt(m[3], 10), parseInt(m[1], 10) - 1, parseInt(m[2], 10)) : null;
+}
+function fmtUsDate(d) {
+  return `${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}/${d.getFullYear()}`;
+}
+function addWorkingDays(d, n) {
+  const out = new Date(d.getTime()); const step = n >= 0 ? 1 : -1; let left = Math.abs(n);
+  while (left > 0) { out.setDate(out.getDate() + step); const w = out.getDay(); if (w !== 0 && w !== 6) left--; }
+  return out;
+}
+function workingDaysBetween(a, b) {
+  if (b <= a) return 0;
+  let n = 0; const d = new Date(a.getTime());
+  while (d < b) { d.setDate(d.getDate() + 1); const w = d.getDay(); if (w !== 0 && w !== 6) n++; }
+  return n;
+}
+
 function FormsScreen({ user, go, activeProjectId }) {
   const { sheetUrls, name: projDisplayName } = useContext(ProjectContext);
   const [openForm, setOpenForm] = useState(null);
@@ -9777,7 +9891,7 @@ function FormsScreen({ user, go, activeProjectId }) {
   }));
   const forms = formsRaw
     .filter((f) => !f.projects || f.projects.includes(activeProjectId))
-    .map((f) => (f.pdfLinkByProject && f.pdfLinkByProject[activeProjectId] ? { ...f, pdfLink: f.pdfLinkByProject[activeProjectId] } : f));
+    .map((f) => resolveFormForProject(f, activeProjectId));
 
   const handleDownload = (f, i) => {
     setDownloaded((d) => ({ ...d, [i]: true }));
@@ -9834,7 +9948,7 @@ function FormsScreen({ user, go, activeProjectId }) {
             )}
             {f.title === "Utility Locate Permit" && user && user.sessionToken && (
               <button onClick={() => setShowRefresh(true)} className="w-full mt-2 text-center text-[10px] font-bold uppercase px-2 py-1.5 rounded-sm border-2" style={{ borderColor: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>
-                Ticket Refresh (14-day)
+                {f.ticketRules ? "Ticket Update (15-day)" : "Ticket Refresh (14-day)"}
               </button>
             )}
           </div>
