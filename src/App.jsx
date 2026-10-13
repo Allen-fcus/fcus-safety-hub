@@ -13211,13 +13211,15 @@ function BadgeModal({ user, onClose, onLogout }) {
 // ============================================================
 const TRUCK_DRIVER_VIDEO_PATH = "truck-driver-orientation.mp4";
 const TRUCK_DRIVER_AFFIDAVIT_FORM = {
-  title: "Truck Driver Drug Screen Affidavit",
-  fields: ["Driver Name", "Company / Carrier", "CDL Number", "CDL State", "Date Drug Screen Was Completed", "Collection Facility / Lab", "Result", "Certification"],
-  genericPdfLongFields: ["Collection Facility / Lab", "Certification"],
+  title: "Truck Driver Orientation & Drug Screen Verification",
+  fields: ["Employee Name", "Contractor", "Authorized Representative (Print)", "Date", "Certification", "Minimum Requirements", "Termination Notice"],
+  genericPdfLongFields: ["Certification", "Minimum Requirements", "Termination Notice"],
   statusGroups: [],
   choiceGroups: [],
 };
-const TRUCK_DRIVER_CERTIFY = "I certify that I completed a drug screen within the last 30 days, that the result was NEGATIVE, and that the information I have provided is true and correct. I understand that a positive or missing result, or false information, will prevent me from receiving a truck driver badge.";
+const TRUCK_DRIVER_CERTIFY = "As an Authorized Representative of the above named CONTRACTOR, I hereby certify the above mentioned EMPLOYEE completed the Truck Driver Orientation and as such understands and will abide by the requirements set forth in the orientation. I further certify that the driver successfully completed a drug screen within the past 30 days and said result proved negative.";
+const TRUCK_DRIVER_TERMS = "It is understood that these are minimum requirements and do not preclude any driver from compliance with local, federal or state laws. All drivers must have the orientation badge on their person at all times. Any disregard for local, federal, state laws or project policies or procedures may result in corrective action up to and including removal from the project.";
+const TRUCK_DRIVER_TERMINATION = "I understand that if at any point in the future this EMPLOYEE is terminated or is removed from the PROJECT, a written notification will be submitted to the project Safety Department.";
 
 function tdDriverStorageKey(slug) { return `safetyhub_td_${slug}`; }
 function tdVerifyLink(slug, token) { return `${window.location.origin}${window.location.pathname}?project=${slug}&screen=verifytruckdriver&v=${token}`; }
@@ -13255,33 +13257,37 @@ function TruckDriverBadgeCard({ driver, projectSlug, projectName }) {
 }
 
 function TruckDriverAffidavitStep({ driver, projectSlug, projectName, onSaved }) {
-  const [f, setF] = useState({ name: driver.name || "", company: driver.company || "", cdl: driver.cdl_number || "", state: driver.cdl_state || "", date: "", lab: "" });
-  const [negative, setNegative] = useState(false);
-  const [sigEmpty, setSigEmpty] = useState(true);
-  const sigRef = useRef(null);
+  const [f, setF] = useState({ name: driver.name || "", company: driver.company || "", rep: "" });
+  const [certified, setCertified] = useState(false);
+  const [repEmpty, setRepEmpty] = useState(true);
+  const [empEmpty, setEmpEmpty] = useState(true);
+  const repRef = useRef(null), empRef = useRef(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
-  const ready = f.name.trim() && f.company.trim() && f.cdl.trim() && f.date && f.lab.trim() && negative && !sigEmpty;
+  const ready = f.name.trim() && f.company.trim() && f.rep.trim() && certified && !repEmpty && !empEmpty;
   const inp = "w-full mt-1 mb-3 rounded-md border px-2.5 py-2 text-[14px]";
   const lbl = { color: STEEL, fontFamily: "IBM Plex Mono, monospace" };
   const save = async () => {
     setBusy(true); setErr("");
     try {
-      const [y, m, d] = f.date.split("-");
-      const dateLabel = `${m}/${d}/${y}`;
+      const now = new Date();
+      const dateLabel = now.toLocaleDateString("en-US", { timeZone: "America/Chicago" });
       const bytes = await buildGenericFormPdf({
         form: TRUCK_DRIVER_AFFIDAVIT_FORM, slug: projectSlug, projectName,
-        standardValues: { name: f.name.trim(), subcontractor: f.company.trim(), date: dateLabel },
-        fieldValues: { 0: f.name.trim(), 1: f.company.trim(), 2: f.cdl.trim(), 3: f.state.trim(), 4: dateLabel, 5: f.lab.trim(), 6: "NEGATIVE (passed)", 7: TRUCK_DRIVER_CERTIFY },
+        standardValues: { name: f.rep.trim(), subcontractor: f.company.trim(), date: dateLabel },
+        fieldValues: { 0: f.name.trim(), 1: f.company.trim(), 2: f.rep.trim(), 3: dateLabel, 4: TRUCK_DRIVER_CERTIFY, 5: TRUCK_DRIVER_TERMS, 6: TRUCK_DRIVER_TERMINATION },
         choiceValues: {}, statusValues: {}, longFields: TRUCK_DRIVER_AFFIDAVIT_FORM.genericPdfLongFields,
-        submittedAt: fmtSubmittedAt(new Date()), photos: {},
-        signatures: [{ label: "Driver Signature", dataUrl: sigRef.current ? sigRef.current.toDataURL("image/png") : null }],
+        submittedAt: fmtSubmittedAt(now), photos: {},
+        signatures: [
+          { label: "Authorized Representative Verifying Orientation - " + f.rep.trim(), dataUrl: repRef.current ? repRef.current.toDataURL("image/png") : null },
+          { label: "Employee Acknowledgement of Attendance - " + f.name.trim(), dataUrl: empRef.current ? empRef.current.toDataURL("image/png") : null },
+        ],
       });
-      const path = `truck-driver-affidavit-${driver.id}-${Date.now()}.pdf`;
+      const path = `truck-driver-verification-${driver.id}-${Date.now()}.pdf`;
       const { error: upErr } = await supabase.storage.from("documents").upload(path, new Blob([bytes], { type: "application/pdf" }), { contentType: "application/pdf" });
       if (upErr) throw new Error(upErr.message || "Upload failed");
       const { data: u } = supabase.storage.from("documents").getPublicUrl(path);
-      const { data: ok } = await supabase.rpc("td_save_affidavit", { p_id: driver.id, p_pdf_url: u.publicUrl, p_data: { ...f, result: "NEGATIVE", signedAt: new Date().toISOString() } });
+      const { data: ok } = await supabase.rpc("td_save_affidavit", { p_id: driver.id, p_pdf_url: u.publicUrl, p_data: { employee: f.name, contractor: f.company, representative: f.rep, certified: true, signedAt: now.toISOString() } });
       if (!ok) throw new Error("Could not save. Please try again.");
       const { data: fresh } = await supabase.rpc("td_get", { p_id: driver.id });
       onSaved(fresh);
@@ -13290,27 +13296,28 @@ function TruckDriverAffidavitStep({ driver, projectSlug, projectName, onSaved })
   };
   return (
     <div>
-      <div className="text-[12px] mb-3" style={{ color: STEEL }}>Complete this drug screen affidavit. It becomes a signed PDF that is stored on your badge record.</div>
-      <label className="text-[10px] uppercase font-bold" style={lbl}>Driver Name</label>
+      <div className="text-[12px] mb-3" style={{ color: STEEL }}>Your employer's authorized representative and you both sign this form. It becomes a PDF stored on your badge record.</div>
+      <div className="text-[10px] uppercase font-bold" style={lbl}>Project</div>
+      <div className="text-[13px] mb-3 font-bold">{projectName}</div>
+      <label className="text-[10px] uppercase font-bold" style={lbl}>Employee Name</label>
       <input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} className={inp} style={{ borderColor: "#C9C6BC" }} />
-      <label className="text-[10px] uppercase font-bold" style={lbl}>Company / Carrier</label>
+      <label className="text-[10px] uppercase font-bold" style={lbl}>Contractor</label>
       <input value={f.company} onChange={(e) => setF({ ...f, company: e.target.value })} className={inp} style={{ borderColor: "#C9C6BC" }} />
-      <div className="flex gap-2">
-        <div className="flex-1"><label className="text-[10px] uppercase font-bold" style={lbl}>CDL Number</label><input value={f.cdl} onChange={(e) => setF({ ...f, cdl: e.target.value })} className={inp} style={{ borderColor: "#C9C6BC" }} /></div>
-        <div style={{ width: 80 }}><label className="text-[10px] uppercase font-bold" style={lbl}>State</label><input value={f.state} onChange={(e) => setF({ ...f, state: e.target.value })} className={inp} style={{ borderColor: "#C9C6BC" }} maxLength={2} autoCapitalize="characters" /></div>
-      </div>
-      <label className="text-[10px] uppercase font-bold" style={lbl}>Date Drug Screen Was Completed</label>
-      <input type="date" max={new Date().toLocaleDateString("en-CA")} value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} className={inp} style={{ borderColor: "#C9C6BC" }} />
-      <label className="text-[10px] uppercase font-bold" style={lbl}>Collection Facility / Lab</label>
-      <input value={f.lab} onChange={(e) => setF({ ...f, lab: e.target.value })} className={inp} style={{ borderColor: "#C9C6BC" }} />
-      <button onClick={() => setNegative((n) => !n)} className="w-full text-left flex items-start gap-2 rounded-md border p-2.5 mb-3" style={{ borderColor: negative ? GOLD : "#C9C6BC", background: negative ? "#FFF8E1" : "white" }}>
-        {negative ? <CheckCircle2 size={18} color={GOLD} className="flex-shrink-0 mt-0.5" /> : <Circle size={18} color={STEEL} className="flex-shrink-0 mt-0.5" />}
-        <span className="text-[12px] leading-snug">{TRUCK_DRIVER_CERTIFY}</span>
+      <div className="rounded-md p-2.5 mb-2 text-[12px] leading-snug" style={{ background: "#F4F3EF" }}>{TRUCK_DRIVER_CERTIFY}</div>
+      <div className="rounded-md p-2.5 mb-2 text-[11px] leading-snug" style={{ background: "#F4F3EF", color: STEEL }}>{TRUCK_DRIVER_TERMS}</div>
+      <div className="rounded-md p-2.5 mb-3 text-[11px] leading-snug" style={{ background: "#F4F3EF", color: STEEL }}>{TRUCK_DRIVER_TERMINATION}</div>
+      <button onClick={() => setCertified((n) => !n)} className="w-full text-left flex items-start gap-2 rounded-md border p-2.5 mb-3" style={{ borderColor: certified ? GOLD : "#C9C6BC", background: certified ? "#FFF8E1" : "white" }}>
+        {certified ? <CheckCircle2 size={18} color={GOLD} className="flex-shrink-0 mt-0.5" /> : <Circle size={18} color={STEEL} className="flex-shrink-0 mt-0.5" />}
+        <span className="text-[12px] leading-snug">The statements above are true, and I understand them.</span>
       </button>
-      <label className="text-[10px] uppercase font-bold flex items-center gap-1" style={lbl}><PenLine size={12} /> Driver Signature</label>
-      <div className="mt-1 mb-3"><SignaturePad autoName={f.name.trim()} onChange={setSigEmpty} canvasRef={sigRef} /></div>
+      <label className="text-[10px] uppercase font-bold" style={lbl}>Authorized Representative Verifying Orientation (Print Name)</label>
+      <input value={f.rep} onChange={(e) => setF({ ...f, rep: e.target.value })} className={inp} style={{ borderColor: "#C9C6BC" }} />
+      <label className="text-[10px] uppercase font-bold flex items-center gap-1" style={lbl}><PenLine size={12} /> Representative Signature</label>
+      <div className="mt-1 mb-3"><SignaturePad autoName={f.rep.trim()} onChange={setRepEmpty} canvasRef={repRef} /></div>
+      <label className="text-[10px] uppercase font-bold flex items-center gap-1" style={lbl}><PenLine size={12} /> Employee Acknowledgement of Attendance</label>
+      <div className="mt-1 mb-3"><SignaturePad autoName={f.name.trim()} onChange={setEmpEmpty} canvasRef={empRef} /></div>
       {err && <div className="text-[11px] mb-2" style={{ color: ALERT }}>{err}</div>}
-      <button disabled={!ready || busy} onClick={save} className="w-full rounded-md py-3 text-sm font-bold disabled:opacity-40" style={{ background: GOLD, color: INK, fontFamily: "Oswald, sans-serif" }}>{busy ? "Saving..." : "Sign & Save Affidavit"}</button>
+      <button disabled={!ready || busy} onClick={save} className="w-full rounded-md py-3 text-sm font-bold disabled:opacity-40" style={{ background: GOLD, color: INK, fontFamily: "Oswald, sans-serif" }}>{busy ? "Saving..." : "Sign & Save Form"}</button>
     </div>
   );
 }
@@ -13475,9 +13482,9 @@ function TruckDriverScreen({ activeProjectId, user, go }) {
       <div className="rounded-md border p-3 mb-4" style={{ borderColor: GOLD, background: "#FFFBEA" }}>
         <div className="text-[11px] uppercase font-bold mb-1" style={lbl}>What you will do</div>
         <ol className="text-[12px] leading-snug list-decimal pl-4" style={{ color: "#333" }}>
-          <li>Sign a drug screen affidavit</li>
           <li>Photo of your CDL and a selfie for your badge</li>
-          <li>Watch the 20 minute safety video</li>
+          <li>Watch the 20 minute orientation video</li>
+          <li>Sign the orientation and drug screen verification (you and your employer's representative)</li>
           <li>We review everything and issue your truck driver badge</li>
         </ol>
       </div>
@@ -13512,9 +13519,9 @@ function TruckDriverScreen({ activeProjectId, user, go }) {
 
   const editable = driver.status === "in_progress" || driver.status === "rejected";
   const steps = [
-    { key: "affidavit", title: "Drug Screen Affidavit", done: driver.affidavit_done, locked: false },
     { key: "photos", title: "CDL Photo and Badge Selfie", done: driver.photos_done, locked: false },
-    { key: "video", title: "Safety Video (20 min)", done: driver.video_done, locked: !driver.affidavit_done || !driver.photos_done },
+    { key: "video", title: "Orientation Video (20 min)", done: driver.video_done, locked: !driver.photos_done },
+    { key: "affidavit", title: "Orientation & Drug Screen Verification", done: driver.affidavit_done, locked: !driver.video_done },
   ];
   const allDone = steps.every((s) => s.done);
   const current = openStep || (steps.find((s) => !s.done && !s.locked) || {}).key || null;
@@ -13605,7 +13612,7 @@ function TruckDriverAdminCard({ d, user, projectSlug, projectName, onChanged }) 
           <div className="rounded-md border p-2 mb-3" style={{ borderColor: "#E4E2DA" }}>
             <div className="text-[10px] uppercase font-bold mb-1" style={{ color: STEEL, ...mono }}>Documents on this driver's badge</div>
             <div className="flex flex-wrap gap-2 mb-2">
-              <button disabled={!d.affidavit_pdf_url} onClick={() => window.open(d.affidavit_pdf_url, "_blank")} className={`${btn} px-3 border`} style={{ borderColor: "#C9C6BC", color: d.affidavit_pdf_url ? INK : "#9AA0A6", ...mono }}>{d.affidavit_pdf_url ? "Drug Screen Affidavit" : "Affidavit - missing"}</button>
+              <button disabled={!d.affidavit_pdf_url} onClick={() => window.open(d.affidavit_pdf_url, "_blank")} className={`${btn} px-3 border`} style={{ borderColor: "#C9C6BC", color: d.affidavit_pdf_url ? INK : "#9AA0A6", ...mono }}>{d.affidavit_pdf_url ? "Orientation & Drug Screen Form" : "Verification form - missing"}</button>
               <button disabled={!d.cdl_photo_url} onClick={() => window.open(d.cdl_photo_url, "_blank")} className={`${btn} px-3 border`} style={{ borderColor: "#C9C6BC", color: d.cdl_photo_url ? INK : "#9AA0A6", ...mono }}>{d.cdl_photo_url ? "CDL Photo" : "CDL - missing"}</button>
               <button disabled={!d.selfie_url} onClick={() => window.open(d.selfie_url, "_blank")} className={`${btn} px-3 border`} style={{ borderColor: "#C9C6BC", color: d.selfie_url ? INK : "#9AA0A6", ...mono }}>{d.selfie_url ? "Selfie" : "Selfie - missing"}</button>
             </div>
@@ -13613,7 +13620,7 @@ function TruckDriverAdminCard({ d, user, projectSlug, projectName, onChanged }) 
             <div className="text-[11px] font-bold" style={{ color: d.video_completed_at ? "#2E7D32" : ALERT }}>
               {d.video_completed_at ? `Safety video completed ${new Date(d.video_completed_at).toLocaleString()}` : `Safety video not completed${d.video_duration ? ` (${Math.round(((d.video_seconds || 0) / d.video_duration) * 100)}% watched)` : ""}`}
             </div>
-            {d.affidavit_signed_at && <div className="text-[10px]" style={{ color: STEEL }}>Affidavit signed {new Date(d.affidavit_signed_at).toLocaleString()}</div>}
+            {d.affidavit_signed_at && <div className="text-[10px]" style={{ color: STEEL }}>Verification form signed {new Date(d.affidavit_signed_at).toLocaleString()}</div>}
             {d.reviewed_at && <div className="text-[10px]" style={{ color: STEEL }}>Reviewed by {d.reviewed_by || "-"} on {new Date(d.reviewed_at).toLocaleDateString()}{d.review_notes ? ` - ${d.review_notes}` : ""}</div>}
           </div>
           {d.status === "submitted" && !rejecting && (
