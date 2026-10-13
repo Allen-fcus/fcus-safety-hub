@@ -5994,11 +5994,12 @@ const FORMS_DEFAULT = [
     trailingFieldLabels: ["Special Conditions (if any)"],
     bigTextFields: ["Special Conditions (if any)"],
     bigTextHints: { "Special Conditions (if any)": "Type any special conditions for this hot work permit, or write None." },
+    sameDayPair: { begin: "Permit Begins (Date/Time)", end: "Permit Expires (Date/Time)" },
     requiresProof: true,
     proofLabel: "Supporting Documentation",
     proofRequired: false,
     fields: [
-      "Contractor Performing Work", "Contact Name", "Contact Tel",
+      "Contractor Performing Work", "Contact Name", "Contact Phone Number",
       "Location of Work", "Description of Work", "Equipment to be Used",
       "Permit Begins (Date/Time)", "Permit Expires (Date/Time)",
       "Special Conditions (if any)",
@@ -6532,7 +6533,7 @@ const FIELD_HINTS = {
   "comments": "Anything else the reviewer should know. Leave blank if nothing to add.",
   "contractor performing work": "Company that will perform the work.",
   "contact name": "Person to call about this work.",
-  "contact tel": "Phone number for the contact person.",
+  "contact phone number": "Phone number for the contact person.",
   "location of work": "Exactly where the work will be done.",
   "description of work": "Briefly describe the work (e.g., welding handrail, cutting rebar).",
   "equipment to be used": "List the equipment that will be used.",
@@ -7063,7 +7064,7 @@ const DESIGNATION_PDF_CONFIGS = {
     buildTextFields: ({ standardValues, getField }) => ({
       contractor_performing_work: getField("Contractor Performing Work"),
       contact_name: getField("Contact Name"),
-      telephone: getField("Contact Tel"),
+      telephone: getField("Contact Phone Number"),
       location_of_work: getField("Location of Work"),
       description_of_work: getField("Description of Work"),
       equipment_to_be_used: getField("Equipment to be Used"),
@@ -8409,6 +8410,25 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
     return lines.join("\n");
   };
 
+  const [sdBegin, setSdBegin] = useState("");
+  const [sdEndTime, setSdEndTime] = useState("23:59");
+  const sdFmt = (d, t) => {
+    if (!d || !t) return "";
+    const [y, m, dd] = d.split("-"); let [h, mi] = t.split(":").map(Number);
+    const ap = h >= 12 ? "PM" : "AM"; h = h % 12 || 12;
+    return `${m}/${dd}/${y} ${h}:${String(mi).padStart(2, "0")} ${ap}`;
+  };
+  const sdIdx = (label) => (form.fields || []).indexOf(label);
+  const onSameDayBegin = (val, bi) => {
+    setSdBegin(val);
+    const d = val.slice(0, 10), t = val.slice(11, 16);
+    setValues((v) => ({ ...v, [bi]: sdFmt(d, t), [sdIdx(form.sameDayPair.end)]: sdFmt(d, sdEndTime) }));
+  };
+  const onSameDayEnd = (t, ei) => {
+    setSdEndTime(t);
+    setValues((v) => ({ ...v, [ei]: sdFmt(sdBegin.slice(0, 10), t) }));
+  };
+
   const renderPhotoPicker = (f) => (
                   <div>
                     <input ref={(el) => { photoInputRefs.current[f] = el; }} type="file" accept="image/*" multiple className="hidden" onChange={(e) => {
@@ -8862,7 +8882,21 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
               <div key={i}>
                 <label className="text-[11px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{f}</label>
                 <FieldHint label={f} />
-                {form.photoFields && form.photoFields[f] ? (
+                {form.sameDayPair && (f === form.sameDayPair.begin || f === form.sameDayPair.end) ? (
+                  f === form.sameDayPair.begin ? (
+                    <input type="datetime-local" value={sdBegin} className="w-full mt-1 rounded-md border px-2.5 py-1.5 text-[13px]" style={{ borderColor: "#C9C6BC" }}
+                      onChange={(e) => onSameDayBegin(e.target.value, i)} />
+                  ) : (
+                    <div>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-[12px]" style={{ color: STEEL }}>{sdBegin ? sdBegin.slice(0, 10).split("-").reverse().join("/").replace(/^(\d\d)\/(\d\d)\/(\d{4})$/, "$2/$1/$3") : "Set the begin date first"} at</span>
+                        <input type="time" value={sdEndTime} disabled={!sdBegin} className="rounded-md border px-2.5 py-1.5 text-[13px]" style={{ borderColor: "#C9C6BC" }}
+                          onChange={(e) => onSameDayEnd(e.target.value, i)} />
+                      </div>
+                      <div className="text-[10px] mt-1" style={{ color: STEEL }}>Fills in automatically from the begin date and ends the same day. Change the time if needed.</div>
+                    </div>
+                  )
+                ) : form.photoFields && form.photoFields[f] ? (
                   renderPhotoPicker(f)
                 ) : form.chipFields && form.chipFields[f] ? (
                   <div>
