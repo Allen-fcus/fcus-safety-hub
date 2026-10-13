@@ -7752,7 +7752,7 @@ async function buildGenericFormPdf({ form, slug, projectName, standardValues, fi
 }
 
 // Generated Job Hazard Analysis PDF (landscape letter): header, job info, task steps table, checklists, signature.
-async function buildJhaPdf({ form, slug, projectName, standardValues, fieldValues, stepValues, stepCount, statusValues, conditions, signatureDataUrl, pick, lifesaving, submittedAt }) {
+async function buildJhaPdf({ form, slug, projectName, standardValues, fieldValues, stepValues, stepCount, statusValues, conditions, signatureDataUrl, pick, lifePick, submittedAt }) {
   const { StandardFonts, rgb } = await import("pdf-lib");
   const doc = await PDFDocument.create();
   const sans = await doc.embedFont(StandardFonts.Helvetica);
@@ -7812,7 +7812,7 @@ async function buildJhaPdf({ form, slug, projectName, standardValues, fieldValue
 
   // ---- job info ----
   const info = [
-    ["Date / Time Submitted", submittedAt || standardValues.date], ["Project", projectName || ""],
+    ["Submitted", submittedAt || standardValues.date], ["Project", projectName || ""],
     ["Subcontractor", standardValues.subcontractor], ["Prepared by", standardValues.name],
     ...(NO_SEGMENT_PROJECTS.includes(slug) ? [] : [["Segment", standardValues.segment]]), ["Conditions", conditions],
   ];
@@ -7837,13 +7837,30 @@ async function buildJhaPdf({ form, slug, projectName, standardValues, fieldValue
   y -= 8;
 
   // ---- hazards and controls ----
-  if (lifesaving && lifesaving.trim()) {
-    const lines = wrap(lifesaving, sans, 9.5, W - 2 * M - 190);
-    need(lines.length * 12 + 6);
-    page.drawText("LIFESAVING CONTROL", { x: M, y: y - 9, size: 7, font: sansB, color: grey });
-    lines.forEach((ln, li) => page.drawText(ln, { x: M + 190, y: y - 9 - li * 12, size: 9.5, font: sans, color: ink }));
-    y -= lines.length * 12 + 6;
-    page.drawLine({ start: { x: M, y: y + 3 }, end: { x: W - M, y: y + 3 }, thickness: 0.4, color: line });
+  {
+    const lw = 190, rw = W - 2 * M - 190;
+    const lrows = (lifePick ? lifePick.h : []).map((h) => ({ h, c: (LIFE_THREATENING[h] || []).filter((c) => lifePick.c.includes(c)) }));
+    if (lifePick && (lifePick.xc || "").trim()) lrows.push({ h: "Other", c: lifePick.xc.trim().split("\n") });
+    const lhead = () => {
+      need(40);
+      page.drawRectangle({ x: M, y: y - 16, width: W - 2 * M, height: 16, color: rgb(0.78, 0.07, 0.18) });
+      page.drawText("LIFE-THREATENING HAZARDS", { x: M + 4, y: y - 11.5, size: 7.5, font: sansB, color: rgb(1, 1, 1) });
+      page.drawText("LIFESAVING CONTROLS SELECTED", { x: M + lw + 4, y: y - 11.5, size: 7.5, font: sansB, color: rgb(1, 1, 1) });
+      y -= 16;
+    };
+    lhead();
+    if (lrows.length === 0) lrows.push({ h: "None identified for this task", c: [] });
+    lrows.forEach((r) => {
+      const hl = wrap(r.h, sansB, 9, lw - 8);
+      const cl = r.c.length ? r.c.flatMap((c) => wrap("- " + c, sans, 8.5, rw - 8)) : ["-"];
+      const rh = Math.max(hl.length, cl.length) * 11 + 8;
+      if (y - rh < 44) { newPage(); lhead(); }
+      hl.forEach((ln, li) => page.drawText(ln, { x: M + 4, y: y - 11 - li * 11, size: 9, font: sansB, color: ink }));
+      cl.forEach((ln, li) => page.drawText(ln, { x: M + lw + 4, y: y - 11 - li * 11, size: 8.5, font: sans, color: ink }));
+      y -= rh;
+      page.drawLine({ start: { x: M, y }, end: { x: W - M, y }, thickness: 0.4, color: line });
+    });
+    y -= 10;
   }
   y -= 8;
   const cols = [{ k: "Hazard", w: 190 }, { k: "Controls confirmed in place", w: W - 2 * M - 190 }];
@@ -8115,6 +8132,68 @@ async function fetchSiteConditions(slug) {
 }
 
 // Pick hazards, then tick the controls in place. Writes plain text back so the email, saved copy and PDF all keep working.
+// Tier 1 life-threatening hazards and the lifesaving controls that physically prevent exposure
+const LIFE_THREATENING = {
+  "Electrical Energy / Overhead Powerline": ["De-energization and physical isolation", "Insulated barriers or rigid exclusion zones", "Engineered minimum approach distance controls"],
+  "Stored Mechanical Energy": ["Lockout devices that physically prevent movement", "Mechanical blocking or pinning systems", "Energy release restraint systems"],
+  "Gravity (Falling Objects)": ["Barricades", "Toe boards, debris netting", "Overhead protection"],
+  "Rotating Equipment": ["LOTO", "Interlocked guards that stop motion when opened", "Physical barrier preventing access to moving parts"],
+  "Working in Live Traffic / Struck By": ["Rigid barrier and crash-rated protection", "Engineered traffic control devices", "TMAs"],
+  "Equipment Operator": ["Interlocks", "Rollover protection structures (ROPS/FOPS)"],
+  "Open Holes": ["Hole covers that withstand twice the intended load, secured and labeled", "Handrail and barrier around the open hole", "Structural decking"],
+  "Pressurized Systems": ["LOTO, safe depressurization", "Physical isolation and pressure relief devices", "Hard-piped barriers or shielding", "Engineered rupture protection"],
+  "Suspended Loads / Lifting Operations": ["Load arrestors, rigging redundancy, load moment indicator", "Load holding and overload protection devices", "Mechanical load stabilization systems"],
+  "Working at Height": ["Solid edge protection / working from ground level", "Hole covers rated for twice the intended load"],
+  "Mobile Plant / Vehicles": ["Solid barriers for segregation", "Close proximity equipment shut off", "Interlocked access controls"],
+  "Confined Spaces": ["Engineered ventilation systems", "Fixed access controls preventing unauthorized entry", "Physical isolation of all energy sources"],
+  "Hot Work": ["Physical removal or isolation of combustibles", "Fixed fire-resistant barriers", "Automatic fire suppression systems"],
+  "Excavation": ["Engineered shoring, shielding or trench boxes", "Physical edge protection and access controls"],
+  "Chemical / Hazardous Materials": ["Substitution, engineering controls, ventilation", "Physical containment and secondary containment"],
+};
+
+function LifeThreateningPicker({ pick, onChange }) {
+  const p = pick || { h: [], c: [], xc: "" };
+  const names = Object.keys(LIFE_THREATENING);
+  const toggleH = (h) => {
+    const has = p.h.includes(h);
+    onChange({ ...p, h: has ? p.h.filter((x) => x !== h) : names.filter((n) => p.h.includes(n) || n === h), c: has ? p.c.filter((c) => !LIFE_THREATENING[h].includes(c)) : p.c });
+  };
+  const toggleC = (c) => onChange({ ...p, c: p.c.includes(c) ? p.c.filter((x) => x !== c) : [...p.c, c] });
+  const lab = { color: STEEL, fontFamily: "IBM Plex Mono, monospace" };
+  return (
+    <div className="rounded-md p-3 border-2 mb-3" style={{ borderColor: ALERT, background: "#FFF5F5" }}>
+      <div className="text-[12px] uppercase font-bold" style={{ color: ALERT, fontFamily: "IBM Plex Mono, monospace" }}>Life-Threatening Hazards</div>
+      <div className="text-[10px] mb-1.5" style={{ color: STEEL }}>Tap every life-threatening hazard that applies to this task.</div>
+      <div className="flex flex-wrap gap-1">
+        {names.map((h) => {
+          const on = p.h.includes(h);
+          return <button key={h} type="button" onClick={() => toggleH(h)} className="text-[11px] px-2 py-1 rounded-full border" style={{ borderColor: on ? ALERT : "#C9C6BC", background: on ? ALERT : "white", color: on ? "white" : INK, fontWeight: on ? 700 : 400 }}>{h}</button>;
+        })}
+      </div>
+      <label className="text-[10px] uppercase font-bold block mt-3" style={lab}>Select Life Saving Controls</label>
+      {p.h.length === 0 && <div className="text-[11px] mt-1" style={{ color: STEEL }}>Pick a life-threatening hazard above and its lifesaving controls appear here. If none apply to this task, leave this blank.</div>}
+      {p.h.map((h) => (
+        <div key={h} className="mt-1.5 rounded-md border p-2" style={{ borderColor: "#E4E2DA", background: "white" }}>
+          <div className="text-[11px] font-bold mb-1">{h}</div>
+          {LIFE_THREATENING[h].map((c) => (
+            <label key={c} className="flex items-start gap-2 py-0.5 text-[12px]">
+              <input type="checkbox" checked={p.c.includes(c)} onChange={() => toggleC(c)} className="mt-0.5" />
+              <span>{c}</span>
+            </label>
+          ))}
+        </div>
+      ))}
+      <textarea rows={2} value={p.xc} onChange={(e) => onChange({ ...p, xc: e.target.value })} placeholder="Other lifesaving controls (optional)" className="w-full mt-1.5 rounded-md border px-2.5 py-1.5 text-[12px] bg-white" style={{ borderColor: "#C9C6BC" }} />
+    </div>
+  );
+}
+function composeLifeText(p) {
+  if (!p || (!p.h.length && !(p.xc || "").trim())) return "";
+  const rows = p.h.map((h) => `${h}: ${(LIFE_THREATENING[h] || []).filter((c) => p.c.includes(c)).join("; ") || "no control selected"}`);
+  if ((p.xc || "").trim()) rows.push(`Other: ${p.xc.trim()}`);
+  return rows.join("\n");
+}
+
 function HazardControlPicker({ pick, onChange, suggest }) {
   const [open, setOpen] = useState(false);
   const p = pick || { h: [], c: [], xh: "", xc: "" };
@@ -8249,6 +8328,7 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
   const [stepCount, setStepCount] = useState(form.stepPlan ? (form.stepPlan.useLibrary ? 1 : form.stepPlan.minSteps) : 0);
   const [stepValues, setStepValues] = useState({});
   const [stepPicks, setStepPicks] = useState({});
+  const [lifePick, setLifePick] = useState({ h: [], c: [], xc: "" });
   const [conditions, setConditions] = useState("");
   const [weatherSuggest, setWeatherSuggest] = useState([]);
   useEffect(() => {
@@ -8307,7 +8387,7 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
       if (conditions.trim()) lines.push("", `Conditions at start of shift: ${conditions.trim()}`);
       if (form.stepPlan.useLibrary) {
         const sv0 = stepValues[0] || {};
-        lines.push("", `Hazards: ${sv0[1] || ""}`, "", "Controls confirmed in place:", sv0[2] || "", "", `Lifesaving control: ${sv0[3] || ""}`);
+        lines.push("", "LIFE-THREATENING HAZARDS & LIFESAVING CONTROLS:", composeLifeText(lifePick) || "None selected", "", `Hazards: ${sv0[1] || ""}`, "", "Controls confirmed in place:", sv0[2] || "");
       } else {
       lines.push("", "Task Steps:");
       Array.from({ length: stepCount }).forEach((_, si) => {
@@ -8436,7 +8516,7 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
         const filledBytes = await buildJhaPdf({
           form, slug: activeProjectId, projectName: projName, standardValues, fieldValues: values,
           stepValues, stepCount, statusValues: effectiveStatusValues, conditions, signatureDataUrl,
-          pick: stepPicks[0] || { h: [], c: [], xh: "", xc: "" }, lifesaving: (stepValues[0] || {})[3] || "", submittedAt,
+          pick: stepPicks[0] || { h: [], c: [], xh: "", xc: "" }, lifePick, submittedAt,
         });
         const blob = new Blob([filledBytes], { type: "application/pdf" });
         const localUrl = URL.createObjectURL(blob);
@@ -8643,7 +8723,7 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
         await supabase.rpc("submit_form", {
           p_token: user.sessionToken,
           p_form_title: form.title,
-          p_data: { ...standardValues, linkId, linkRef, submittedAtLabel: submittedAt, statusRefs, refreshes: [], fields: values, statusValues: effectiveStatusValues, choiceValues, stepValues, filledPdfUrl, proofDocUrls, category },
+          p_data: { ...standardValues, lifeThreatening: form.stepPlan && form.stepPlan.useLibrary ? composeLifeText(lifePick) : undefined, linkId, linkRef, submittedAtLabel: submittedAt, statusRefs, refreshes: [], fields: values, statusValues: effectiveStatusValues, choiceValues, stepValues, filledPdfUrl, proofDocUrls, category },
           p_signature: null,
         });
       } catch (e) {
@@ -8809,12 +8889,9 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
                 <label className="text-[10px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Conditions at start of shift (auto-filled, edit if needed)</label>
                 <input value={conditions} onChange={(e) => setConditions(e.target.value)} placeholder="Weather at the work site" className="w-full mt-1 rounded-md border px-2.5 py-1.5 text-[13px]" style={{ borderColor: "#C9C6BC" }} />
               </div>
+              <LifeThreateningPicker pick={lifePick} onChange={setLifePick} />
               <div className="rounded-md p-3 border" style={{ borderColor: "#E4E2DA", background: "#FCFCFA" }}>
                 <HazardControlPicker pick={stepPicks[0]} onChange={(np) => setStepPick(0, np)} suggest={weatherSuggest} />
-                <div className="mt-3">
-                  <label className="text-[10px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Lifesaving control</label>
-                  <textarea rows={2} value={(stepValues[0] || {})[3] || ""} onChange={(e) => setStepField(0, 3, e.target.value)} className="w-full mt-1 rounded-md border px-2.5 py-1.5 text-[13px]" style={{ borderColor: "#C9C6BC" }} />
-                </div>
               </div>
             </div>
           )}
