@@ -2944,6 +2944,7 @@ function SignInCard({ entry, user, onDone }) {
           email: entry.email,
           phone: entry.phone,
           photoUrl: entry.photo_url,
+          orientationDate: entry.submitted_at ? new Date(entry.submitted_at).toLocaleDateString("en-CA") : undefined,
           onCreated: async () => {
             await supabase.rpc("delete_orientation_signin", { p_token: user.sessionToken, p_signin_id: entry.id });
           },
@@ -5961,6 +5962,13 @@ const FORMS_DEFAULT = [
     pdfFillTemplate: "generic-form-pdf",
     genericPdfWrap: true,
     genericPdfLongFields: ["Purpose of Entry", "Location / Description of Work Area", "Comments"],
+    linkLabel: "Confined Space Evaluation + Entry Permit",
+    followUpForm: "Confined Space Entry Permit",
+    followUpNote: "Complete a Confined Space Entry Permit for this entry. The location and purpose are filled in for you.",
+    followUpMap: {
+      "Confined Space Location/Description/ID Number": "Location / Description of Work Area",
+      "Purpose of Entry": "Purpose of Entry",
+    },
     trailingFieldLabels: ["Comments"],
     bigTextFields: ["Comments"],
     bigTextHints: { "Comments": "Type any comments or special conditions for this entry here." },
@@ -5984,6 +5992,87 @@ const FORMS_DEFAULT = [
         label: "Equipment",
         options: ["Yes", "N/A"],
         items: ["Testing & Monitoring", "Ventilation", "Communications", "Lighting", "Ingress/Egress", "Rescue", "Personal Protection", "Barriers/Shields"],
+      },
+    ],
+  },
+  {
+    title: "Confined Space Entry Permit",
+    description: "Permit required before anyone enters a permit-required confined space. Records hazards, special requirements, atmospheric test readings, entrants and attendants, and the authorization to enter.",
+    pdfLink: "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/nti-confined-space-permit.pdf",
+    pdfLinkByProject: {
+      "nti-sylvania": "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/nti-confined-space-permit.pdf",
+      "nti-golden-triangle": "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/nti-confined-space-permit.pdf",
+      "sh99-houston": "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/sh99-confined-space-permit.pdf",
+      "nashville": "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/sh99-confined-space-permit.pdf",
+    },
+    pdfFillTemplate: "generic-form-pdf",
+    genericPdfWrap: true,
+    genericPdfNeutral: true,
+    linkLabel: "Confined Space Evaluation + Entry Permit",
+    genericPdfLongFields: [
+      "Confined Space Location/Description/ID Number", "Purpose of Entry", "Reason Permit Canceled",
+      "Rescue and Emergency Services", "Communication Procedures", "Special Requirements - Other (list)",
+      "Test Instrument(s) Used (Name, Model, Serial No., Date Last Calibrated)",
+      "Name(s) of Person(s) Testing", "Authorized Entrants", "Authorized Attendants",
+    ],
+    timeFields: ["Time In", "Time Out", "Permit Canceled Time", "Test Start Time", "Test Stop Time", "Pre Entry Time", "Central Notified Before Entrance - Time", "Central Notified After Entrance - Time"],
+    trailingFieldLabels: [
+      "Test Start Time", "Test Stop Time",
+      "Oxygen (%)", "LEL (%)", "Carbon Monoxide (PPM)", "Hydrogen Sulfide (PPM)", "Other Reading",
+      "Name(s) of Person(s) Testing", "Test Instrument(s) Used (Name, Model, Serial No., Date Last Calibrated)",
+      "CFM - Ventilation", "Size - Cubic Feet", "Pre Entry Time",
+      "Central Notified Before Entrance - Time", "Central Notified After Entrance - Time",
+      "Special Requirements - Other (list)", "Authorized Entrants", "Authorized Attendants",
+    ],
+    bigTextFields: ["Authorized Entrants", "Authorized Attendants", "Communication Procedures", "Rescue and Emergency Services"],
+    bigTextHints: {
+      "Authorized Entrants": "One name per line.",
+      "Authorized Attendants": "One name per line.",
+      "Communication Procedures": "How the attendant and entrants will communicate (radio, voice, hand signals).",
+      "Rescue and Emergency Services": "Who will perform rescue and how they are contacted (name and phone).",
+    },
+    requiresProof: true,
+    proofLabel: "Photos / Supporting Documentation",
+    proofRequired: false,
+    noteBelowProof: "PERMIT AUTHORIZATION: By signing, I certify that all actions and conditions necessary for safe entry have been performed.",
+    signatureLabels: ["Permit Authorization Signature"],
+    fields: [
+      "Confined Space Location/Description/ID Number", "Purpose of Entry",
+      "Time In", "Time Out", "Permit Canceled Time", "Reason Permit Canceled",
+      "Supervisor", "Rescue and Emergency Services", "Communication Procedures",
+      "Test Start Time", "Test Stop Time",
+      "Oxygen (%)", "LEL (%)", "Carbon Monoxide (PPM)", "Hydrogen Sulfide (PPM)", "Other Reading",
+      "Name(s) of Person(s) Testing", "Test Instrument(s) Used (Name, Model, Serial No., Date Last Calibrated)",
+      "CFM - Ventilation", "Size - Cubic Feet", "Pre Entry Time",
+      "Central Notified Before Entrance - Time", "Central Notified After Entrance - Time",
+      "Special Requirements - Other (list)", "Authorized Entrants", "Authorized Attendants",
+    ],
+    referenceTable: {
+      title: "Permissible Entry Levels - DO NOT ENTER IF EXCEEDED",
+      columns: ["Test", "Permissible Entry Level"],
+      rows: [
+        ["% of Oxygen", "19.5% to 23.5%"],
+        ["% of LEL", "Less than 10%"],
+        ["Carbon Monoxide", "35 PPM (8 hr.)"],
+        ["Hydrogen Sulfide", "10 PPM (8 hr.)"],
+        ["Other", "-"],
+      ],
+    },
+    statusGroups: [
+      {
+        label: "Hazards of Confined Space",
+        options: ["Yes", "No"],
+        items: ["Oxygen deficiency", "Combustible gas/vapor", "Combustible dust", "Carbon Monoxide", "Hydrogen Sulfide", "Toxic gas/vapor", "Toxic fumes", "Skin - chemical hazards", "Electrical hazard", "Mechanical hazard", "Engulfment hazard", "Entrapment hazard", "Thermal hazard", "Slip or fall hazard"],
+      },
+      {
+        label: "Special Requirements",
+        options: ["Yes", "No"],
+        items: ["Hot Work Permit Required", "Lockout/Tagout", "Lines broken, capped, or blanked", "Purge-flush and vent", "Secure Area - Post and Flag", "Ventilation"],
+      },
+      {
+        label: "Special Equipment",
+        options: ["Yes", "No"],
+        items: ["Breathing apparatus / respirator", "Escape harness required", "Tripod emergency escape unit", "Lifelines", "Lighting (explosion proof / low voltage)", "PPE - goggles, gloves, clothing, etc.", "Fire Extinguisher"],
       },
     ],
   },
@@ -8494,6 +8583,17 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
     setValues((v) => ({ ...v, [ei]: sdFmt(sdBegin.slice(0, 10), t) }));
   };
 
+  const renderTimeInput = (i) => (
+    <input type="time" className="w-full mt-1 rounded-md border px-2.5 py-1.5 text-[13px]" style={{ borderColor: "#C9C6BC" }}
+      value={(() => { const m = (values[i] || "").match(/^(\d{1,2}):(\d\d) (AM|PM)$/); if (!m) return ""; let h = parseInt(m[1], 10) % 12; if (m[3] === "PM") h += 12; return `${String(h).padStart(2, "0")}:${m[2]}`; })()}
+      onChange={(e) => { if (!e.target.value) { setValues((v) => ({ ...v, [i]: "" })); return; } let [h, mi] = e.target.value.split(":").map(Number); const ap = h >= 12 ? "PM" : "AM"; h = h % 12 || 12; setValues((v) => ({ ...v, [i]: `${h}:${String(mi).padStart(2, "0")} ${ap}` })); }} />
+  );
+  const renderDateInput = (i) => (
+    <input type="date" className="w-full mt-1 rounded-md border px-2.5 py-1.5 text-[13px]" style={{ borderColor: "#C9C6BC" }}
+      value={(() => { const m = (values[i] || "").match(/^(\d\d)\/(\d\d)\/(\d{4})$/); return m ? `${m[3]}-${m[1]}-${m[2]}` : ""; })()}
+      onChange={(e) => { const [y, mo, d] = e.target.value.split("-"); setValues((v) => ({ ...v, [i]: e.target.value ? `${mo}/${d}/${y}` : "" })); }} />
+  );
+
   const renderPhotoPicker = (f) => (
                   <div>
                     <input ref={(el) => { photoInputRefs.current[f] = el; }} type="file" accept="image/*" multiple className="hidden" onChange={(e) => {
@@ -8861,7 +8961,7 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
           {form.followUpForm && followUpAvailable && onFollowUp && (
             <div className="mt-4 rounded-md border-2 p-3" style={{ borderColor: GOLD, background: "#FFFBEA" }}>
               <div className="text-[12px] font-bold" style={{ fontFamily: "Oswald, sans-serif" }}>Next step: {form.followUpForm} required</div>
-              <div className="text-[11px] mb-2" style={{ color: STEEL }}>Complete a {form.followUpForm} for this excavation. The location, depth and width are filled in for you.</div>
+              <div className="text-[11px] mb-2" style={{ color: STEEL }}>{form.followUpNote || `Complete a ${form.followUpForm} for this excavation. The location, depth and width are filled in for you.`}</div>
               <button onClick={() => {
                 const pre = {};
                 Object.keys(form.followUpMap || {}).forEach((target) => {
@@ -8949,11 +9049,7 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
               <div key={i}>
                 <label className="text-[11px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{f}</label>
                 <FieldHint label={f} />
-                {(form.dateFields || []).includes(f) ? (
-                  <input type="date" className="w-full mt-1 rounded-md border px-2.5 py-1.5 text-[13px]" style={{ borderColor: "#C9C6BC" }}
-                    value={(() => { const m = (values[i] || "").match(/^(\d\d)\/(\d\d)\/(\d{4})$/); return m ? `${m[3]}-${m[1]}-${m[2]}` : ""; })()}
-                    onChange={(e) => { const [y, mo, d] = e.target.value.split("-"); setValues((v) => ({ ...v, [i]: e.target.value ? `${mo}/${d}/${y}` : "" })); }} />
-                ) : form.sameDayPair && (f === form.sameDayPair.begin || f === form.sameDayPair.end) ? (
+                {(form.timeFields || []).includes(f) ? renderTimeInput(i) : (form.dateFields || []).includes(f) ? renderDateInput(i) : form.sameDayPair && (f === form.sameDayPair.begin || f === form.sameDayPair.end) ? (
                   f === form.sameDayPair.begin ? (
                     <input type="datetime-local" value={sdBegin} className="w-full mt-1 rounded-md border px-2.5 py-1.5 text-[13px]" style={{ borderColor: "#C9C6BC" }}
                       onChange={(e) => onSameDayBegin(e.target.value, i)} />
@@ -9127,7 +9223,7 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
               <div key={`trailing-${i}`}>
                 <label className="text-[11px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{f}</label>
                 <FieldHint label={f} />
-                {form.photoFields && form.photoFields[f] ? renderPhotoPicker(f) : (
+                {(form.timeFields || []).includes(f) ? renderTimeInput(i) : (form.dateFields || []).includes(f) ? renderDateInput(i) : form.photoFields && form.photoFields[f] ? renderPhotoPicker(f) : (
                 <textarea
                   rows={(form.bigTextFields || []).includes(f) ? 5 : (f.length > 30 ? 2 : 1)}
                   placeholder={(form.bigTextHints || {})[f] || ((form.bigTextFields || []).includes(f) ? "Type here. Write \"None\" if there is nothing to add." : undefined)}
@@ -9469,7 +9565,9 @@ function FormsScreen({ user, go, activeProjectId }) {
     fields: (row.Fields || "").split("|").map((s) => s.trim()).filter(Boolean),
     pdfLink: row.PdfLink || "",
   }));
-  const forms = formsRaw.filter((f) => !f.projects || f.projects.includes(activeProjectId));
+  const forms = formsRaw
+    .filter((f) => !f.projects || f.projects.includes(activeProjectId))
+    .map((f) => (f.pdfLinkByProject && f.pdfLinkByProject[activeProjectId] ? { ...f, pdfLink: f.pdfLinkByProject[activeProjectId] } : f));
 
   const handleDownload = (f, i) => {
     setDownloaded((d) => ({ ...d, [i]: true }));
@@ -9904,7 +10002,7 @@ function AddPersonScreen({ user, onDone, prefill }) {
   const [contactEmail, setContactEmail] = useState(prefill ? prefill.email || "" : "");
   const [contactPhone, setContactPhone] = useState(prefill ? prefill.phone || "" : "");
   const [employer, setEmployer] = useState(prefill ? prefill.employer || "" : "");
-  const [orientationDate, setOrientationDate] = useState(new Date().toISOString().slice(0, 10));
+  const [orientationDate, setOrientationDate] = useState(() => prefill && prefill.orientationDate ? prefill.orientationDate : new Date().toLocaleDateString("en-CA"));
   const [trainingAccess, setTrainingAccess] = useState(false);
   const [quals, setQuals] = useState([]);
   const [qualLabel, setQualLabel] = useState("");
