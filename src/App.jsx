@@ -6350,7 +6350,7 @@ async function drawSignatureInBox(pdfDoc, page, dataUrl, box) {
   page.drawImage(png, { x: box.x + 4, y: box.y + 1, width: Math.min(w, box.width - 4), height: h * Math.min(1, (box.width - 4) / w) });
 }
 
-function SignaturePad({ onChange, canvasRef: externalCanvasRef }) {
+function SignaturePad({ onChange, canvasRef: externalCanvasRef, autoName }) {
   const { t } = useTranslation();
   const internalCanvasRef = useRef(null);
   const canvasRef = externalCanvasRef || internalCanvasRef;
@@ -6399,6 +6399,11 @@ function SignaturePad({ onChange, canvasRef: externalCanvasRef }) {
   };
 
   const onTypedChange = (v) => { setTypedName(v); renderTyped(v); };
+  const isAuto = autoName !== undefined;
+  useEffect(() => {
+    if (isAuto && mode === "type") renderTyped(autoName || "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoName, mode]);
 
   const switchMode = (m) => {
     if (m === mode) return;
@@ -6447,7 +6452,7 @@ function SignaturePad({ onChange, canvasRef: externalCanvasRef }) {
         {t("esignDisclaimer")}
       </div>
       <div className="flex rounded-md overflow-hidden border mb-2" style={{ borderColor: "#C9C6BC" }}>
-        {[["type", "Type my name"], ["draw", "Draw instead"]].map(([m, label]) => (
+        {[["type", isAuto ? "Auto signature" : "Type my name"], ["draw", "Draw instead"]].map(([m, label]) => (
           <button
             key={m}
             type="button"
@@ -6459,7 +6464,7 @@ function SignaturePad({ onChange, canvasRef: externalCanvasRef }) {
           </button>
         ))}
       </div>
-      {mode === "type" && (
+      {mode === "type" && !isAuto && (
         <input
           type="text"
           value={typedName}
@@ -6484,9 +6489,11 @@ function SignaturePad({ onChange, canvasRef: externalCanvasRef }) {
         onTouchMove={move}
         onTouchEnd={end}
       />
-      <button type="button" onClick={clear} className="mt-1.5 flex items-center gap-1 text-[11px]" style={{ color: STEEL }}>
-        <Eraser size={13} /> Clear signature
-      </button>
+      {!(isAuto && mode === "type") && (
+        <button type="button" onClick={clear} className="mt-1.5 flex items-center gap-1 text-[11px]" style={{ color: STEEL }}>
+          <Eraser size={13} /> Clear signature
+        </button>
+      )}
     </div>
   );
 }
@@ -9205,7 +9212,7 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
                     {r.name.trim() && (
                       <div className="mt-2">
                         <div className="text-[10px] uppercase font-bold mb-1" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Signature - {r.name.trim()}</div>
-                        <SignaturePad onChange={(emp) => setCrewSigEmpty((m) => ({ ...m, [r.id]: emp }))} canvasRef={getCrewRef(r.id)} />
+                        <SignaturePad autoName={r.name.trim()} onChange={(emp) => setCrewSigEmpty((m) => ({ ...m, [r.id]: emp }))} canvasRef={getCrewRef(r.id)} />
                       </div>
                     )}
                   </div>
@@ -9222,7 +9229,7 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
               <PenLine size={12} /> {form.crewSignatures ? ((form.signatureLabels && form.signatureLabels[0]) || "Supervisor Signature") : form.requiresTwoSignatures ? (form.signatureLabels && form.signatureLabels[0]) || "Signature 1" : "Signature"}
             </label>
             <div className="mt-1">
-              <SignaturePad onChange={setSigEmpty} canvasRef={signatureCanvasRef} />
+              <SignaturePad {...(form.crewSignatures ? { autoName: (standardValues.name || "").trim() } : {})} onChange={setSigEmpty} canvasRef={signatureCanvasRef} />
             </div>
           </div>
 
