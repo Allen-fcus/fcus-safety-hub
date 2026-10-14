@@ -8277,6 +8277,16 @@ async function buildGenericFormPdf({ form, slug, projectName, standardValues, fi
   });
   y -= 6;
 
+  const qrImgs = {};
+  for (const b of (form.textBlocks || [])) {
+    if (!b.qr || qrImgs[b.qr.url]) continue;
+    try {
+      const u = await QRCode.toDataURL(b.qr.url, { width: 300, margin: 1 });
+      const bin = atob(u.split(",")[1]); const bytes = new Uint8Array(bin.length);
+      for (let k = 0; k < bin.length; k++) bytes[k] = bin.charCodeAt(k);
+      qrImgs[b.qr.url] = await doc.embedPng(bytes);
+    } catch (e) { /* QR optional */ }
+  }
   // free-text blocks from the source document (statements, notes, tables, footers)
   const drawBlocks = (at) => (form.textBlocks || []).filter((b) => (b.at || "before") === at).forEach((b) => {
     if (b.title) {
@@ -8291,7 +8301,7 @@ async function buildGenericFormPdf({ form, slug, projectName, standardValues, fi
       y -= 2;
     }
     if (b.text) {
-      const fnt = b.emphasis || (b.title && !b.rows && !b.items) ? sansB : sans;
+      const fnt = b.emphasis || (b.title && !b.rows && !b.items && !b.plain) ? sansB : sans;
       const lines = wrap(b.text, fnt, 9.5, CW - 8);
       lines.forEach((ln) => { need(14); page.drawText(ln, { x: M + 4, y: y - 10, size: 9.5, font: fnt, color: ink }); y -= 12.5; });
       y -= 6;
@@ -8316,6 +8326,12 @@ async function buildGenericFormPdf({ form, slug, projectName, standardValues, fi
         y -= 2;
       });
       y -= 6;
+    }
+    if (b.qr && qrImgs[b.qr.url]) {
+      need(100);
+      page.drawImage(qrImgs[b.qr.url], { x: M + 4, y: y - 86, width: 84, height: 84 });
+      wrap(b.qr.label, sansB, 9.5, CW - 110).forEach((ln, li) => page.drawText(ln, { x: M + 100, y: y - 36 - li * 12, size: 9.5, font: sansB, color: ink }));
+      y -= 94;
     }
     if (b.rows) {
       b.rows.forEach((r) => {
@@ -9116,6 +9132,9 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
               </div>
             ))}
           </div>
+        )}
+        {b.qr && (
+          <a href={b.qr.url} target="_blank" rel="noreferrer" className="mt-2 block text-center text-[11px] font-bold uppercase py-2 rounded-sm" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>{b.qr.label}</a>
         )}
         {b.ackCheck && (
           <label className="mt-2 flex items-start gap-2 rounded-md border-2 p-2 cursor-pointer" style={{ borderColor: ackChecked ? GOLD : "#C9C6BC", background: ackChecked ? "#FFFBEA" : "white" }}>
@@ -10995,8 +11014,29 @@ function EmployeeDetail({ emp, onClose, photo }) {
   );
 }
 
+// Share a new person's badge + PIN by text or email from the admin's own phone/mail app.
+function BadgeShareButtons({ name, badge, pin, phone, email, slug, projectName }) {
+  const [copied, setCopied] = useState(false);
+  const link = `${window.location.origin}${window.location.pathname}?project=${slug}`;
+  const first = (name || "").trim().split(/\s+/)[0] || "";
+  const msg = `Hi ${first}, your ${projectName || "Safety Hub"} Safety Hub login:\nBadge number: ${badge}\nPIN: ${pin}\nLog in here: ${link}\nKeep this private and do not share your PIN.`;
+  const digits = (phone || "").replace(/[^\d+]/g, "");
+  const mono = { fontFamily: "IBM Plex Mono, monospace" };
+  const btn = "flex-1 text-center text-[10px] font-bold uppercase py-2 rounded-sm";
+  const copy = async () => { try { await navigator.clipboard.writeText(msg); setCopied(true); setTimeout(() => setCopied(false), 2500); } catch (e) { /* ignore */ } };
+  return (
+    <div className="w-full max-w-xs mt-3">
+      <div className="flex gap-2">
+        {digits ? <a href={`sms:${digits}?&body=${encodeURIComponent(msg)}`} className={btn} style={{ background: GOLD, color: INK, ...mono }}>Text It</a> : <div className={btn} style={{ background: "#EEE", color: "#999", ...mono }}>No phone</div>}
+        {email ? <a href={`mailto:${email}?subject=${encodeURIComponent((projectName || "Safety Hub") + " login")}&body=${encodeURIComponent(msg)}`} className={btn} style={{ background: GOLD, color: INK, ...mono }}>Email It</a> : <div className={btn} style={{ background: "#EEE", color: "#999", ...mono }}>No email</div>}
+        <button onClick={copy} className={btn + " border"} style={{ borderColor: "#C9C6BC", color: STEEL, ...mono }}>{copied ? "Copied" : "Copy"}</button>
+      </div>
+    </div>
+  );
+}
+
 function AddPersonScreen({ user, onDone, prefill }) {
-  const { id: activeProjectId } = useContext(ProjectContext);
+  const { id: activeProjectId, name: activeProjectName } = useContext(ProjectContext);
   const subcontractorOptions = useSubcontractors(activeProjectId);
   const [mode, setMode] = useState("single"); // "single" | "bulk"
   const [name, setName] = useState(prefill ? prefill.name || "" : "");
@@ -11104,7 +11144,7 @@ function AddPersonScreen({ user, onDone, prefill }) {
       await supabase.rpc("set_badge_contact", { p_token: user.sessionToken, p_employee_id: employeeId.trim(), p_email: contactEmail.trim(), p_phone: contactPhone.trim() });
     }
     if (prefill && prefill.onCreated) prefill.onCreated();
-    setSuccess({ name: name.trim(), badge: badge.trim(), pin: pin.trim() });
+    setSuccess({ name: name.trim(), badge: badge.trim(), pin: pin.trim(), phone: contactPhone.trim(), email: contactEmail.trim() });
   };
 
   if (success) {
@@ -11121,6 +11161,7 @@ function AddPersonScreen({ user, onDone, prefill }) {
           <div className="text-[10px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>PIN</div>
           <div className="text-[16px] font-bold">{success.pin}</div>
         </div>
+        <BadgeShareButtons name={success.name} badge={success.badge} pin={success.pin} phone={success.phone} email={success.email} slug={activeProjectId} projectName={activeProjectName} />
         <button
           onClick={onDone}
           className="mt-5 text-[12px] font-bold uppercase px-4 py-2 rounded-sm"
@@ -11539,7 +11580,7 @@ function PersonnelScreen({ user, go }) {
 }
 
 function RosterRow({ person, user, onChanged }) {
-  const { id: activeProjectId } = useContext(ProjectContext);
+  const { id: activeProjectId, name: activeProjectName } = useContext(ProjectContext);
   const subcontractorOptions = useSubcontractors(activeProjectId);
   const [editing, setEditing] = useState(false);
   const [role, setRole] = useState(person.role || "");
@@ -11862,6 +11903,7 @@ function RosterRow({ person, user, onChanged }) {
           {pinResult && (
             <div className="mt-2 text-[12px] text-center rounded-sm p-2" style={{ background: "#FFF8E1" }}>
               New PIN for {person.name}: <span className="font-bold">{pinResult}</span>
+              <div className="flex justify-center"><BadgeShareButtons name={person.name} badge={person.badge_number} pin={pinResult} phone={contactPhone} email={contactEmail} slug={activeProjectId} projectName={activeProjectName} /></div>
             </div>
           )}
         </div>
@@ -12622,6 +12664,235 @@ function WorkPlanEditor({ plan, user, onDone }) {
   );
 }
 
+// FCW99 (SH99 - Houston) version of the Summary of Safety Requirements - project-specific wording.
+const SH99_SAFETY_SUMMARY_BLOCKS = [
+  { at: "before", title: "Required take-away documentation for contractor", items: [
+    "Construction Safety Plan 5A",
+    "Copy of Summary of Safety Requirements",
+  ] },
+  { at: "before", title: "Required documentation to be provided to Ferrovial Construction-Webber 99 JV", items: [
+    "Company Safety Manual",
+    "Contractors Monthly Work Hours Summary Report to be e-mailed on the correct form by the 5th of each month. Submitted to: sh99safety@ferrovial.us",
+    { t: "Key Personnel and Safety contact Information on the company letterhead", s: [
+      "1. Onsite Superintendent",
+      "2. Safety Representative",
+      "3. Supervisor (Construction - Project Manager, Engineer)",
+      "4. Emergency contact information for onsite supervision",
+    ] },
+    "Drug Screen confirmation on a company letter head stating the names of all employees that will be onsite and that they have successfully passed drug screen within the past 30 days",
+    { t: "Designations - to be presented at the time of orientation (for detailed information see the designation forms)", s: [
+      "1. Competent Person designations",
+      "2. Equipment Operators designations",
+      "      a. Heavy Equipment - Back-Hoe, Excavators, Aerial lifts",
+      "      b. Crane: i. Operators  ii. A/D Directors  iii. Qualified Riggers  iv. Qualified Signal Persons",
+      "3. Traffic Flagger designations",
+    ] },
+    "Copies of First Aid and CPR training cards from the American Red Cross or other accredited agency for a minimum of one person onsite.",
+    "Trench Safety Plan (if applicable) - Stamped by PE",
+    "Work plans are to be presented for each job to be performed at a pre-task meeting scheduled by the project manager or his designee, and once Work Plan is accepted a copy is to be kept on site and be readily available for review.",
+    { t: "Active Railroads in project: Notify FCW99 safety department with a list of workers to be trained.", s: [
+      "1. BNSF",
+      "I. Online training",
+      "II. FCW99 will need the employees email address to register",
+    ] },
+  ] },
+  { at: "before", title: "Safety / environment orientation", items: [
+    { t: "1. Will be held on every Monday, Tuesday, starting at 7:30am - 12:30pm.", s: ["I. Monday's orientation will be in English", "II. Tuesday's orientation will be in Spanish"] },
+    "2. Notify Safety Department ahead of time of employees attending orientation.",
+    "3. Employees must arrive on time and being late for orientation will result in your employee having to reschedule until next orientation.",
+    "4. All employees are required to attend orientation prior to work on this project.",
+  ] },
+  { at: "before", title: "Trucker orientation", heading: "Required for all truckers, needs to be coordinated with FCW99 Safety Department", items: [
+    "1. The trucker orientation and sign in sheet shall be issued by the Safety Department to the involved contractors",
+    "2. The completed sign-in sheet, drug test affidavit and photo of the driver shall be returned to the Safety department and allowed ID Badges to be made",
+  ] },
+  { at: "before", title: "Safety requirements of the project - PPE", items: [
+    { t: "PPE - Class III apparel for all employees", s: ["Lime green for Construction", "Hard Hats/Helmets", "Safety Glasses Clear/Tinted", "Safety Footwear", "Orange vest for work near Railroad"] },
+    "ANSI Z87.1 Safety Glasses",
+    "Hard Hat must be Type 2, with chin strap and meet the ANSI Z89.1 standard.",
+    "Safety shoes and boots must meet ANSI Z41-1991 and provide impact and compression protection to the foot.",
+  ] },
+  { at: "before", title: "Traffic control", items: [
+    "1. Traffic Control that meets applicable requirements for local, state and federal regulations must be provided when working in or adjacent to roadways. The FCW99 Traffic department must be made aware of all traffic control operations prior to the commencement of the work.",
+    "2. Give notice of minimum 48 hours, but preferably a week prior to beginning work to the Traffic Control Officer",
+    "3. All personnel involved in traffic control operations shall be certified in work zone safety etc. thru a recognized agency such as TEEX or ATSSA",
+    "4. DO NOT move or alter TC devices and report damaged devices to the TC-TSO",
+    "5. Clear Zone: Frontage Roads = 16'; Main Lanes = 30', Curbs = 3', 75'/25' behind attenuators",
+  ] },
+  { at: "before", title: "Equipment", items: [
+    "1. All equipment movement on open public roadways must be escorted by a company vehicle.",
+    "2. Equipment must have an orange \"slow moving\" triangle and an amber beacon light as well as company vehicle",
+    "3. Rubber tire Equipment Operators that will be driven on open public roads must have a valid driver's license",
+    "4. No equipment shall be left overnight closer than 30 feet to any travel lanes",
+    "5. Construction equipment shall not be operated on any interstate or state highway.",
+    "6. All crane operators shall be certified thru a recognized agency to include NCCCO. There will be no lifting next to live traffic!",
+  ] },
+  { at: "before", title: "Visitors", items: [
+    "1. All visitors, vendors, mechanics, etc., who enter the jobsite must check in at the FCW99 office and receive a \"Visitor\" badge and check out at the end of the day and return \"Visitor\" badge.",
+    "2. Visitors are required to be escorted while on site by the contractor management or a designee.",
+    "3. The inviting contractor is responsible for controlling all activities of the invited visitors while on site.",
+  ] },
+  { at: "before", title: "Life-saving controls", plain: true, text: "For any of the following tasks, life-saving controls must be identified for life threatening hazards: Working at heights, Lifting Operations, Equipment and vehicle movement, Excavations, Confined Space, Traffic Control, Access and Egress to and from site, Working near utilities overhead or underground. This will be documented in the work plan provided by the contractor." },
+  { at: "before", text: "Life threatening hazards must have lifesaving controls when in place, a control measure is \"lifesaving\" if it meets these three criteria:", items: ["Not Worker dependent", "Effective when mistakes are made", "Prevents or mitigates exposure"] },
+  { at: "before", title: "Hazards, night work and electrical", items: [
+    "All hazards created or encountered such as, excavations, overhead work must be protected daily and give maintenance for the duration of the project or until the hazard no longer exists.",
+    "All night work shall be performed using adequate lighting to safely perform the work. The lighting shall be positioned so that it does not affect the traffic around the work zone or the public.",
+    "All electrical supply generators or other power supplies must be equipped with Ground Fault Circuit Interrupters (GFCI's) in addition the company shall comply with assured Grounding inspection requirements (White, Green, Red, Orange).",
+  ] },
+  { at: "before", title: "Excavation", items: [
+    "1. The excavator shall contact 811, and any non-member facility owner including FCW99 for locates of I.T.S., illumination etc. There shall be no penetration in the earth's surface regardless of depth without confirmation of a positive response from all utility owners. The excavator is responsible for determining exact location of all facilities that could potentially be in conflict with the excavation. Location of utilities shall be determined using non-mechanical means.",
+    { t: "2. Required documentation to retrieve at the time of orientation for each excavation operator:", s: ["a. Utility Locate Permit", "b. Daily Excavation Checklist"] },
+  ] },
+  { at: "before", title: "After-hours work, housekeeping and fall protection", items: [
+    "Notify Ferrovial Construction/Webber 99 JV Safety and Construction Departments when any workers will be onsite between the hours of 5:30 PM and 6:30 AM.",
+    { t: "Housekeeping", s: ["1. Always keep work areas free of trash and trip/fall hazards.", "2. Remove all protruding nails from lumber (DO NOT bend nails - remove them)"] },
+    "100% Fall Protection - Zero Tolerance",
+  ] },
+  { at: "before", title: "Accidents and utility strikes", heading: "All accidents and utility strikes must be reported to the Ferrovial Construction/Webber 99 JV. Safety Department immediately.", items: [
+    "1. The FCW99 Safety Department will notify the appropriate FCW99 personnel.",
+    "2. A post-accident drug test must be conducted, and a signed letter of verification must be forwarded to the FCW99 Safety Department confirming the results of the drug screen.",
+    "3. Follow your company policy for the situation",
+  ] },
+  { at: "before", title: "Additional requirements", heading: "All documentation below must be submitted to the FCW99 Safety Department to: sh99safety@ferrovial.us", items: [
+    "A documented Job Hazard Analysis must be completed by each crew - DAILY",
+    "Air monitoring documentation for all excavation, confined space - DAILY",
+    "A documented pre-shift briefing with the railroad flagman must be attended by each crew supervisor - DAILY (when applicable). A valid right of entry must be obtained from the railroad involved and FCW99 and any required railway training must be completed by all who will be within 25 feet of the track.",
+    "A documented pre-shift equipment inspection conducted by the operator - DAILY.",
+    "A documented pre-shift crane inspection conducted by the operator - DAILY.",
+    "A documented pre-shift inspection of excavations, confined spaces and scaffolding conducted by a company-designated \"Competent Person\" - DAILY.",
+    "A documented \"Tool-box\" safety meeting conducted by each crew - WEEKLY.",
+    "Mandatory attendance to the Job wide General Safety Meeting hosted by Ferrovial Construction/Webber 99 JV - QUARTERLY.",
+    "Documented Inspection verification form to be submitted to the FCW99 representative for (Ladders, Fall Protection Equipment, Assured Grounding Electrical, Rigging Equipment) - QUARTERLY",
+    "Documented Inspection verification form to be submitted to the FCW99 representative for Fire Extinguishers - MONTHLY",
+    "Work Plan - once accepted by FCW99, a copy must be on site readily available for review",
+  ] },
+  { at: "before", text: "This document is only a summary of the safety requirements and therefore does not include all safety requirements for the Project. The full safety program for the Project is detailed in the Safety Plan for Construction.", emphasis: true },
+  { at: "after", title: "Acknowledgment", ackCheck: "I acknowledge and agree to the statement above.", text: "I hereby acknowledge the receipt of the Summary of Safety Requirements. The content has been thoroughly reviewed. If there are any further actions required on my part related to this document, I will not hesitate to contact Ferrovial Construction/Webber 99 JV safety department." },
+  { at: "end", text: "Those that fail to comply with these safety requirements are subject to permanent removal from the project. The worst consequence would be that you or others suffer an injury or worse cause a fatality because of an employees' failure to comply with safety requirements.", emphasis: true },
+];
+
+// FCW24 JV (Tennessee) version of the Summary of Safety Requirements - project-specific wording.
+const FCW24_SAFETY_SUMMARY_BLOCKS = [
+  { at: "before", title: "Required take-away documentation for contractor", items: [
+    "Construction Safety Plan Chapter 4",
+    "Copy of Summary of Safety Requirements",
+  ] },
+  { at: "before", title: "Required documentation to be provided to FCW24 JV", items: [
+    "Company Safety Manual",
+    "Contractors Monthly Work Hours Summary Report to be e-mailed on the correct form by the 5th of each month. Submitted to: agarcia@ferrovial.us and mmaldonado@ferrovial.us",
+    { t: "Key Personnel and Safety contact Information on the company letterhead", s: [
+      "1. Onsite Superintendent",
+      "2. Safety Representative",
+      "3. Supervisor (Construction - Project Manager, Engineer)",
+      "4. Emergency contact information for onsite supervision",
+    ] },
+    "Drug Screen confirmation on a company letter head stating the names of all employees that will be onsite and that they have successfully passed drug screen within the past 30 days",
+    { t: "Designations - to be presented at the time of orientation (for detailed information see the designation forms)", s: [
+      "1. Competent Person designations",
+      "2. Equipment Operators designations",
+      "      a. Heavy Equipment - Back-Hoe, Excavators, Aerial lifts, etc.",
+      "      b. Crane (All cranes coming on site must be checked in by safety department): i. Operators  ii. A/D Directors  iii. Qualified Riggers  iv. Qualified Signal Persons",
+      "3. Traffic Flagger designations",
+    ] },
+    "Copies of First Aid and CPR training cards from the American Red Cross or other accredited agency for a minimum of one person onsite.",
+    "Trench Safety Plan (if applicable) - Stamped by Professional Engineer (PE)",
+    "Work plans are to be presented for each job to be performed at a pre-task meeting scheduled by the project manager or his designee, and once Work Plan is accepted a copy is to be kept on site and be readily available for review.",
+    { t: "Potential Active Railroads in project: Notify FCW24 JV safety department with a list of workers to be trained. NO PERSON OR EQUIPMENT SHALL BE IN FOUL OF A TRACK (25') WITHOUT PROPER TRAINING AS REQUIRED BY THE SPECIFIC RAILROAD (typically known as Roadway Worker Protection training). A piece of equipment that could potentially foul a track due to vertical tip over, could be an end dump truck that could tip over within 25 feet of the rail, a drill-rig that could have a mechanical failure and fall over into foul, a crane, any lifted load. Etc.", s: [
+      "1. CSX Transportation, The Nashville and Eastern Line, The Nashville and Western Line",
+      "I. Online training",
+      "II. FCW24 JV will need the employees email address to register",
+    ] },
+  ] },
+  { at: "before", title: "Safety requirements of the project - PPE", items: [
+    { t: "PPE - Class III apparel for all employees", s: ["Class 3 Vest - Lime green for Construction", "Hard Hats Type 2", "Safety Glasses Clear/Tinted", "Safety Footwear", "Orange vest for work near Railroad"] },
+    "ANSI Z87.1 Safety Glasses (clear or shaded lenses for daytime and clear only at night)",
+    "Prescription Lenses: Workers who wear prescription glasses must use safety eyewear that either incorporates the prescription directly into the protective design or fits properly over their regular prescription glasses without disrupting them.",
+    "Hard Hat must be Type 2, worn with chin straps fastened and shall have a minimum of 12 sq. in. of reflective material visible from all sides, and meet the ANSI Z89.1 standard.",
+    "Safety shoes and boots must meet ANSI Z41-1991 and provide impact and compression protection to the foot.",
+  ] },
+  { at: "before", text: "ALL VEHICLES IN THE WORK AREA MUST OPERATE ROTATING OR FLASHING INCANDESCENT AMBER LIGHTS VISIBLE IN 360 DEGREES AROUND THE VEHICLE", emphasis: true },
+  { at: "before", text: "ALL WORK VEHICLES INCLUDING TRUCKS MUST HAVE RED AND WHITE REFLECTIVE TAPE APPLIED TO ALL SIDES SUCH THAT IT DEFINES THE OUTLINE OF THE VEHICLE", emphasis: true },
+  { at: "before", title: "Traffic control", items: [
+    { t: "1. ALL TRAFFIC CONTROL ON THIS PROJECT SHALL BE PERFORMED BY FCW24 JV PERSONNEL ONLY AND BE IN COMPLIANCE WITH TENNESSEE SECTION 712 Traffic control", s: [
+      "a. This includes lane and shoulder closures, flagging, and the installation, maintenance, relocation and removal of all traffic control (TC) devices. Contractors and subcontractors shall NOT set up, move, alter, or remove any TC device or perform any lane closure or flagging operation",
+    ] },
+    "2. Give notice of minimum 48 hours, but preferably a week prior to beginning work to the Traffic Control Officer",
+    "3. All personnel involved in traffic control operations shall be certified in work zone safety etc. thru a recognized agency such as TEEX or ATSSA",
+    "4. DO NOT move or alter TC devices and report damaged devices to the TC-TSO",
+    "5. Clear Zone: Frontage Roads = See State of Tennessee Standard Drawing Department of Transportation Clear Zone Criteria S-CZ-1 dated 7-11-2013; Main Lanes = 46', Curbs = 4'.",
+    "6. Crash cushion attenuators have a clear zone of 75'/25' behind attenuators (measurement begins at the connection of the attenuator to the CTB)",
+  ], qr: { label: "Clear Zone Criteria - S-CZ-1 (scan or tap to open)", url: "https://fcus-safety-hub.vercel.app/?project=nashville&screen=trafficcontrol" } },
+  { at: "before", title: "Equipment", items: [
+    "1. All equipment movement on open public roadways must be escorted by a company vehicle.",
+    "2. Equipment must have an orange \"slow moving\" triangle and an amber beacon light as well as company vehicle",
+    "3. Rubber tire Equipment Operators that will be driven on open public roads must have a valid driver's license.",
+    "4. No equipment or machinery shall be on a main-lane for the purposes of moving from one location to another.",
+    "5. No equipment, machinery or materials shall be left overnight closer than 46 feet to any travel lanes",
+    "6. If machinery, materials or equipment is left on site outside of the clear zone it must have a minimum of a type 3 barricade in front of the equipment facing oncoming traffic.",
+    "7. Construction equipment shall not be operated on any interstate or state highway.",
+    "8. All crane operators shall be certified through a recognized agency such as NCCCO. There will be no lifting next to live traffic!",
+  ] },
+  { at: "before", title: "Trucker orientation", heading: "Required for all truckers. This shall be coordinated with the FCW24 JV Safety Department", items: [
+    "1. The trucker orientation and sign in sheet shall be issued by the Safety Department to the involved contractors",
+    "2. The completed sign-in sheet, drug test affidavit and photo of the driver shall be returned to the Safety department and allowed ID Badges to be made",
+    "3. There shall be no dumping material from a vertical position where if failure of the raised load occurs that it could fall into live traffic, onto an adjacent truck or piece of equipment and all dumped loads must not be dumped prior to ensuring no person is physically adjacent to the load in case of tip over.",
+    "4. All drivers shall comply with PPE requirements when outside of vehicle.",
+    "5. All trucks shall have an AUDIBLE backup alarm.",
+    "6. All loads from a dump bed must be dumped from level ground.",
+  ] },
+  { at: "before", title: "Visitors", items: [
+    "1. All visitors, vendors, mechanics, etc., who enter the jobsite must check in at the FCW24 JV office and receive a \"Visitor\" badge and check out at the end of the day and return \"Visitor\" badge.",
+    "2. Visitors are required to be escorted while on site by the contractor management or a designee.",
+    "3. The inviting contractor is responsible for controlling all activities of the invited visitors while on site.",
+  ] },
+  { at: "before", title: "Life-saving controls", plain: true, text: "For any of the following tasks, life-saving controls must be identified for life threatening hazards: Working at heights, Lifting Operations, Equipment and vehicle movement, Excavations, Confined Space, Traffic Control, Access and Egress to and from site, Working near utilities overhead or underground. This will be documented in the work plan provided by the contractor." },
+  { at: "before", text: "Life threatening hazards must have lifesaving controls when in place, a control measure is \"lifesaving\" if it meets these three criteria:", items: ["Not Worker dependent", "Effective when mistakes are made", "Prevents or mitigates exposure"] },
+  { at: "before", title: "Hazards, night work and electrical", items: [
+    "All hazards created or encountered such as, excavations, overhead work must be protected daily and give maintenance for the duration of the project or until the hazard no longer exists.",
+    "All night work shall be performed using adequate lighting to safely perform the work. The lighting shall be positioned so that it does not affect the traffic around the work zone or the public.",
+    "All electrical supply generators or other power supplies must be equipped with Ground Fault Circuit Interrupters (GFCI's) in addition the company shall comply with assured Grounding inspection requirements (White, Green, Red, Orange).",
+  ] },
+  { at: "before", title: "Excavation", items: [
+    "1. The excavator shall contact Tennessee 811 at least 3 (and not more than 10) working days before digging, and shall request locates from any non-member facility owner, including FCW24 JV (ITS, illumination, etc.).",
+    "2. There shall be no penetration of the earth's surface, regardless of depth, without confirmation of a positive response from all utility owners. Keep the 811 ticket current (tickets are valid 15 calendar days).",
+    "3. The excavator is responsible for determining the exact location of all facilities that could be in conflict with the excavation. Utility locations shall be determined by non-mechanical means (hand digging or vacuum excavation).",
+    { t: "4. Required documentation to retrieve at the time of orientation for each excavation operator:", s: ["a. Utility Locate Permit", "b. Daily Excavation Checklist"] },
+  ] },
+  { at: "before", title: "After-hours work, housekeeping and fall protection", items: [
+    "Notify FCW24 JV Safety and Construction Departments when any workers will be onsite between the hours of 5:30 PM and 6:30 AM.",
+    { t: "Housekeeping", s: ["1. Always keep work areas free of trash and trip/fall hazards.", "2. Remove all protruding nails from lumber (DO NOT bend nails - remove them)"] },
+    "100% Fall Protection - Zero Tolerance",
+  ] },
+  { at: "before", title: "Accidents and utility strikes", heading: "ALL accidents and utility strikes must be reported to the FCW24 JV Safety Department immediately.", items: [
+    "1. The FCW24 JV Safety Department will notify the appropriate FCW24 JV personnel.",
+    "2. A post-accident drug test must be conducted, and a signed letter of verification must be forwarded to the FCW24 JV Safety Department confirming the results of the drug screen.",
+    "3. Follow your company policy for the situation",
+  ] },
+  { at: "before", title: "Safety / environment orientation", items: [
+    { t: "1. Will be held on every Monday, Tuesday, starting at 7:30am - 12:30pm.", s: ["I. Monday's orientation will be in English", "II. Tuesday's orientation will be in Spanish"] },
+    "2. Notify Safety Department ahead of time of employees attending orientation.",
+    "3. Employees must arrive on time and being late for orientation will result in your employee having to reschedule until next orientation.",
+    "4. All employees are required to attend orientation prior to work on this project.",
+  ] },
+  { at: "before", title: "Additional requirements", heading: "All documentation below must be submitted to the FCW24 JV Safety Department to: agarcia@ferrovial.us and mmaldonado@ferrovial.us", items: [
+    "A documented Job Hazard Analysis must be completed by each crew - DAILY",
+    "Air monitoring documentation for all excavation, confined space - DAILY",
+    "A documented pre-shift briefing with the railroad flagman must be attended by each crew supervisor - DAILY (when applicable). A valid right of entry must be obtained from the railroad involved and FCW24 JV and any required railway training must be completed by all who will be within 25 feet of the track.",
+    "A documented pre-shift equipment inspection conducted by the operator - DAILY.",
+    "A documented pre-shift crane inspection conducted by the operator - DAILY.",
+    "A documented pre-shift inspection of excavations, confined spaces and scaffolding conducted by a company-designated \"Competent Person\" - DAILY.",
+    "A documented Utility Locate permit shall be on site and readily available - DAILY",
+    "A documented \"Tool-box\" safety meeting conducted by each crew - WEEKLY.",
+    "Mandatory attendance to the Job wide General Safety Meeting hosted by FCW24 JV - QUARTERLY.",
+    "Documented Inspection verification form to be submitted to the FCW24 JV representative for (Ladders, Fall Protection Equipment, Assured Grounding Electrical, Rigging Equipment) - QUARTERLY",
+    "Documented Inspection verification form to be submitted to the FCW24 JV representative for Fire Extinguishers - MONTHLY",
+    "Work Plan - once accepted by FCW24 JV, a copy must be on site readily available for review",
+  ] },
+  { at: "before", text: "This document is only a summary of the safety requirements and therefore does not include all safety requirements for the Project. The full safety program for the Project is detailed in the Safety Plan for Construction.", emphasis: true },
+  { at: "after", title: "Acknowledgment", ackCheck: "I acknowledge and agree to the statement above.", text: "I hereby acknowledge the receipt of the Summary of Safety Requirements. The content has been thoroughly reviewed. If there are any further actions required on my part related to this document, I will not hesitate to contact FCW24 JV safety department." },
+  { at: "end", text: "Those that fail to comply with these safety requirements are subject to permanent removal from the project. The worst consequence would be that you or others suffer an injury or worse cause a fatality because of failure to comply with safety requirements.", emphasis: true },
+];
+
 const PRECONSTRUCTION_DOC_TITLES = ["Summary of Safety Requirements", "Emergency Contacts List", "Man Hour Work Submittal", "Work Plan Template"];
 
 // Fixed, fill-and-sign templates — same pattern as any other form in
@@ -12642,6 +12913,26 @@ const PRECONSTRUCTION_FILLABLE_FORMS = {
     trailingFieldLabels: ["Email for Weekly Toolbox, Quarterly Meeting and Other NTI Information"],
     personSignatures: [{ field: "Contractor Senior Site Managers and/or Safety Manager", heading: "Contractor Senior Site Managers and/or Safety Manager - Signatures", noun: "Signer", pdfTitle: "CONTRACTOR SENIOR SITE MANAGERS AND/OR SAFETY MANAGER", startRows: 1 }],
     signatureLabels: ["Acknowledged By - Signature"],
+    projectOverrides: {
+      "sh99-houston": {
+        description: "Review the full FCW99 Summary of Safety Requirements, then acknowledge receipt. Signed by the contractor's senior site manager(s) and/or Safety Manager.",
+        submitEmail: "sh99safety@ferrovial.us",
+        pdfLink: "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/sh99-summary-of-safety-requirements.pdf",
+        fields: ["Email for Weekly Toolbox, Quarterly Meeting and Other FCW99 Information"],
+        genericPdfLongFields: ["Email for Weekly Toolbox, Quarterly Meeting and Other FCW99 Information"],
+        trailingFieldLabels: ["Email for Weekly Toolbox, Quarterly Meeting and Other FCW99 Information"],
+        textBlocks: SH99_SAFETY_SUMMARY_BLOCKS,
+      },
+      nashville: {
+        description: "Review the full FCW24 JV Summary of Safety Requirements, then acknowledge receipt. Signed by the contractor's senior site manager(s) and/or Safety Manager.",
+        submitEmail: "agarcia@ferrovial.us,mmaldonado@ferrovial.us",
+        pdfLink: "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/fcw24-summary-of-safety-requirements.pdf",
+        fields: ["Email for Weekly Toolbox, Quarterly Meeting and Other FCW24 JV Information"],
+        genericPdfLongFields: ["Email for Weekly Toolbox, Quarterly Meeting and Other FCW24 JV Information"],
+        trailingFieldLabels: ["Email for Weekly Toolbox, Quarterly Meeting and Other FCW24 JV Information"],
+        textBlocks: FCW24_SAFETY_SUMMARY_BLOCKS,
+      },
+    },
     textBlocks: [
       { at: "before", title: "Required take-away documentation for contractor", items: [
         "Construction Safety Plan 5A",
@@ -12823,7 +13114,7 @@ function PreConstructionScreen({ user, go, activeProjectId }) {
       {loading && <div className="text-[12px] mb-2" style={{ color: STEEL }}>Loading…</div>}
       <div className="space-y-2">
         {PRECONSTRUCTION_DOC_TITLES.map((title) => {
-          const fillableBase = PRECONSTRUCTION_FILLABLE_FORMS[title];
+          const fillableBase = PRECONSTRUCTION_FILLABLE_FORMS[title] ? resolveFormForProject(PRECONSTRUCTION_FILLABLE_FORMS[title], activeProjectId) : null;
           if (fillableBase && fillableBase.projects && !fillableBase.projects.includes(activeProjectId)) {
             return null;
           }
