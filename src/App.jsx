@@ -3611,13 +3611,20 @@ const WORK_PLANS_FLAT_DEFAULT = [
 // Google Drive links already preview; Office files use Microsoft's viewer, PDFs and anything else use Google's.
 function PdfFrame({ link, title }) {
   const [state, setState] = useState("checking");
+  const [src, setSrc] = useState("");
   useEffect(() => {
-    let alive = true;
-    setState("checking");
+    let alive = true, objUrl = "";
+    setState("checking"); setSrc("");
     if (!link) { setState("missing"); return; }
-    if (/drive\.google\.com|docs\.google\.com/i.test(link)) { setState("ok"); return; }
-    fetch(link, { method: "HEAD" }).then((r) => { if (alive) setState(r.ok ? "ok" : "missing"); }).catch(() => { if (alive) setState("ok"); });
-    return () => { alive = false; };
+    if (/drive\.google\.com|docs\.google\.com/i.test(link) || !/\.pdf(\?|$)/i.test(link)) { setSrc(inlineViewUrl(link)); setState("ok"); return; }
+    // fetch the PDF and show it from a local blob so the browser's own viewer renders it (no third-party viewer)
+    fetch(link).then(async (r) => {
+      if (!r.ok) { if (alive) setState("missing"); return; }
+      const buf = await r.arrayBuffer();
+      objUrl = URL.createObjectURL(new Blob([buf], { type: "application/pdf" }));
+      if (alive) { setSrc(objUrl + "#view=FitH"); setState("ok"); }
+    }).catch(() => { if (alive) { setSrc(inlineViewUrl(link)); setState("ok"); } });
+    return () => { alive = false; if (objUrl) URL.revokeObjectURL(objUrl); };
   }, [link]);
   const fname = fileNameFromLink(link || "", title);
   if (state === "checking") return <div className="flex-1 flex items-center justify-center text-[12px]" style={{ color: STEEL }}>Loading form...</div>;
@@ -3630,7 +3637,7 @@ function PdfFrame({ link, title }) {
   );
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <iframe src={inlineViewUrl(link)} className="flex-1 w-full" style={{ border: "none" }} title={title} />
+      <iframe src={src} className="flex-1 w-full" style={{ border: "none" }} title={title} />
       <a href={link} target="_blank" rel="noreferrer" className="text-center text-[11px] font-bold uppercase py-2 border-t" style={{ borderColor: "#E4E2DA", color: INK, fontFamily: "IBM Plex Mono, monospace", background: "#FAF9F5" }}>Not showing? Open in new tab</a>
     </div>
   );
