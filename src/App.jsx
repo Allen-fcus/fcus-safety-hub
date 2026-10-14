@@ -403,9 +403,9 @@ const QUARTERLY_MONTHLY_PROJECTS = ["nti-sylvania", "nti-golden-triangle"];
 // Add "sh99-houston" here once the Houston versions of the templates are uploaded.
 const DESIGNATION_FORM_PROJECTS = ["nti-sylvania", "nti-golden-triangle"];
 
-const QM_YEAR = new Date().getFullYear();
-const QM_QUARTERS = [`Q4 ${QM_YEAR - 1} - ORANGE (Oct-Dec)`, `Q1 ${QM_YEAR} - WHITE (Jan-Mar)`, `Q2 ${QM_YEAR} - GREEN (Apr-Jun)`, `Q3 ${QM_YEAR} - RED (Jul-Sep)`, `Q4 ${QM_YEAR} - ORANGE (Oct-Dec)`];
-const QM_MONTHS = ["December " + (QM_YEAR - 1), ...["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].map((m) => `${m} ${QM_YEAR}`)];
+// Period choices carry no year - the submission date supplies the year.
+const QM_QUARTERS = ["Q1", "Q2", "Q3", "Q4"];
+const QM_MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const QM_GC_BLOCK = { at: "before", title: "General Contractor", text: "North Tarrant Infrastructure, LLC" };
 
 const QUARTERLY_MONTHLY_FORMS_DEFAULT = [
@@ -468,14 +468,24 @@ const QUARTERLY_MONTHLY_FORMS_DEFAULT = [
   },
 ];
 
-function QuarterlyMonthlyScreen({ user }) {
+function QuarterlyMonthlyScreen({ user, go }) {
   const [openForm, setOpenForm] = useState(null);
   const [viewingPdf, setViewingPdf] = useState(null);
 
   return (
     <div className="px-4 pt-4 pb-8" style={{ background: "#F4F3EF", minHeight: "100%" }}>
-      <div className="text-[12px] mb-3" style={{ color: STEEL }}>
-        Fill out, sign, and submit — it's emailed automatically. Or view/download a blank copy.
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-[12px]" style={{ color: STEEL }}>
+          Fill out, sign, and submit — it's emailed automatically. Or view/download a blank copy.
+        </div>
+        <div className="flex gap-2 flex-shrink-0 ml-2">
+          {user && user.sessionToken && go && (
+            <button onClick={() => go("quarterlymysubmissions")} className="text-[10px] font-bold uppercase px-2 py-1 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>My Submissions</button>
+          )}
+          {user && user.canAddPersonnel && go && (
+            <button onClick={() => go("managequarterlysubmissions")} className="text-[10px] font-bold uppercase px-2 py-1 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Submissions</button>
+          )}
+        </div>
       </div>
       <div className="space-y-2">
         {QUARTERLY_MONTHLY_FORMS_DEFAULT.map((f, i) => (
@@ -514,6 +524,71 @@ function QuarterlyMonthlyScreen({ user }) {
   );
 }
 
+
+function QuarterlySubmissionsScreen({ user, admin }) {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [q, setQ] = useState("");
+  const [formFilter, setFormFilter] = useState("");
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const load = async () => {
+    setLoading(true);
+    const { data, error } = await supabase.rpc(admin ? "list_quarterly_submissions_admin" : "list_my_quarterly_submissions", { p_token: user.sessionToken });
+    setRows(error || !data ? [] : data);
+    setLoading(false);
+  };
+  useEffect(() => { load(); }, [user?.sessionToken, admin]);
+  const doDelete = async (id) => {
+    if (confirmDeleteId !== id) { setConfirmDeleteId(id); return; }
+    const res = await supabase.rpc("delete_form_submission", { p_token: user.sessionToken, p_submission_id: id });
+    reportRpcFailure("Delete submission", res);
+    setConfirmDeleteId(null); load();
+  };
+  const shown = rows.filter((r) => {
+    if (formFilter && r.form_title !== formFilter) return false;
+    if (q) return `${r.submitted_by || ""} ${r.employer || ""} ${r.period || ""}`.toLowerCase().includes(q.toLowerCase());
+    return true;
+  });
+  const mono = { fontFamily: "IBM Plex Mono, monospace" };
+  return (
+    <div className="px-4 pt-4 pb-8" style={{ background: "#F4F3EF", minHeight: "100%" }}>
+      <div className="text-[12px] mb-3" style={{ color: STEEL }}>
+        {admin ? "Every Quarterly Inspection and Monthly Fire Protection verification submitted on this project, with the completed document. Admin only." : "The Quarterly and Monthly verifications you've submitted, with the completed document. These are kept here."}
+      </div>
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={admin ? "Search by name, employer or period" : "Search by period"} className="w-full rounded-md border px-3 py-2 text-[13px] mb-2" style={{ borderColor: "#C9C6BC" }} />
+      <div className="flex gap-2 mb-3">
+        <select value={formFilter} onChange={(e) => setFormFilter(e.target.value)} className="flex-1 rounded-md border px-2.5 py-2 text-[12px] bg-white" style={{ borderColor: "#C9C6BC" }}>
+          <option value="">All Forms</option>
+          {QUARTERLY_MONTHLY_FORMS_DEFAULT.map((f) => <option key={f.title} value={f.title}>{f.title}</option>)}
+        </select>
+        {(q || formFilter) && <button onClick={() => { setQ(""); setFormFilter(""); }} className="text-[10px] font-bold uppercase px-3 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, ...mono }}>Clear</button>}
+      </div>
+      <div className="text-[10px] mb-2" style={{ color: STEEL }}>{shown.length} of {rows.length} submissions</div>
+      {loading && <div className="text-[12px] mb-2" style={{ color: STEEL }}>Loading…</div>}
+      {shown.map((s) => (
+        <div key={s.id} className="bg-white rounded-md p-3 border mb-2" style={{ borderColor: "#E4E2DA" }}>
+          <div className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{s.form_title}</div>
+          {s.period && <div className="text-[11px] mt-0.5 font-bold" style={{ color: INK }}>Period: {s.period}</div>}
+          {admin && <div className="text-[11px] mt-0.5" style={{ color: STEEL }}>{s.submitted_by} · {s.employer || "—"}</div>}
+          <div className="text-[10px] mt-0.5" style={{ color: STEEL, ...mono }}>{new Date(s.submitted_at).toLocaleString()}</div>
+          <div className="flex gap-2 mt-2 flex-wrap">
+            {s.filled_pdf_url ? (
+              <button onClick={() => window.open(s.filled_pdf_url, "_blank")} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm" style={{ background: GOLD, color: INK, ...mono }}>View / Download</button>
+            ) : (
+              <div className="flex-1 text-[10px] text-center py-1.5" style={{ color: STEEL }}>No generated PDF for this submission</div>
+            )}
+          </div>
+          {admin && (
+            <button onClick={() => doDelete(s.id)} className="w-full mt-2 text-[10px] font-bold uppercase py-1.5 rounded-sm" style={{ background: confirmDeleteId === s.id ? ALERT : "white", color: confirmDeleteId === s.id ? "white" : ALERT, border: `1px solid ${ALERT}`, ...mono }}>
+              {confirmDeleteId === s.id ? "Tap Again to Permanently Delete" : "Delete"}
+            </button>
+          )}
+        </div>
+      ))}
+      {!loading && shown.length === 0 && <div className="text-[12px] text-center py-6" style={{ color: STEEL }}>{rows.length === 0 ? "No submissions yet." : "No submissions match."}</div>}
+    </div>
+  );
+}
 
 // ---- Screen: Home ----
 // Project logos. "plate" = show on a white rounded card (for logos with dark text);
@@ -9120,7 +9195,7 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
         // submissions become visible to the person who submitted them
         // (for the rest of that day only); Orientation submissions
         // stay admin-only, same as before.
-        const category = FORMS_DEFAULT.some((f) => f.title === form.title) ? "forms" : "orientation";
+        const category = QUARTERLY_MONTHLY_FORMS_DEFAULT.some((f) => f.title === form.title) ? "quarterly" : FORMS_DEFAULT.some((f) => f.title === form.title) ? "forms" : "orientation";
         await supabase.rpc("submit_form", {
           p_token: user.sessionToken,
           p_form_title: form.title,
@@ -14209,7 +14284,7 @@ function TruckDriverVerifyScreen() {
 // reporting, and the Labor Law QR code that anyone can scan).
 const ALWAYS_PUBLIC_SCREENS = ["emergency", "concern", "laborlaws", "trafficcontrol", "meetingsignin", "orientationsignin", "hsstandards", "orientationschedule", "verifybadge", "truckdriver", "verifytruckdriver"];
 // Normally-gated screens for every project.
-const BASE_GATED_SCREENS = ["forms", "safetyplan", "toolbox", "workplans", "mysubmissions", "preconstruction", "quarterlymonthly", "training", "meetings"];
+const BASE_GATED_SCREENS = ["forms", "safetyplan", "toolbox", "workplans", "mysubmissions", "quarterlymysubmissions", "preconstruction", "quarterlymonthly", "training", "meetings"];
 // Projects where EVERYTHING (except the always-public screens above)
 // requires a badge — including Home itself.
 const FULLY_GATED_PROJECTS = ["sh99-houston"];
@@ -14409,6 +14484,8 @@ export default function SafetyHubPrototype() {
     workplans: t("workPlans"),
     preconstruction: "Pre-Construction",
     quarterlymonthly: "Quarterly/Monthly Inspections",
+    quarterlymysubmissions: "My Quarterly/Monthly Submissions",
+    managequarterlysubmissions: "Quarterly/Monthly Submissions",
     emergency: t("emergencyContacts"),
     concern: t("reportConcern"),
     addperson: "Add Person",
@@ -14647,7 +14724,9 @@ export default function SafetyHubPrototype() {
             {screen === "managebulletin" && <ManageBulletinScreen user={user} />}
             {screen === "workplans" && <WorkPlansScreen user={user} go={go} />}
             {screen === "preconstruction" && <PreConstructionScreen user={user} go={go} activeProjectId={activeProjectId} />}
-            {screen === "quarterlymonthly" && <QuarterlyMonthlyScreen user={user} />}
+            {screen === "quarterlymonthly" && <QuarterlyMonthlyScreen user={user} go={go} />}
+            {screen === "quarterlymysubmissions" && <QuarterlySubmissionsScreen user={user} admin={false} />}
+            {screen === "managequarterlysubmissions" && <QuarterlySubmissionsScreen user={user} admin />}
             {screen === "managepreconstruction" && <ManagePreConstructionScreen user={user} activeProjectId={activeProjectId} />}
             {screen === "manageworkplans" && <ManageWorkPlansScreen user={user} />}
             {screen === "emergency" && <EmergencyContactsScreen user={user} go={go} activeProjectId={activeProjectId} />}
