@@ -403,35 +403,68 @@ const QUARTERLY_MONTHLY_PROJECTS = ["nti-sylvania", "nti-golden-triangle"];
 // Add "sh99-houston" here once the Houston versions of the templates are uploaded.
 const DESIGNATION_FORM_PROJECTS = ["nti-sylvania", "nti-golden-triangle"];
 
+const QM_YEAR = new Date().getFullYear();
+const QM_QUARTERS = [`Q4 ${QM_YEAR - 1} - ORANGE (Oct-Dec)`, `Q1 ${QM_YEAR} - WHITE (Jan-Mar)`, `Q2 ${QM_YEAR} - GREEN (Apr-Jun)`, `Q3 ${QM_YEAR} - RED (Jul-Sep)`, `Q4 ${QM_YEAR} - ORANGE (Oct-Dec)`];
+const QM_MONTHS = ["December " + (QM_YEAR - 1), ...["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].map((m) => `${m} ${QM_YEAR}`)];
+const QM_GC_BLOCK = { at: "before", title: "General Contractor", text: "North Tarrant Infrastructure, LLC" };
+
 const QUARTERLY_MONTHLY_FORMS_DEFAULT = [
   {
     title: "Quarterly Inspection Verification",
     description: "Quarterly Competent Person verification that electrical, fall protection, scaffold, rigging, and ladder equipment has been inspected and maintained.",
     submitEmail: "ntisafety@ferrovial.us",
     pdfLink: "https://drive.google.com/file/d/12DQztBzoC8veYc19LW8GKXNOqL51ZQaZ/preview",
-    pdfFillTemplate: "quarterly-inspection-verification",
+    pdfFillTemplate: "generic-form-pdf",
+    genericPdfNeutral: true,
+    prefillNameFields: ["Competent Person"],
     fields: ["Competent Person", "Period"],
+    chipFields: { Period: { options: QM_QUARTERS } },
+    signatureLabels: ["Authorized \"Competent Person\" Signature"],
+    textBlocks: [
+      QM_GC_BLOCK,
+      { at: "before", text: "As an authorized \u201CCOMPETENT PERSON\u201D for the above named \u201CSUBCONTRACTOR\u201D on the above named \u201CPROJECT\u201D in the area(s) of:" },
+      { at: "after", text: "I hereby verify that all electrical components in our use, temporary and permanent, have been inspected and maintained over the \u201CPERIOD\u201D indicated above, and meet all local, state and federal regulations for their safe use." },
+      {
+        at: "after", title: "Color Code Program",
+        text: "The following color code program will be required as a visual indicator of this inspection practice:",
+        rows: [["1st Quarter", "WHITE", "January, February and March"], ["2nd Quarter", "GREEN", "April, May and June"], ["3rd Quarter", "RED", "July, August and September"], ["4th Quarter", "ORANGE", "October, November and December"]],
+      },
+      { at: "after", text: "Frequency of submission of this form to the NTI Safety Department is QUARTERLY.", emphasis: true },
+      { at: "after", text: "*** This form is to be submitted to the Safety Coordinator at ntisafety@ferrovial.us.", emphasis: true },
+    ],
     statusGroups: [
       {
         label: "Area(s) of Responsibility",
         options: ["Yes", "N/A"],
         items: [
           "Electrical (power tools, cords, lights and power sources)",
-          "Fall Protection (Personal Fall Arrest Systems)",
-          "Scaffolds (erection, use, dismantling)",
-          "Rigging (selection, use, maintenance)",
-          "Ladders (selection, use, maintenance)",
+          "Fall Protection, i.e. Personal Fall Arrest Systems (selection, use and maintenance)",
+          "Scaffolds (erection, use and dismantling)",
+          "Rigging (selection, use and maintenance)",
+          "Ladders (selection, use and maintenance)",
         ],
       },
     ],
+    genericPdfWide: true,
   },
   {
     title: "Monthly Fire Protection Verification",
     description: "Monthly Competent Person verification that fire extinguishers have been inspected and maintained.",
     submitEmail: "ntisafety@ferrovial.us",
     pdfLink: "https://drive.google.com/file/d/1qVpT8Ln0zzGbgSMCyUYzmMN5qGbQ5cV_/preview",
-    pdfFillTemplate: "fire-protection-inspection-verification",
+    pdfFillTemplate: "generic-form-pdf",
+    genericPdfNeutral: true,
+    prefillNameFields: ["Competent Person"],
     fields: ["Competent Person", "Period"],
+    chipFields: { Period: { options: QM_MONTHS } },
+    signatureLabels: ["Authorized \"Competent Person\" Signature"],
+    textBlocks: [
+      QM_GC_BLOCK,
+      { at: "before", text: "As an authorized \u201CCOMPETENT PERSON\u201D for the above named \u201CSUBCONTRACTOR\u201D on the above named \u201CPROJECT\u201D in the area of Fire Protection, I hereby verify that all fire extinguishers at our disposal have been inspected and maintained over the \u201CPERIOD\u201D indicated above, and meet all local, state and federal regulations for their safe use." },
+      { at: "before", title: "Note", text: "All extinguishers must be inspected by a third party entity, annually.", emphasis: true },
+      { at: "after", text: "Frequency of submission of this form to the NTI, LLC. Safety Department is MONTHLY. This form shall be emailed to the Segment Safety Coordinator.", emphasis: true },
+      { at: "after", text: "*** This form is to be submitted to Safety Department every month at ntisafety@ferrovial.us", emphasis: true },
+    ],
   },
 ];
 
@@ -7626,7 +7659,7 @@ async function buildGenericFormPdf({ form, slug, projectName, standardValues, fi
   const doc = await PDFDocument.create();
   const sans = await doc.embedFont(StandardFonts.Helvetica);
   const sansB = await doc.embedFont(StandardFonts.HelveticaBold);
-  const clean = (t) => String(t == null ? "" : t).replace(/[\u2013\u2014]/g, "-").replace(/\u2264/g, "<=").replace(/\u2265/g, ">=").replace(/\r/g, "").replace(/[^\n -ÿ]/g, "?");
+  const clean = (t) => String(t == null ? "" : t).replace(/[\u2013\u2014]/g, "-").replace(/[\u201C\u201D]/g, '"').replace(/[\u2018\u2019]/g, "'").replace(/\u2264/g, "<=").replace(/\u2265/g, ">=").replace(/\r/g, "").replace(/[^\n -ÿ]/g, "?");
   const ink = rgb(0.1, 0.1, 0.1), gold = rgb(0.98, 0.78, 0.02), grey = rgb(0.4, 0.42, 0.45), line = rgb(0.8, 0.79, 0.75), pale = rgb(0.96, 0.95, 0.92);
   const W = 612, H = 792, M = 36, CW = W - 2 * M;
   const wrap = (text, font, size, max) => {
@@ -7800,6 +7833,34 @@ async function buildGenericFormPdf({ form, slug, projectName, standardValues, fi
   });
   y -= 6;
 
+  // free-text blocks from the source document (statements, notes, tables, footers)
+  const drawBlocks = (at) => (form.textBlocks || []).filter((b) => (b.at || "before") === at).forEach((b) => {
+    if (b.title) {
+      need(30);
+      page.drawRectangle({ x: M, y: y - 14, width: CW, height: 14, color: gold });
+      page.drawText(clean(b.title).toUpperCase(), { x: M + 4, y: y - 10, size: 7.5, font: sansB, color: ink });
+      y -= 18;
+    }
+    if (b.text) {
+      const fnt = b.emphasis || (b.title && !b.rows) ? sansB : sans;
+      const lines = wrap(b.text, fnt, 9.5, CW - 8);
+      lines.forEach((ln) => { need(14); page.drawText(ln, { x: M + 4, y: y - 10, size: 9.5, font: fnt, color: ink }); y -= 12.5; });
+      y -= 6;
+    }
+    if (b.rows) {
+      b.rows.forEach((r) => {
+        need(16);
+        page.drawText(clean(r[0]), { x: M + 4, y: y - 11, size: 9, font: sans, color: ink });
+        if (r[1] != null) page.drawText(clean(r[1]), { x: M + 110, y: y - 11, size: 9, font: sansB, color: ink });
+        if (r[2] != null) page.drawText(clean(r[2]), { x: M + 190, y: y - 11, size: 9, font: sans, color: ink });
+        y -= 15;
+        page.drawLine({ start: { x: M, y: y + 1 }, end: { x: W - M, y: y + 1 }, thickness: 0.3, color: line });
+      });
+      y -= 6;
+    }
+  });
+  drawBlocks("before");
+
   // reference table (e.g. clearance distances)
   if (form.referenceTable) {
     const rt = form.referenceTable;
@@ -7874,6 +7935,7 @@ async function buildGenericFormPdf({ form, slug, projectName, standardValues, fi
     }
     y -= 6;
   });
+  drawBlocks("after");
   if (form.genericPdfPhotosLast) await drawPhotos();
 
   // named people with signatures (entrants, attendants, crew)
@@ -9268,6 +9330,21 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
             </div>
           )}
 
+          {(form.textBlocks || []).filter((b) => (b.at || "before") === "before").map((b, bi) => (
+            <div key={"tb" + "before" + bi} className="rounded-md border p-2.5" style={{ borderColor: "#E4E2DA", background: "#FCFCFA" }}>
+              {b.title && <div className="text-[11px] uppercase font-bold mb-1" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{b.title}</div>}
+              {b.text && <div className="text-[12px] leading-snug" style={{ color: "#333", fontWeight: b.emphasis ? 600 : 400 }}>{b.text}</div>}
+              {b.rows && (
+                <div className="mt-1.5 rounded-md border overflow-hidden" style={{ borderColor: "#E4E2DA" }}>
+                  {b.rows.map((r, ri) => (
+                    <div key={ri} className="flex text-[11px] px-2 py-1" style={{ borderTop: ri ? "1px solid #E4E2DA" : "none" }}>
+                      <div style={{ width: "30%" }}>{r[0]}</div><div style={{ width: "22%", fontWeight: 700 }}>{r[1]}</div><div style={{ width: "48%", color: STEEL }}>{r[2]}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
           {(form.statusGroups || []).map((group, gi) => (
             <React.Fragment key={gi}>
             <StatusGroup group={group} values={statusValues[gi] || {}} onChange={(itemIdx, opt) => setStatus(gi, itemIdx, opt)} refs={statusRefs[gi] || {}} onRef={(itemIdx, val) => setStatusRefs((r) => ({ ...r, [gi]: { ...(r[gi] || {}), [itemIdx]: val } }))} />
@@ -9302,6 +9379,21 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
             </React.Fragment>
           ))}
 
+          {(form.textBlocks || []).filter((b) => (b.at || "before") === "after").map((b, bi) => (
+            <div key={"tb" + "after" + bi} className="rounded-md border p-2.5" style={{ borderColor: "#E4E2DA", background: "#FCFCFA" }}>
+              {b.title && <div className="text-[11px] uppercase font-bold mb-1" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{b.title}</div>}
+              {b.text && <div className="text-[12px] leading-snug" style={{ color: "#333", fontWeight: b.emphasis ? 600 : 400 }}>{b.text}</div>}
+              {b.rows && (
+                <div className="mt-1.5 rounded-md border overflow-hidden" style={{ borderColor: "#E4E2DA" }}>
+                  {b.rows.map((r, ri) => (
+                    <div key={ri} className="flex text-[11px] px-2 py-1" style={{ borderTop: ri ? "1px solid #E4E2DA" : "none" }}>
+                      <div style={{ width: "30%" }}>{r[0]}</div><div style={{ width: "22%", fontWeight: 700 }}>{r[1]}</div><div style={{ width: "48%", color: STEEL }}>{r[2]}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
           {form.referenceTable && (
             <div>
               <div className="text-[11px] uppercase font-bold mb-2" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{form.referenceTable.title}</div>
