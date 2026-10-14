@@ -13219,20 +13219,45 @@ function BadgeModal({ user, onClose, onLogout }) {
 // admin review, separate TD- badge, public badge verification.
 // Truck driver badges live in their own table and never mix with regular personnel badges.
 // ============================================================
-const TRUCK_DRIVER_VIDEO_PATH = "truck-driver-orientation.mp4";
-const TRUCK_DRIVER_AFFIDAVIT_FORM = {
-  title: "Truck Driver Orientation & Drug Screen Verification",
-  fields: ["Employee Name", "Contractor", "Authorized Representative (Print)", "Date", "Certification", "Minimum Requirements", "Administrative Instruction", "Termination Notice"],
-  genericPdfLongFields: ["Certification", "Minimum Requirements", "Administrative Instruction", "Termination Notice"],
-  statusGroups: [],
-  choiceGroups: [],
+// Truck driver onboarding is configured PER PROJECT. Each project can have its own orientation video,
+// verification-form title/wording, and (via the database) its own badge prefix and numbering.
+// Video file convention: upload "truck-driver-orientation-<project-slug>.mp4" to the documents bucket
+// (e.g. truck-driver-orientation-nti-sylvania.mp4). To give a project its own form wording, add an entry to TRUCK_DRIVER_PROJECTS.
+const TRUCK_DRIVER_DEFAULTS = {
+  formTitle: "Truck Driver Orientation & Drug Screen Verification",
+  subtitle: "(An authorized employer representative must verify orientation)",
+  certify: "As an Authorized Representative of the above named CONTRACTOR, I hereby certify the above mentioned EMPLOYEE completed the Truck Driver Orientation and as such understands and will abide by the requirements set forth in the orientation. I further certify that the driver successfully completed a drug screen within the past 30 days and said result proved negative.",
+  terms: "It is understood that these are minimum requirements and do not preclude any driver from compliance with local, federal or state laws. All drivers must have the orientation badge on their person at all times. Any disregard for local, federal, state laws or project policies or procedures may result in corrective action up to and including removal from the project.",
+  admin: (projectName) => `This form must be completed in its entirety and submitted with a picture of the employee that completed the orientation. Once submitted, the ${projectName || "project"} Safety Department will review the form, the employee's photo and the orientation video, and the badge will be issued.`,
+  termination: "I understand that if at any point in the future this EMPLOYEE is terminated or is removed from the PROJECT, a written notification will be submitted to the project Safety Department.",
 };
-const TRUCK_DRIVER_CERTIFY = "As an Authorized Representative of the above named CONTRACTOR, I hereby certify the above mentioned EMPLOYEE completed the Truck Driver Orientation and as such understands and will abide by the requirements set forth in the orientation. I further certify that the driver successfully completed a drug screen within the past 30 days and said result proved negative.";
-const TRUCK_DRIVER_TERMS = "It is understood that these are minimum requirements and do not preclude any driver from compliance with local, federal or state laws. All drivers must have the orientation badge on their person at all times. Any disregard for local, federal, state laws or project policies or procedures may result in corrective action up to and including removal from the project.";
-const tdAdminInstruction = (slug, projectName) => /^nti-/.test(slug)
-  ? "This form must be completed in its entirety and submitted with a picture of the employee that completed the orientation. Submission of the form along with the picture of the employee shall be sent to ntisafety@ferrovial.us. Badges may be retrieved from NTI Safety at 13601 North Freeway, Suite 200 Fort Worth, TX 76177. Please allow 24 hours to complete the badge making process."
-  : `This form must be completed in its entirety and submitted with a picture of the employee that completed the orientation. Once submitted, the ${projectName || "project"} Safety Department will review the form, the employee's photo and the orientation video, and the badge will be issued.`;
-const TRUCK_DRIVER_TERMINATION = "I understand that if at any point in the future this EMPLOYEE is terminated or is removed from the PROJECT, a written notification will be submitted to the project Safety Department.";
+const TRUCK_DRIVER_PROJECTS = {
+  "nti-sylvania": {
+    formTitle: "Truck Driver Orientation & Drug Screen Verification",
+    certify: "As an Authorized Representative of the above named \"SUBCONTRACTOR\", I hereby certify the above mentioned \"EMPLOYEE\" completed the NTI Truck Driver Orientation and as such understands and will abide by the requirements set forth in the orientation. I further certify that the driver successfully completed a drug screen within the past 30 days and said result proved negative.",
+    terms: "It is understood that these are minimum requirements and do not preclude any driver from compliance with local, federal or state laws. All drivers must have the orientation badge on their person at all times. Any disregard for local, federal, state laws or NTI policies or procedures may result in corrective action up to and including removal from the project.",
+    admin: () => "This form must be completed in its entirety and submitted with a picture of the employee that completed the orientation. Submission of the form along with the picture of the employee shall be sent to ntisafety@ferrovial.us. Badges may be retrieved from NTI Safety at 13601 North Freeway, Suite 200 Fort Worth, TX 76177. Please allow 24 hours to complete the badge making process.",
+    termination: "I understand that if at any point in the future this \"EMPLOYEE\" is terminated or is removed from the \"PROJECT\", a written notification will be submitted to the NTI Safety Department.",
+  },
+  // Golden Triangle shares the NTI wording until it gets its own form
+  "nti-golden-triangle": {
+    admin: () => "This form must be completed in its entirety and submitted with a picture of the employee that completed the orientation. Submission of the form along with the picture of the employee shall be sent to ntisafety@ferrovial.us. Badges may be retrieved from NTI Safety at 13601 North Freeway, Suite 200 Fort Worth, TX 76177. Please allow 24 hours to complete the badge making process.",
+  },
+};
+function tdConfig(slug, projectName) {
+  const c = { ...TRUCK_DRIVER_DEFAULTS, ...(TRUCK_DRIVER_PROJECTS[slug] || {}) };
+  return {
+    ...c,
+    admin: c.admin(projectName),
+    videoPath: (TRUCK_DRIVER_PROJECTS[slug] && TRUCK_DRIVER_PROJECTS[slug].videoPath) || `truck-driver-orientation-${slug}.mp4`,
+    form: {
+      title: c.formTitle,
+      fields: ["Employee Name", "Contractor", "Authorized Representative (Print)", "Date", "Certification", "Minimum Requirements", "Administrative Instruction", "Termination Notice"],
+      genericPdfLongFields: ["Certification", "Minimum Requirements", "Administrative Instruction", "Termination Notice"],
+      statusGroups: [], choiceGroups: [],
+    },
+  };
+}
 
 function tdDriverStorageKey(slug) { return `safetyhub_td_${slug}`; }
 function tdVerifyLink(slug, token) { return `${window.location.origin}${window.location.pathname}?project=${slug}&screen=verifytruckdriver&v=${token}`; }
@@ -13271,6 +13296,7 @@ function TruckDriverBadgeCard({ driver, projectSlug, projectName }) {
 
 function TruckDriverAffidavitStep({ driver, projectSlug, projectName, onSaved }) {
   const [f, setF] = useState({ name: driver.name || "", company: driver.company || "", rep: "" });
+  const cfg = tdConfig(projectSlug, projectName);
   const todayLabel = new Date().toLocaleDateString("en-US", { timeZone: "America/Chicago" });
   const [certified, setCertified] = useState(false);
   const [repEmpty, setRepEmpty] = useState(true);
@@ -13284,13 +13310,14 @@ function TruckDriverAffidavitStep({ driver, projectSlug, projectName, onSaved })
   const save = async () => {
     setBusy(true); setErr("");
     try {
+      const cfg = tdConfig(projectSlug, projectName);
       const now = new Date();
       const dateLabel = now.toLocaleDateString("en-US", { timeZone: "America/Chicago" });
       const bytes = await buildGenericFormPdf({
-        form: TRUCK_DRIVER_AFFIDAVIT_FORM, slug: projectSlug, projectName,
+        form: cfg.form, slug: projectSlug, projectName,
         standardValues: { name: f.rep.trim(), subcontractor: f.company.trim(), date: dateLabel },
-        fieldValues: { 0: f.name.trim(), 1: f.company.trim(), 2: f.rep.trim(), 3: dateLabel, 4: TRUCK_DRIVER_CERTIFY, 5: TRUCK_DRIVER_TERMS, 6: tdAdminInstruction(projectSlug, projectName), 7: TRUCK_DRIVER_TERMINATION },
-        choiceValues: {}, statusValues: {}, longFields: TRUCK_DRIVER_AFFIDAVIT_FORM.genericPdfLongFields,
+        fieldValues: { 0: f.name.trim(), 1: f.company.trim(), 2: f.rep.trim(), 3: dateLabel, 4: cfg.certify, 5: cfg.terms, 6: cfg.admin, 7: cfg.termination },
+        choiceValues: {}, statusValues: {}, longFields: cfg.form.genericPdfLongFields,
         submittedAt: fmtSubmittedAt(now), photos: {},
         signatures: [
           { label: "Authorized Representative Verifying Orientation - " + f.rep.trim(), dataUrl: repRef.current ? repRef.current.toDataURL("image/png") : null },
@@ -13311,8 +13338,8 @@ function TruckDriverAffidavitStep({ driver, projectSlug, projectName, onSaved })
   return (
     <div>
       <div className="text-center mb-3">
-        <div className="text-[15px] font-bold" style={{ fontFamily: "Oswald, sans-serif" }}>Truck Driver Orientation & Drug Screen Verification</div>
-        <div className="text-[11px] italic" style={{ color: STEEL }}>(An authorized employer representative must verify orientation)</div>
+        <div className="text-[15px] font-bold" style={{ fontFamily: "Oswald, sans-serif" }}>{cfg.formTitle}</div>
+        <div className="text-[11px] italic" style={{ color: STEEL }}>{cfg.subtitle}</div>
       </div>
       <div className="grid grid-cols-2 gap-x-3">
         <div><div className="text-[10px] uppercase font-bold" style={lbl}>Project</div><div className="text-[13px] mb-3 font-bold">{projectName}</div></div>
@@ -13322,11 +13349,11 @@ function TruckDriverAffidavitStep({ driver, projectSlug, projectName, onSaved })
       <input value={f.company} onChange={(e) => setF({ ...f, company: e.target.value })} className={inp} style={{ borderColor: "#C9C6BC" }} />
       <label className="text-[10px] uppercase font-bold" style={lbl}>Employee Name</label>
       <input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} className={inp} style={{ borderColor: "#C9C6BC" }} />
-      <div className="rounded-md p-2.5 mb-2 text-[12px] leading-snug" style={{ background: "#F4F3EF" }}>{TRUCK_DRIVER_CERTIFY}</div>
-      <div className="rounded-md p-2.5 mb-2 text-[11px] leading-snug" style={{ background: "#F4F3EF", color: STEEL }}>{TRUCK_DRIVER_TERMS}</div>
+      <div className="rounded-md p-2.5 mb-2 text-[12px] leading-snug" style={{ background: "#F4F3EF" }}>{cfg.certify}</div>
+      <div className="rounded-md p-2.5 mb-2 text-[11px] leading-snug" style={{ background: "#F4F3EF", color: STEEL }}>{cfg.terms}</div>
       <div className="text-[10px] uppercase font-bold text-center mt-3 mb-1" style={lbl}>Administrative Instruction</div>
-      <div className="rounded-md p-2.5 mb-2 text-[11px] leading-snug" style={{ background: "#F4F3EF", color: STEEL }}>{tdAdminInstruction(projectSlug, projectName)}</div>
-      <div className="rounded-md p-2.5 mb-3 text-[11px] leading-snug" style={{ background: "#F4F3EF", color: STEEL }}>{TRUCK_DRIVER_TERMINATION}</div>
+      <div className="rounded-md p-2.5 mb-2 text-[11px] leading-snug" style={{ background: "#F4F3EF", color: STEEL }}>{cfg.admin}</div>
+      <div className="rounded-md p-2.5 mb-3 text-[11px] leading-snug" style={{ background: "#F4F3EF", color: STEEL }}>{cfg.termination}</div>
       <button onClick={() => setCertified((n) => !n)} className="w-full text-left flex items-start gap-2 rounded-md border p-2.5 mb-4" style={{ borderColor: certified ? GOLD : "#C9C6BC", background: certified ? "#FFF8E1" : "white" }}>
         {certified ? <CheckCircle2 size={18} color={GOLD} className="flex-shrink-0 mt-0.5" /> : <Circle size={18} color={STEEL} className="flex-shrink-0 mt-0.5" />}
         <span className="text-[12px] leading-snug">The statements above are true, and I understand them.</span>
@@ -13406,8 +13433,8 @@ function TruckDriverPhotosStep({ driver, onSaved }) {
   );
 }
 
-function TruckDriverVideoStep({ driver, onUpdated }) {
-  const videoUrl = (supabase.storage.from("documents").getPublicUrl(TRUCK_DRIVER_VIDEO_PATH).data || {}).publicUrl;
+function TruckDriverVideoStep({ driver, projectSlug, onUpdated }) {
+  const videoUrl = (supabase.storage.from("documents").getPublicUrl(tdConfig(projectSlug).videoPath).data || {}).publicUrl;
   const vref = useRef(null);
   const maxRef = useRef(driver.video_seconds || 0);
   const lastReport = useRef(0);
@@ -13494,6 +13521,17 @@ function TruckDriverScreen({ activeProjectId, user, go }) {
     if (!data) { setErr("Badge number or PIN didn't match."); return; }
     remember(data); setDriver(data);
   };
+  const [forgot, setForgot] = useState(false);
+  const [rcPhone, setRcPhone] = useState("");
+  const [rcCdl, setRcCdl] = useState("");
+  const doRecover = async () => {
+    setBusy(true); setErr("");
+    await loadProjectMap();
+    const { data } = await supabase.rpc("td_recover", { p_project_id: projectIdForSlug(activeProjectId), p_phone: rcPhone, p_cdl: rcCdl });
+    setBusy(false);
+    if (!data) { setErr("We couldn't find a match. Use the same phone number and CDL number you entered when you started."); return; }
+    remember(data); setDriver(data);
+  };
   const doResume = async () => {
     setBusy(true); setErr("");
     const { data } = await supabase.rpc("td_resume", { p_code: resume });
@@ -13551,7 +13589,7 @@ function TruckDriverScreen({ activeProjectId, user, go }) {
         <button disabled={busy || !f.name.trim() || !f.phone.trim() || !f.company.trim() || !f.cdl.trim()} onClick={start} className="w-full rounded-md py-3 text-sm font-bold disabled:opacity-40" style={{ background: GOLD, color: INK, fontFamily: "Oswald, sans-serif" }}>{busy ? "Starting..." : "Start Onboarding"}</button>
       </>) : mode === "badge" ? (<>
         <label className="text-[10px] uppercase font-bold" style={lbl}>Badge Number</label>
-        <input value={badgeNo} onChange={(e) => setBadgeNo(e.target.value.toUpperCase())} autoCapitalize="characters" placeholder="TD0001" className={inp} style={{ borderColor: "#C9C6BC" }} />
+        <input value={badgeNo} onChange={(e) => setBadgeNo(e.target.value.toUpperCase())} autoCapitalize="characters" placeholder="e.g. SYL-001 or just 1" className={inp} style={{ borderColor: "#C9C6BC" }} />
         <label className="text-[10px] uppercase font-bold" style={lbl}>PIN</label>
         <input value={badgePin} onChange={(e) => setBadgePin(e.target.value.replace(/\D/g, "").slice(0, 4))} inputMode="numeric" type="password" className={inp} style={{ borderColor: "#C9C6BC", letterSpacing: "0.3em" }} />
         {err && <div className="text-[11px] mb-2" style={{ color: ALERT }}>{err}</div>}
@@ -13559,8 +13597,18 @@ function TruckDriverScreen({ activeProjectId, user, go }) {
       </>) : (<>
         <label className="text-[10px] uppercase font-bold" style={lbl}>Resume Code</label>
         <input value={resume} onChange={(e) => setResume(e.target.value.toUpperCase())} autoCapitalize="characters" className={inp} style={{ borderColor: "#C9C6BC", letterSpacing: "0.12em" }} />
-        {err && <div className="text-[11px] mb-2" style={{ color: ALERT }}>{err}</div>}
+        {err && !forgot && <div className="text-[11px] mb-2" style={{ color: ALERT }}>{err}</div>}
         <button disabled={busy || resume.trim().length < 6} onClick={doResume} className="w-full rounded-md py-3 text-sm font-bold disabled:opacity-40" style={{ background: GOLD, color: INK, fontFamily: "Oswald, sans-serif" }}>{busy ? "Checking..." : "Continue"}</button>
+        <button onClick={() => { setForgot((x) => !x); setErr(""); }} className="mt-3 text-[12px] underline" style={{ color: STEEL }}>{forgot ? "Hide" : "I lost my code"}</button>
+        {forgot && (
+          <div className="mt-2 rounded-md border p-3" style={{ borderColor: "#C9C6BC", background: "white" }}>
+            <div className="text-[11px] mb-2" style={{ color: STEEL }}>Enter the phone number and CDL number you used when you started.</div>
+            <input type="tel" value={rcPhone} onChange={(e) => setRcPhone(e.target.value)} placeholder="Phone number" className={inp} style={{ borderColor: "#C9C6BC" }} />
+            <input value={rcCdl} onChange={(e) => setRcCdl(e.target.value.toUpperCase())} placeholder="CDL number" autoCapitalize="characters" className={inp} style={{ borderColor: "#C9C6BC" }} />
+            {err && <div className="text-[11px] mb-2" style={{ color: ALERT }}>{err}</div>}
+            <button disabled={busy || rcPhone.replace(/\D/g, "").length < 7 || rcCdl.trim().length < 4} onClick={doRecover} className="w-full rounded-md py-2.5 text-sm font-bold disabled:opacity-40" style={{ background: GOLD, color: INK, fontFamily: "Oswald, sans-serif" }}>{busy ? "Checking..." : "Find My Application"}</button>
+          </div>
+        )}
       </>)}
     </>);
   }
@@ -13614,7 +13662,7 @@ function TruckDriverScreen({ activeProjectId, user, go }) {
           <div className="px-3 pb-3">
             {s.key === "affidavit" && <TruckDriverAffidavitStep driver={driver} projectSlug={activeProjectId} projectName={proj.name} onSaved={(d) => { setDriver(d); setOpenStep(null); }} />}
             {s.key === "photos" && <TruckDriverPhotosStep driver={driver} onSaved={(d) => { setDriver(d); setOpenStep(null); }} />}
-            {s.key === "video" && <TruckDriverVideoStep driver={driver} onUpdated={(d) => setDriver((old) => ({ ...old, ...d }))} />}
+            {s.key === "video" && <TruckDriverVideoStep driver={driver} projectSlug={activeProjectId} onUpdated={(d) => setDriver((old) => ({ ...old, ...d }))} />}
           </div>
         )}
       </div>
@@ -13659,6 +13707,7 @@ function TruckDriverAdminCard({ d, user, projectSlug, projectName, onChanged }) 
         <div className="px-3 pb-3">
           <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] mb-3" style={{ color: STEEL }}>
             <div>Phone: {d.phone || "-"}</div><div>Email: {d.email || "-"}</div>
+            {d.resume_code && <div>Resume code: <b style={{ letterSpacing: "0.08em" }}>{d.resume_code}</b></div>}
             {d.badge_number && <div>Badge: <b>{d.badge_number}</b></div>}{d.pin && <div>PIN: <b>{d.pin}</b></div>}
             <div>CDL: {d.cdl_number || "-"} {d.cdl_state || ""}</div><div>Started: {new Date(d.created_at).toLocaleDateString()}</div>
           </div>
