@@ -13225,19 +13225,19 @@ function BadgeModal({ user, onClose, onLogout }) {
 // (e.g. truck-driver-orientation-nti-sylvania.mp4). To give a project its own form wording, add an entry to TRUCK_DRIVER_PROJECTS.
 const TRUCK_DRIVER_DEFAULTS = {
   formTitle: "Truck Driver Orientation & Drug Screen Verification",
-  subtitle: "(An authorized employer representative must verify orientation)",
-  certify: "As an Authorized Representative of the above named CONTRACTOR, I hereby certify the above mentioned EMPLOYEE completed the Truck Driver Orientation and as such understands and will abide by the requirements set forth in the orientation. I further certify that the driver successfully completed a drug screen within the past 30 days and said result proved negative.",
+  subtitle: "",
+  certify: "I certify that I completed the Truck Driver Orientation and that I understand and will abide by the requirements set forth in the orientation. I further certify that I successfully completed a drug screen within the past 30 days and that the result was negative.",
   terms: "It is understood that these are minimum requirements and do not preclude any driver from compliance with local, federal or state laws. All drivers must have the orientation badge on their person at all times. Any disregard for local, federal, state laws or project policies or procedures may result in corrective action up to and including removal from the project.",
   admin: (projectName) => `This form must be completed in its entirety and submitted with a picture of the employee that completed the orientation. Once submitted, the ${projectName || "project"} Safety Department will review the form, the employee's photo and the orientation video, and the badge will be issued.`,
-  termination: "I understand that if at any point in the future this EMPLOYEE is terminated or is removed from the PROJECT, a written notification will be submitted to the project Safety Department.",
+  termination: "I understand that if at any point in the future I am terminated or removed from the PROJECT, a written notification will be submitted to the project Safety Department.",
 };
 const TRUCK_DRIVER_PROJECTS = {
   "nti-sylvania": {
     formTitle: "Truck Driver Orientation & Drug Screen Verification",
-    certify: "As an Authorized Representative of the above named \"SUBCONTRACTOR\", I hereby certify the above mentioned \"EMPLOYEE\" completed the NTI Truck Driver Orientation and as such understands and will abide by the requirements set forth in the orientation. I further certify that the driver successfully completed a drug screen within the past 30 days and said result proved negative.",
+    certify: "I certify that I completed the NTI Truck Driver Orientation and that I understand and will abide by the requirements set forth in the orientation. I further certify that I successfully completed a drug screen within the past 30 days and that the result was negative.",
     terms: "It is understood that these are minimum requirements and do not preclude any driver from compliance with local, federal or state laws. All drivers must have the orientation badge on their person at all times. Any disregard for local, federal, state laws or NTI policies or procedures may result in corrective action up to and including removal from the project.",
     admin: () => "This form must be completed in its entirety and submitted with a picture of the employee that completed the orientation. Submission of the form along with the picture of the employee shall be sent to ntisafety@ferrovial.us. Badges may be retrieved from NTI Safety at 13601 North Freeway, Suite 200 Fort Worth, TX 76177. Please allow 24 hours to complete the badge making process.",
-    termination: "I understand that if at any point in the future this \"EMPLOYEE\" is terminated or is removed from the \"PROJECT\", a written notification will be submitted to the NTI Safety Department.",
+    termination: "I understand that if at any point in the future I am terminated or removed from the \"PROJECT\", a written notification will be submitted to the NTI Safety Department.",
   },
   // Golden Triangle shares the NTI wording until it gets its own form
   "nti-golden-triangle": {
@@ -13252,7 +13252,7 @@ function tdConfig(slug, projectName) {
     videoPath: (TRUCK_DRIVER_PROJECTS[slug] && TRUCK_DRIVER_PROJECTS[slug].videoPath) || `truck-driver-orientation-${slug}.mp4`,
     form: {
       title: c.formTitle,
-      fields: ["Employee Name", "Contractor", "Authorized Representative (Print)", "Date", "Certification", "Minimum Requirements", "Administrative Instruction", "Termination Notice"],
+      fields: ["Employee Name", "Contractor", "Date", "Certification", "Minimum Requirements", "Administrative Instruction", "Termination Notice"],
       genericPdfLongFields: ["Certification", "Minimum Requirements", "Administrative Instruction", "Termination Notice"],
       statusGroups: [], choiceGroups: [],
     },
@@ -13295,16 +13295,15 @@ function TruckDriverBadgeCard({ driver, projectSlug, projectName }) {
 }
 
 function TruckDriverAffidavitStep({ driver, projectSlug, projectName, onSaved }) {
-  const [f, setF] = useState({ name: driver.name || "", company: driver.company || "", rep: "" });
+  const [f, setF] = useState({ name: driver.name || "", company: driver.company || "" });
   const cfg = tdConfig(projectSlug, projectName);
   const todayLabel = new Date().toLocaleDateString("en-US", { timeZone: "America/Chicago" });
   const [certified, setCertified] = useState(false);
-  const [repEmpty, setRepEmpty] = useState(true);
   const [empEmpty, setEmpEmpty] = useState(true);
-  const repRef = useRef(null), empRef = useRef(null);
+  const empRef = useRef(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
-  const ready = f.name.trim() && f.company.trim() && f.rep.trim() && certified && !repEmpty && !empEmpty;
+  const ready = f.name.trim() && f.company.trim() && certified && !empEmpty;
   const inp = "w-full mt-1 mb-3 rounded-md border px-2.5 py-2 text-[14px]";
   const lbl = { color: STEEL, fontFamily: "IBM Plex Mono, monospace" };
   const save = async () => {
@@ -13315,12 +13314,11 @@ function TruckDriverAffidavitStep({ driver, projectSlug, projectName, onSaved })
       const dateLabel = now.toLocaleDateString("en-US", { timeZone: "America/Chicago" });
       const bytes = await buildGenericFormPdf({
         form: cfg.form, slug: projectSlug, projectName,
-        standardValues: { name: f.rep.trim(), subcontractor: f.company.trim(), date: dateLabel },
-        fieldValues: { 0: f.name.trim(), 1: f.company.trim(), 2: f.rep.trim(), 3: dateLabel, 4: cfg.certify, 5: cfg.terms, 6: cfg.admin, 7: cfg.termination },
+        standardValues: { name: f.name.trim(), subcontractor: f.company.trim(), date: dateLabel },
+        fieldValues: { 0: f.name.trim(), 1: f.company.trim(), 2: dateLabel, 3: cfg.certify, 4: cfg.terms, 5: cfg.admin, 6: cfg.termination },
         choiceValues: {}, statusValues: {}, longFields: cfg.form.genericPdfLongFields,
         submittedAt: fmtSubmittedAt(now), photos: {},
         signatures: [
-          { label: "Authorized Representative Verifying Orientation - " + f.rep.trim(), dataUrl: repRef.current ? repRef.current.toDataURL("image/png") : null },
           { label: "Employee Acknowledgement of Attendance - " + f.name.trim(), dataUrl: empRef.current ? empRef.current.toDataURL("image/png") : null },
         ],
       });
@@ -13328,7 +13326,7 @@ function TruckDriverAffidavitStep({ driver, projectSlug, projectName, onSaved })
       const { error: upErr } = await supabase.storage.from("documents").upload(path, new Blob([bytes], { type: "application/pdf" }), { contentType: "application/pdf" });
       if (upErr) throw new Error(upErr.message || "Upload failed");
       const { data: u } = supabase.storage.from("documents").getPublicUrl(path);
-      const { data: ok } = await supabase.rpc("td_save_affidavit", { p_id: driver.id, p_pdf_url: u.publicUrl, p_data: { employee: f.name, contractor: f.company, representative: f.rep, certified: true, signedAt: now.toISOString() } });
+      const { data: ok } = await supabase.rpc("td_save_affidavit", { p_id: driver.id, p_pdf_url: u.publicUrl, p_data: { employee: f.name, contractor: f.company, certified: true, signedAt: now.toISOString() } });
       if (!ok) throw new Error("Could not save. Please try again.");
       const { data: fresh } = await supabase.rpc("td_get", { p_id: driver.id });
       onSaved(fresh);
@@ -13339,7 +13337,7 @@ function TruckDriverAffidavitStep({ driver, projectSlug, projectName, onSaved })
     <div>
       <div className="text-center mb-3">
         <div className="text-[15px] font-bold" style={{ fontFamily: "Oswald, sans-serif" }}>{cfg.formTitle}</div>
-        <div className="text-[11px] italic" style={{ color: STEEL }}>{cfg.subtitle}</div>
+        {cfg.subtitle ? <div className="text-[11px] italic" style={{ color: STEEL }}>{cfg.subtitle}</div> : null}
       </div>
       <div className="grid grid-cols-2 gap-x-3">
         <div><div className="text-[10px] uppercase font-bold" style={lbl}>Project</div><div className="text-[13px] mb-3 font-bold">{projectName}</div></div>
@@ -13359,14 +13357,6 @@ function TruckDriverAffidavitStep({ driver, projectSlug, projectName, onSaved })
         <span className="text-[12px] leading-snug">The statements above are true, and I understand them.</span>
       </button>
       <div className="rounded-md border p-3 mb-3" style={{ borderColor: "#C9C6BC" }}>
-        <div className="text-[10px] uppercase font-bold mb-2" style={lbl}>Authorized Representative Verifying Orientation</div>
-        <label className="text-[10px] uppercase font-bold" style={lbl}>Print</label>
-        <input value={f.rep} onChange={(e) => setF({ ...f, rep: e.target.value })} className={inp} style={{ borderColor: "#C9C6BC" }} />
-        <label className="text-[10px] uppercase font-bold flex items-center gap-1" style={lbl}><PenLine size={12} /> Sign</label>
-        <div className="mt-1 mb-2"><SignaturePad autoName={f.rep.trim()} onChange={setRepEmpty} canvasRef={repRef} /></div>
-        <div className="text-[10px] uppercase font-bold" style={lbl}>Date</div><div className="text-[13px] font-bold">{todayLabel}</div>
-      </div>
-      <div className="rounded-md border p-3 mb-3" style={{ borderColor: "#C9C6BC" }}>
         <div className="text-[10px] uppercase font-bold mb-2" style={lbl}>"Employee" Acknowledgement of Attendance</div>
         <div className="text-[10px] uppercase font-bold" style={lbl}>Print</div>
         <div className="text-[14px] font-bold mb-3">{f.name || "-"}</div>
@@ -13382,10 +13372,11 @@ function TruckDriverAffidavitStep({ driver, projectSlug, projectName, onSaved })
 
 function TruckDriverPhotosStep({ driver, onSaved }) {
   const [cdl, setCdl] = useState(null);
+  const [cdlBack, setCdlBack] = useState(null);
   const [selfie, setSelfie] = useState(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
-  const cdlRef = useRef(null), selfieRef = useRef(null);
+  const cdlRef = useRef(null), cdlBackRef = useRef(null), selfieRef = useRef(null);
   const pick = (setter) => (e) => { const file = e.target.files && e.target.files[0]; if (file) setter({ file, url: URL.createObjectURL(file) }); e.target.value = ""; };
   const upload = async (item, name) => {
     const bytes = await fileToJpegBytes(item.file);
@@ -13398,8 +13389,9 @@ function TruckDriverPhotosStep({ driver, onSaved }) {
     setBusy(true); setErr("");
     try {
       const cdlUrl = await upload(cdl, "cdl");
+      const cdlBackUrl = await upload(cdlBack, "cdl-back");
       const selfieUrl = await upload(selfie, "selfie");
-      const { data: ok } = await supabase.rpc("td_save_photos", { p_id: driver.id, p_cdl_url: cdlUrl, p_selfie_url: selfieUrl });
+      const { data: ok } = await supabase.rpc("td_save_photos", { p_id: driver.id, p_cdl_url: cdlUrl, p_cdl_back_url: cdlBackUrl, p_selfie_url: selfieUrl });
       if (!ok) throw new Error("Could not save. Please try again.");
       const { data: fresh } = await supabase.rpc("td_get", { p_id: driver.id });
       onSaved(fresh);
@@ -13426,9 +13418,10 @@ function TruckDriverPhotosStep({ driver, onSaved }) {
   return (
     <div>
       {box("Photo of your CDL (front)", "Lay the license flat in good light. Every word and number must be readable.", cdl, cdlRef, setCdl, "environment", false)}
+      {box("Photo of your CDL (back)", "Flip the license over and photograph the back the same way.", cdlBack, cdlBackRef, setCdlBack, "environment", false)}
       {box("Selfie for your badge", "Face the camera, no hat or sunglasses. This photo prints on your badge.", selfie, selfieRef, setSelfie, "user", true)}
       {err && <div className="text-[11px] mb-2" style={{ color: ALERT }}>{err}</div>}
-      <button disabled={!cdl || !selfie || busy} onClick={save} className="w-full rounded-md py-3 text-sm font-bold disabled:opacity-40" style={{ background: GOLD, color: INK, fontFamily: "Oswald, sans-serif" }}>{busy ? "Uploading..." : "Save Photos"}</button>
+      <button disabled={!cdl || !cdlBack || !selfie || busy} onClick={save} className="w-full rounded-md py-3 text-sm font-bold disabled:opacity-40" style={{ background: GOLD, color: INK, fontFamily: "Oswald, sans-serif" }}>{busy ? "Uploading..." : "Save Photos"}</button>
     </div>
   );
 }
@@ -13506,7 +13499,7 @@ function TruckDriverScreen({ activeProjectId, user, go }) {
     await loadProjectMap();
     const pid = projectIdForSlug(activeProjectId);
     if (!pid) { setBusy(false); setErr("We couldn't tell which project this is for. Open the link from the project's QR code."); return; }
-    const { data } = await supabase.rpc("td_start", { p_project_id: pid, p_name: f.name, p_phone: f.phone, p_email: f.email, p_company: f.company, p_cdl_number: f.cdl, p_cdl_state: f.state });
+    const { data } = await supabase.rpc("td_start", { p_project_id: pid, p_name: f.name, p_phone: f.phone, p_email: f.email, p_company: f.company, p_cdl_number: f.cdl, p_cdl_state: f.state, p_session_code: sessionOpen ? sessionCode : null });
     setBusy(false);
     if (!data) { setErr("Something went wrong. Please try again."); return; }
     remember(data); setDriver(data);
@@ -13521,6 +13514,18 @@ function TruckDriverScreen({ activeProjectId, user, go }) {
     if (!data) { setErr("Badge number or PIN didn't match."); return; }
     remember(data); setDriver(data);
   };
+  const sessionCode = (new URLSearchParams(window.location.search).get("session") || "").trim().toUpperCase();
+  const [sessionInfo, setSessionInfo] = useState(null);
+  useEffect(() => {
+    if (!sessionCode) return;
+    (async () => {
+      await loadProjectMap();
+      const { data } = await supabase.rpc("td_session_info", { p_project_id: projectIdForSlug(activeProjectId), p_code: sessionCode });
+      if (data) { setSessionInfo(data); if (data.company) setF((old) => ({ ...old, company: old.company || data.company })); }
+      else setSessionInfo({ status: "missing" });
+    })();
+  }, [sessionCode, activeProjectId]);
+  const sessionOpen = sessionInfo && sessionInfo.status === "open";
   const [forgot, setForgot] = useState(false);
   const [rcPhone, setRcPhone] = useState("");
   const [rcCdl, setRcCdl] = useState("");
@@ -13558,12 +13563,19 @@ function TruckDriverScreen({ activeProjectId, user, go }) {
   if (!driver) {
     return wrap(<>
       {head}{adminBtn}
+      {sessionCode && sessionInfo && (
+        <div className="rounded-md p-3 mb-3 text-[12px]" style={{ background: sessionOpen ? "#EEF7EF" : "#FCEFEF", color: sessionOpen ? "#1F6B2C" : ALERT }}>
+          {sessionOpen
+            ? <><b>Group orientation{sessionInfo.company ? ` - ${sessionInfo.company}` : ""}</b>{sessionInfo.location ? ` - ${sessionInfo.location}` : ""}<div className="text-[11px] mt-0.5">Register below while the video plays in the room. Your instructor will confirm you watched it.</div></>
+            : <>This group session is closed. You can still register on your own and watch the video on your phone.</>}
+        </div>
+      )}
       <div className="rounded-md border p-3 mb-4" style={{ borderColor: GOLD, background: "#FFFBEA" }}>
         <div className="text-[11px] uppercase font-bold mb-1" style={lbl}>What you will do</div>
         <ol className="text-[12px] leading-snug list-decimal pl-4" style={{ color: "#333" }}>
           <li>Photo of your CDL and a selfie for your badge</li>
           <li>Watch the 20 minute orientation video</li>
-          <li>Sign the orientation and drug screen verification (you and your employer's representative)</li>
+          <li>Sign the orientation and drug screen verification</li>
           <li>We review everything and issue your truck driver badge</li>
         </ol>
       </div>
@@ -13615,7 +13627,7 @@ function TruckDriverScreen({ activeProjectId, user, go }) {
 
   const editable = driver.status === "in_progress" || driver.status === "rejected";
   const steps = [
-    { key: "photos", title: "CDL Photo and Badge Selfie", done: driver.photos_done, locked: false },
+    { key: "photos", title: "CDL Photos (front & back) and Badge Selfie", done: driver.photos_done, locked: false },
     { key: "video", title: "Orientation Video (20 min)", done: driver.video_done, locked: !driver.photos_done },
     { key: "affidavit", title: "Orientation & Drug Screen Verification", done: driver.affidavit_done, locked: !driver.video_done },
   ];
@@ -13668,6 +13680,13 @@ function TruckDriverScreen({ activeProjectId, user, go }) {
       </div>
     ))}
 
+    {editable && driver.session_waiting && (
+      <div className="rounded-md px-3 py-2.5 mt-2 text-[12px]" style={{ background: "#FFFBEA", border: `1px solid ${GOLD}` }}>
+        <div className="font-bold">Group session{driver.session_label ? ` (${driver.session_label})` : ""}</div>
+        <div className="text-[11px] mt-0.5">If you are watching the video in the room, your instructor will confirm it and this step completes automatically. Not in the room? Watch it on your phone in step 2.</div>
+        <button onClick={refresh} className="mt-2 text-[11px] font-bold uppercase px-3 py-1.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Check if confirmed</button>
+      </div>
+    )}
     {editable && (
       <button disabled={!allDone || busy} onClick={async () => { setBusy(true); const { data } = await supabase.rpc("td_submit", { p_id: driver.id }); setBusy(false); if (data) setDriver(data); else { setErr("Finish every step first."); await refresh(); } }} className="w-full mt-2 rounded-md py-3 text-sm font-bold disabled:opacity-40" style={{ background: GOLD, color: INK, fontFamily: "Oswald, sans-serif" }}>
         {busy ? "Submitting..." : "Submit for Review"}
@@ -13679,6 +13698,122 @@ function TruckDriverScreen({ activeProjectId, user, go }) {
 }
 
 // ---- Admin: review truck driver onboarding and badges ----
+function TruckSessionCard({ ss, user, projectSlug, onChanged }) {
+  const link = `${window.location.origin}${window.location.pathname}?project=${projectSlug}&screen=truckdriver&session=${ss.code}`;
+  const qr = useBadgeQr(link, 360);
+  const att = ss.attendees || [];
+  const [excluded, setExcluded] = useState(() => new Set());
+  const sel = new Set(att.filter((a) => !a.video_done && !excluded.has(a.id)).map((a) => a.id));
+  const [busy, setBusy] = useState(false);
+  const mono = { fontFamily: "IBM Plex Mono, monospace" };
+  const videoUrl = (supabase.storage.from("documents").getPublicUrl(tdConfig(projectSlug).videoPath).data || {}).publicUrl;
+  const confirm = async () => {
+    if (!window.confirm(`Confirm the full orientation video was shown to the room? ${sel.size} driver(s) will be credited with watching it.`)) return;
+    setBusy(true);
+    await supabase.rpc("confirm_truck_session", { p_token: user.sessionToken, p_session_id: ss.id, p_driver_ids: Array.from(sel) });
+    setBusy(false); onChanged();
+  };
+  const cancel = async () => {
+    if (!window.confirm("Cancel this session? The link will stop accepting registrations.")) return;
+    setBusy(true);
+    await supabase.rpc("cancel_truck_session", { p_token: user.sessionToken, p_session_id: ss.id });
+    setBusy(false); onChanged();
+  };
+  const isOpen = ss.status === "open";
+  return (
+    <div className="rounded-md border p-3 mb-2 bg-white" style={{ borderColor: isOpen ? GOLD : "#E4E2DA" }}>
+      <div className="flex items-center justify-between mb-1">
+        <div className="text-[13px] font-bold" style={{ fontFamily: "Oswald, sans-serif" }}>{ss.company || "Group"} - {new Date(ss.session_date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}{ss.location ? ` - ${ss.location}` : ""}</div>
+        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-sm" style={{ background: isOpen ? GOLD : ss.status === "confirmed" ? "#2E7D32" : "#9AA0A6", color: isOpen ? INK : "white", ...mono }}>{ss.status.toUpperCase()}</span>
+      </div>
+      {isOpen && (
+        <div className="flex items-center gap-3 mb-2">
+          {qr ? <img src={qr} alt="QR" style={{ width: 96, height: 96 }} /> : null}
+          <div className="min-w-0">
+            <div className="text-[10px] uppercase" style={{ color: STEEL }}>Session code</div>
+            <div className="text-[20px] font-bold" style={{ letterSpacing: "0.12em", ...mono }}>{ss.code}</div>
+            <div className="flex gap-2 mt-1 flex-wrap">
+              <button onClick={() => { try { navigator.clipboard.writeText(link); } catch (e) { /* ignore */ } }} className="text-[10px] font-bold uppercase px-2 py-1 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, ...mono }}>Copy link</button>
+              {qr && <a href={qr} download={`truck-session-${ss.code}.png`} className="text-[10px] font-bold uppercase px-2 py-1 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, ...mono }}>QR</a>}
+              <button onClick={() => window.open(videoUrl, "_blank")} className="text-[10px] font-bold uppercase px-2 py-1 rounded-sm" style={{ background: GOLD, color: INK, ...mono }}>Open video for room</button>
+            </div>
+          </div>
+        </div>
+      )}
+      <div className="text-[10px] uppercase font-bold mb-1" style={{ color: STEEL, ...mono }}>Registered ({att.length})</div>
+      {att.length === 0 && <div className="text-[11px]" style={{ color: STEEL }}>No one has registered yet.</div>}
+      {att.map((a) => (
+        <label key={a.id} className="flex items-center gap-2 py-1 text-[12px]">
+          {isOpen
+            ? <input type="checkbox" checked={sel.has(a.id)} disabled={a.video_done} onChange={(e) => setExcluded((old) => { const n = new Set(old); if (e.target.checked) n.delete(a.id); else n.add(a.id); return n; })} />
+            : <span style={{ color: a.via_this_session ? "#2E7D32" : "#9AA0A6" }}>{a.via_this_session ? "\u2713" : "\u2013"}</span>}
+          <span className="flex-1">{a.name}{a.company ? ` (${a.company})` : ""}</span>
+          <span className="text-[10px]" style={{ color: a.video_done ? "#2E7D32" : STEEL }}>{a.video_done ? "video credited" : "no video credit"}</span>
+        </label>
+      ))}
+      {isOpen && (
+        <div className="mt-2">
+          <div className="text-[10px] mb-1" style={{ color: STEEL }}>Check only the drivers who were in the room for the whole video, then confirm. Later registrations to this session are closed once you confirm.</div>
+          <div className="flex gap-2">
+            <button disabled={busy || sel.size === 0} onClick={confirm} className="flex-1 text-[10px] font-bold uppercase py-2 rounded-sm disabled:opacity-40" style={{ background: GOLD, color: INK, ...mono }}>{busy ? "Working..." : `Confirm video shown (${sel.size})`}</button>
+            <button disabled={busy} onClick={cancel} className="text-[10px] font-bold uppercase px-3 py-2 rounded-sm border" style={{ borderColor: ALERT, color: ALERT, ...mono }}>Cancel</button>
+          </div>
+        </div>
+      )}
+      {ss.status === "confirmed" && <div className="text-[10px] mt-1" style={{ color: STEEL }}>Confirmed by {ss.confirmed_by || "-"} on {ss.confirmed_at ? new Date(ss.confirmed_at).toLocaleString() : ""}</div>}
+    </div>
+  );
+}
+
+function TruckSessionsPanel({ user, projectSlug, onChanged }) {
+  const [sessions, setSessions] = useState([]);
+  const [open, setOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [f, setF] = useState({ company: "", date: new Date().toLocaleDateString("en-CA"), location: "" });
+  const [busy, setBusy] = useState(false);
+  const load = async () => {
+    const { data } = await supabase.rpc("list_truck_sessions_admin", { p_token: user.sessionToken });
+    setSessions(Array.isArray(data) ? data : []);
+  };
+  useEffect(() => { load(); }, [user?.sessionToken]);
+  const create = async () => {
+    setBusy(true);
+    await supabase.rpc("create_truck_session", { p_token: user.sessionToken, p_company: f.company, p_date: f.date, p_location: f.location });
+    setBusy(false); setCreating(false); setF({ ...f, company: "", location: "" }); load();
+  };
+  const refresh = () => { load(); onChanged(); };
+  const openCount = sessions.filter((x) => x.status === "open").length;
+  const inp = "w-full rounded-md border px-2.5 py-2 text-[13px] mb-2";
+  return (
+    <div className="bg-white rounded-md border mb-3" style={{ borderColor: "#E4E2DA" }}>
+      <button onClick={() => setOpen((o) => !o)} className="w-full flex items-center justify-between px-3 py-2.5">
+        <span className="text-[13px] font-bold" style={{ fontFamily: "Oswald, sans-serif" }}>Group Orientation Sessions{openCount ? ` (${openCount} open)` : ""}</span>
+        <ChevronRight size={16} style={{ transform: open ? "rotate(90deg)" : "none", color: STEEL }} />
+      </button>
+      {open && (
+        <div className="px-3 pb-3">
+          <div className="text-[11px] mb-2" style={{ color: STEEL }}>For a trucking company that sits a group in a room: create a session, show the video on a screen, have each driver scan the QR to register on their own phone, then confirm who watched.</div>
+          {!creating ? (
+            <button onClick={() => setCreating(true)} className="w-full mb-2 text-[11px] font-bold uppercase py-2 rounded-sm" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>+ New Group Session</button>
+          ) : (
+            <div className="rounded-md border p-2.5 mb-2" style={{ borderColor: "#C9C6BC" }}>
+              <input value={f.company} onChange={(e) => setF({ ...f, company: e.target.value })} placeholder="Trucking company" className={inp} style={{ borderColor: "#C9C6BC" }} />
+              <input type="date" value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} className={inp} style={{ borderColor: "#C9C6BC" }} />
+              <input value={f.location} onChange={(e) => setF({ ...f, location: e.target.value })} placeholder="Room / location (optional)" className={inp} style={{ borderColor: "#C9C6BC" }} />
+              <div className="flex gap-2">
+                <button disabled={busy || !f.company.trim()} onClick={create} className="flex-1 text-[11px] font-bold uppercase py-2 rounded-sm disabled:opacity-40" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>{busy ? "Creating..." : "Create"}</button>
+                <button onClick={() => setCreating(false)} className="flex-1 text-[11px] font-bold uppercase py-2 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Cancel</button>
+              </div>
+            </div>
+          )}
+          {sessions.map((ss) => <TruckSessionCard key={ss.id} ss={ss} user={user} projectSlug={projectSlug} onChanged={refresh} />)}
+          {sessions.length === 0 && <div className="text-[11px]" style={{ color: STEEL }}>No sessions yet.</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TruckDriverAdminCard({ d, user, projectSlug, projectName, onChanged }) {
   const [open, setOpen] = useState(false);
   const [rejecting, setRejecting] = useState(false);
@@ -13715,10 +13850,12 @@ function TruckDriverAdminCard({ d, user, projectSlug, projectName, onChanged }) 
             <div className="text-[10px] uppercase font-bold mb-1" style={{ color: STEEL, ...mono }}>Documents on this driver's badge</div>
             <div className="flex flex-wrap gap-2 mb-2">
               <button disabled={!d.affidavit_pdf_url} onClick={() => window.open(d.affidavit_pdf_url, "_blank")} className={`${btn} px-3 border`} style={{ borderColor: "#C9C6BC", color: d.affidavit_pdf_url ? INK : "#9AA0A6", ...mono }}>{d.affidavit_pdf_url ? "Orientation & Drug Screen Form" : "Verification form - missing"}</button>
-              <button disabled={!d.cdl_photo_url} onClick={() => window.open(d.cdl_photo_url, "_blank")} className={`${btn} px-3 border`} style={{ borderColor: "#C9C6BC", color: d.cdl_photo_url ? INK : "#9AA0A6", ...mono }}>{d.cdl_photo_url ? "CDL Photo" : "CDL - missing"}</button>
+              <button disabled={!d.cdl_photo_url} onClick={() => window.open(d.cdl_photo_url, "_blank")} className={`${btn} px-3 border`} style={{ borderColor: "#C9C6BC", color: d.cdl_photo_url ? INK : "#9AA0A6", ...mono }}>{d.cdl_photo_url ? "CDL Front" : "CDL front - missing"}</button>
+              <button disabled={!d.cdl_back_photo_url} onClick={() => window.open(d.cdl_back_photo_url, "_blank")} className={`${btn} px-3 border`} style={{ borderColor: "#C9C6BC", color: d.cdl_back_photo_url ? INK : "#9AA0A6", ...mono }}>{d.cdl_back_photo_url ? "CDL Back" : "CDL back - missing"}</button>
               <button disabled={!d.selfie_url} onClick={() => window.open(d.selfie_url, "_blank")} className={`${btn} px-3 border`} style={{ borderColor: "#C9C6BC", color: d.selfie_url ? INK : "#9AA0A6", ...mono }}>{d.selfie_url ? "Selfie" : "Selfie - missing"}</button>
             </div>
-            {d.cdl_photo_url && <img src={d.cdl_photo_url} alt="CDL" className="w-full rounded-md mb-2" style={{ maxHeight: 220, objectFit: "contain", background: "#F4F3EF" }} />}
+            {d.cdl_photo_url && <img src={d.cdl_photo_url} alt="CDL front" className="w-full rounded-md mb-2" style={{ maxHeight: 220, objectFit: "contain", background: "#F4F3EF" }} />}
+            {d.cdl_back_photo_url && <img src={d.cdl_back_photo_url} alt="CDL back" className="w-full rounded-md mb-2" style={{ maxHeight: 220, objectFit: "contain", background: "#F4F3EF" }} />}
             <div className="text-[11px] font-bold" style={{ color: d.video_completed_at ? "#2E7D32" : ALERT }}>
               {d.video_completed_at ? `Safety video completed ${new Date(d.video_completed_at).toLocaleString()}` : `Safety video not completed${d.video_duration ? ` (${Math.round(((d.video_seconds || 0) / d.video_duration) * 100)}% watched)` : ""}`}
             </div>
@@ -13793,6 +13930,7 @@ function ManageTruckDriversScreen({ user, activeProjectId, go }) {
       </div>
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search driver name, employer, or badge #" className="w-full rounded-md border px-3 py-2 text-[13px] mb-2" style={{ borderColor: "#C9C6BC", background: "white" }} />
       {searching && <div className="text-[10px] mb-2" style={{ color: STEEL }}>{shown.length} match{shown.length === 1 ? "" : "es"} across all statuses</div>}
+      <TruckSessionsPanel user={user} projectSlug={activeProjectId} onChanged={load} />
       <div className="flex gap-1.5 mb-3 overflow-x-auto" style={{ opacity: searching ? 0.4 : 1 }}>
         {chips.map(([k, l]) => (
           <button key={k} onClick={() => setFilter(k)} className="flex-shrink-0 text-[10px] font-bold uppercase px-2.5 py-1.5 rounded-sm" style={{ background: filter === k ? GOLD : "white", color: filter === k ? INK : STEEL, border: `1px solid ${filter === k ? GOLD : "#C9C6BC"}`, fontFamily: "IBM Plex Mono, monospace" }}>{l} ({counts[k]})</button>
