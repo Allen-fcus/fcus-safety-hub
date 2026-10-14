@@ -7758,6 +7758,16 @@ async function stampSubmitted(bytes, label) {
   return await doc.save();
 }
 
+// Flatten a textBlock "items" list: entries are a string or { t, s: [sub items] } -> [{ t, lvl }]
+function flattenBlockItems(items) {
+  const out = [];
+  (items || []).forEach((it) => {
+    if (typeof it === "string") out.push({ t: it, lvl: 0 });
+    else { out.push({ t: it.t, lvl: 0 }); (it.s || []).forEach((x) => out.push({ t: x, lvl: 1 })); }
+  });
+  return out;
+}
+
 async function buildGenericFormPdf({ form, slug, projectName, standardValues, fieldValues, choiceValues, statusValues, signatures, longFields, submittedAt, photos, statusRefs, mediaCount, linkRef, groupSigs }) {
   const { StandardFonts, rgb } = await import("pdf-lib");
   const doc = await PDFDocument.create();
@@ -7940,15 +7950,34 @@ async function buildGenericFormPdf({ form, slug, projectName, standardValues, fi
   // free-text blocks from the source document (statements, notes, tables, footers)
   const drawBlocks = (at) => (form.textBlocks || []).filter((b) => (b.at || "before") === at).forEach((b) => {
     if (b.title) {
-      need(30);
+      need(b.sigLines ? 30 + b.sigLines.count * 40 : 70);
       page.drawRectangle({ x: M, y: y - 14, width: CW, height: 14, color: gold });
       page.drawText(clean(b.title).toUpperCase(), { x: M + 4, y: y - 10, size: 7.5, font: sansB, color: ink });
       y -= 18;
     }
+    if (b.heading) {
+      need(30);
+      wrap(b.heading, sansB, 9.5, CW - 8).forEach((ln) => { need(14); page.drawText(ln, { x: M + 4, y: y - 10, size: 9.5, font: sansB, color: ink }); y -= 12.5; });
+      y -= 2;
+    }
     if (b.text) {
-      const fnt = b.emphasis || (b.title && !b.rows) ? sansB : sans;
+      const fnt = b.emphasis || (b.title && !b.rows && !b.items) ? sansB : sans;
       const lines = wrap(b.text, fnt, 9.5, CW - 8);
       lines.forEach((ln) => { need(14); page.drawText(ln, { x: M + 4, y: y - 10, size: 9.5, font: fnt, color: ink }); y -= 12.5; });
+      y -= 6;
+    }
+    if (b.items) {
+      flattenBlockItems(b.items).forEach((it) => {
+        const ind = it.lvl ? 30 : 12;
+        const lines = wrap(it.t, sans, 9, CW - 8 - ind - 4);
+        lines.forEach((ln, li) => {
+          need(13);
+          if (li === 0 && !/^([0-9]+|[a-z]|[IVX]+)\.\s/.test(it.t.trim())) { if (it.lvl) page.drawText("-", { x: M + 22, y: y - 10, size: 9, font: sans, color: ink }); else page.drawCircle({ x: M + 9, y: y - 6.5, size: 1.6, color: ink }); }
+          page.drawText(ln, { x: M + 4 + ind, y: y - 10, size: 9, font: sans, color: ink });
+          y -= 12;
+        });
+        y -= 2;
+      });
       y -= 6;
     }
     if (b.rows) {
@@ -7960,6 +7989,19 @@ async function buildGenericFormPdf({ form, slug, projectName, standardValues, fi
         y -= 15;
         page.drawLine({ start: { x: M, y: y + 1 }, end: { x: W - M, y: y + 1 }, thickness: 0.3, color: line });
       });
+      y -= 6;
+    }
+    if (b.sigLines) {
+      for (let n = 0; n < b.sigLines.count; n++) {
+        need(48);
+        y -= 22;
+        const cols = [[M + 4, 190, "Print"], [M + 210, 190, "Signature"], [M + 416, 100, "Date"]];
+        cols.forEach(([x, w, lab]) => {
+          page.drawLine({ start: { x, y }, end: { x: x + w, y }, thickness: 0.6, color: ink });
+          page.drawText(lab, { x, y: y - 9, size: 7.5, font: sans, color: grey });
+        });
+        y -= 14;
+      }
       y -= 6;
     }
   });
@@ -8092,6 +8134,8 @@ async function buildGenericFormPdf({ form, slug, projectName, standardValues, fi
       page.drawText(i === 0 ? `${clean(standardValues.name)}   ${clean(submittedAt || standardValues.date)}` : `Date: ${clean(submittedAt || standardValues.date)}`, { x, y: y - 73, size: 8, font: sans, color: grey });
     }
   }
+  if (sigs.length) y -= 90;
+  drawBlocks("end");
   const pages = doc.getPages();
   pages.forEach((p, i) => {
     const t = `Page ${i + 1} of ${pages.length}`;
@@ -8695,6 +8739,59 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
     title: g.pdfTitle || g.heading.toUpperCase(),
     people: namedFor(gi).map((r) => { const ref = getCrewRef(`${gi}:${r.id}`); return { name: r.name.trim(), dataUrl: ref.current ? ref.current.toDataURL("image/png") : null }; }),
   }));
+  const renderTextBlock = (b, key) => {
+    const inner = (
+      <>
+        {b.heading && <div className="text-[12px] font-bold mb-1" style={{ color: INK }}>{b.heading}</div>}
+        {b.text && <div className="text-[12px] leading-snug" style={{ color: "#333", fontWeight: b.emphasis ? 600 : 400 }}>{b.text}</div>}
+        {b.items && (
+          <ul className="mt-1 space-y-1 text-[12px] leading-snug" style={{ color: "#333", listStyle: "none", paddingLeft: 0 }}>
+            {flattenBlockItems(b.items).map((it, ii) => (
+              <li key={ii} className="flex gap-1.5" style={{ marginLeft: it.lvl ? 18 : 0 }}>
+                <span style={{ color: STEEL, minWidth: 8 }}>{/^([0-9]+|[a-z]|[IVX]+)\.\s/.test(it.t.trim()) ? "" : it.lvl ? "\u2013" : "\u2022"}</span><span>{it.t}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {b.rows && (
+          <div className="mt-1.5 rounded-md border overflow-hidden" style={{ borderColor: "#E4E2DA" }}>
+            {b.rows.map((r, ri) => (
+              <div key={ri} className="flex text-[11px] px-2 py-1" style={{ borderTop: ri ? "1px solid #E4E2DA" : "none" }}>
+                <div style={{ width: "30%" }}>{r[0]}</div><div style={{ width: "22%", fontWeight: 700 }}>{r[1]}</div><div style={{ width: "48%", color: STEEL }}>{r[2]}</div>
+              </div>
+            ))}
+          </div>
+        )}
+        {b.sigLines && (
+          <div className="mt-1 space-y-3">
+            {Array.from({ length: b.sigLines.count }, (_, n) => (
+              <div key={n} className="flex gap-2 text-[10px]" style={{ color: STEEL }}>
+                <div style={{ flex: 3, borderTop: "1px solid #999", paddingTop: 2 }}>Print</div>
+                <div style={{ flex: 3, borderTop: "1px solid #999", paddingTop: 2 }}>Signature</div>
+                <div style={{ flex: 2, borderTop: "1px solid #999", paddingTop: 2 }}>Date</div>
+              </div>
+            ))}
+            <div className="text-[10px]" style={{ color: STEEL }}>Signed on paper / by NTI at the safety orientation - not completed in the app.</div>
+          </div>
+        )}
+      </>
+    );
+    const boxStyle = { borderColor: "#E4E2DA", background: "#FCFCFA" };
+    if (b.title && (b.items || b.collapsible)) {
+      return (
+        <details key={key} open className="rounded-md border p-2.5" style={boxStyle}>
+          <summary className="text-[11px] uppercase font-bold cursor-pointer" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{b.title}</summary>
+          <div className="mt-1.5">{inner}</div>
+        </details>
+      );
+    }
+    return (
+      <div key={key} className="rounded-md border p-2.5" style={boxStyle}>
+        {b.title && <div className="text-[11px] uppercase font-bold mb-1" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{b.title}</div>}
+        {inner}
+      </div>
+    );
+  };
   const [pdfGenerating, setPdfGenerating] = useState(false);
   const [pdfGenerated, setPdfGenerated] = useState(false);
   const [pdfError, setPdfError] = useState("");
@@ -9446,21 +9543,7 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
             </div>
           )}
 
-          {(form.textBlocks || []).filter((b) => (b.at || "before") === "before").map((b, bi) => (
-            <div key={"tb" + "before" + bi} className="rounded-md border p-2.5" style={{ borderColor: "#E4E2DA", background: "#FCFCFA" }}>
-              {b.title && <div className="text-[11px] uppercase font-bold mb-1" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{b.title}</div>}
-              {b.text && <div className="text-[12px] leading-snug" style={{ color: "#333", fontWeight: b.emphasis ? 600 : 400 }}>{b.text}</div>}
-              {b.rows && (
-                <div className="mt-1.5 rounded-md border overflow-hidden" style={{ borderColor: "#E4E2DA" }}>
-                  {b.rows.map((r, ri) => (
-                    <div key={ri} className="flex text-[11px] px-2 py-1" style={{ borderTop: ri ? "1px solid #E4E2DA" : "none" }}>
-                      <div style={{ width: "30%" }}>{r[0]}</div><div style={{ width: "22%", fontWeight: 700 }}>{r[1]}</div><div style={{ width: "48%", color: STEEL }}>{r[2]}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
+          {(form.textBlocks || []).filter((b) => (b.at || "before") === "before").map((b, bi) => renderTextBlock(b, "tbbefore" + bi))}
           {(form.statusGroups || []).map((group, gi) => (
             <React.Fragment key={gi}>
             <StatusGroup group={group} values={statusValues[gi] || {}} onChange={(itemIdx, opt) => setStatus(gi, itemIdx, opt)} refs={statusRefsRaw[gi] || {}} onRef={(itemIdx, val) => setStatusRefs((r) => ({ ...r, [gi]: { ...(r[gi] || {}), [itemIdx]: val } }))} />
@@ -9495,21 +9578,7 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
             </React.Fragment>
           ))}
 
-          {(form.textBlocks || []).filter((b) => (b.at || "before") === "after").map((b, bi) => (
-            <div key={"tb" + "after" + bi} className="rounded-md border p-2.5" style={{ borderColor: "#E4E2DA", background: "#FCFCFA" }}>
-              {b.title && <div className="text-[11px] uppercase font-bold mb-1" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{b.title}</div>}
-              {b.text && <div className="text-[12px] leading-snug" style={{ color: "#333", fontWeight: b.emphasis ? 600 : 400 }}>{b.text}</div>}
-              {b.rows && (
-                <div className="mt-1.5 rounded-md border overflow-hidden" style={{ borderColor: "#E4E2DA" }}>
-                  {b.rows.map((r, ri) => (
-                    <div key={ri} className="flex text-[11px] px-2 py-1" style={{ borderTop: ri ? "1px solid #E4E2DA" : "none" }}>
-                      <div style={{ width: "30%" }}>{r[0]}</div><div style={{ width: "22%", fontWeight: 700 }}>{r[1]}</div><div style={{ width: "48%", color: STEEL }}>{r[2]}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
+          {(form.textBlocks || []).filter((b) => (b.at || "before") === "after").map((b, bi) => renderTextBlock(b, "tbafter" + bi))}
           {form.referenceTable && (
             <div>
               <div className="text-[11px] uppercase font-bold mb-2" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{form.referenceTable.title}</div>
@@ -9686,6 +9755,7 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
               </div>
             </div>
           )}
+          {(form.textBlocks || []).filter((b) => b.at === "end").map((b, bi) => renderTextBlock(b, "tbend" + bi))}
           {pdfError && <div className="text-[11px] mb-2" style={{ color: ALERT }}>{pdfError}</div>}
           {(() => {
             const trig = form.proofRequiredIfStatusYes;
@@ -12167,19 +12237,125 @@ function WorkPlanEditor({ plan, user, onDone }) {
   );
 }
 
-const PRECONSTRUCTION_DOC_TITLES = ["Safety Requirements Summary", "Emergency Contacts List", "Man Hour Work Submittal", "Work Plan Template"];
+const PRECONSTRUCTION_DOC_TITLES = ["Summary of Safety Requirements", "Emergency Contacts List", "Man Hour Work Submittal", "Work Plan Template"];
 
 // Fixed, fill-and-sign templates — same pattern as any other form in
 // Forms & Templates, no per-project upload needed. Work Plan Template
 // is the only one left that stays view/download only, each project
 // uploading its own via Manage.
 const PRECONSTRUCTION_FILLABLE_FORMS = {
-  "Safety Requirements Summary": {
-    title: "Safety Requirements Summary",
+  "Summary of Safety Requirements": {
+    title: "Summary of Safety Requirements",
+    description: "Review the full Summary of Safety Requirements, then acknowledge receipt. Signed by the contractor's senior site manager(s) and/or Safety Manager.",
+    submitEmail: "ntisafety@ferrovial.us",
     pdfLink: "https://drive.google.com/file/d/1n4Xk4SZJOyEN9zqn5THzBA_zoWADab61/preview",
-    pdfFillTemplate: "safety-requirements-summary",
+    pdfFillTemplate: "generic-form-pdf",
+    genericPdfNeutral: true,
     requiresProof: false,
-    fields: ["Onsite Superintendent Name", "Safety Representative Name", "Supervisor Name (PM/Engineer)", "Emergency Contact Name"],
+    fields: ["Email for Weekly Toolbox, Quarterly Meeting and Other NTI Information"],
+    genericPdfLongFields: ["Email for Weekly Toolbox, Quarterly Meeting and Other NTI Information"],
+    trailingFieldLabels: ["Email for Weekly Toolbox, Quarterly Meeting and Other NTI Information"],
+    personSignatures: [{ field: "Contractor Senior Site Managers and/or Safety Manager", heading: "Contractor Senior Site Managers and/or Safety Manager", noun: "Manager", pdfTitle: "CONTRACTOR SENIOR SITE MANAGERS AND/OR SAFETY MANAGER", startRows: 1 }],
+    signatureLabels: ["Acknowledged By - Signature"],
+    textBlocks: [
+      { at: "before", title: "Required take-away documentation for contractor", items: [
+        "Construction Safety Plan 5A",
+        "Copy of Summary of Safety Requirements",
+      ] },
+      { at: "before", title: "Required documentation to be provided to NTI", items: [
+        "Company Safety Manual",
+        "Contractors Monthly Work Hours Summary Report to be e-mailed on the correct form provided by NTI by the 5th of each month. Submitted to: ntisafety@ferrovial.us",
+        { t: "Key Personnel and Safety contact Information on the company letterhead - NTI to send form.", s: [
+          "1. Onsite Superintendent",
+          "2. Safety Representative",
+          "3. Supervisor (Construction - Project Manager, Engineer)",
+          "4. Emergency contact information for onsite supervision",
+        ] },
+        "Drug Screen confirmation on a company letter head stating the names of all employees that will be onsite and have successfully passed drug screen within the past 30 days.",
+        { t: "Designations Forms - to be presented at the time of orientation (for detailed information see Safety Requirements of the Project)", s: [
+          "1. Competent Person designations",
+          "2. Equipment Operators designations",
+          "      a. Heavy Equipment - Back-Hoe, Excavators, Skid steers",
+          "      b. Crane: i. Operators  ii. A/D Directors  iii. Qualified Riggers  iv. Qualified Signal Persons",
+          "3. Traffic Flagger designations",
+        ] },
+        "Copies of First Aid and CPR training cards from the American Red Cross or other accredited agency for a minimum of one person onsite.",
+        "Trench Safety Plan (if applicable) - Stamped by PE",
+        "Work plans (work plan template) are to be presented for each job to be performed at a pre-task meeting scheduled by the project manager or his designee, and once Work Plan is accepted a copy is to be kept on site and be readily available for review.",
+      ] },
+      { at: "before", title: "Safety requirements of the project - Minimum required PPE", items: [
+        { t: "Class III apparel for all employees", s: ["Lime green for Construction", "Orange vest for work near Railroad"] },
+        "ANSI Z87 Safety Glasses",
+        "Hard Hat must be Type 1, Class G, and meet the ANSI Z89.1 standard.",
+        "Safety shoes and boots must meet ANSI Z41-1991 and provide impact and compression protection to the foot.",
+      ] },
+      { at: "before", title: "Traffic control", items: [
+        "1. Traffic Control that meets applicable requirements for local, state, and federal regulations must be provided when working in or adjacent to roadways. The NTI Traffic department must be made aware of all traffic control operations prior to the commencement of the work.",
+        "2. Give notice of minimum 48 hours, but preferably a week prior to beginning work to the NTI Traffic Control",
+        "3. All personnel involved in traffic control operations shall be certified in work zone safety thru a recognized agency such as TEEX, ATSSA or UTA",
+        "4. DO NOT move or alter Traffic Control devices and report damaged devices to the NTI Traffic Control",
+        "5. Clear Zone: Frontage Roads = 16'; Main Lanes = 30', Curbs = 3', 75'/25' from and beside attenuators",
+      ] },
+      { at: "before", title: "Equipment", items: [
+        "1. All equipment movement on open public roadways must be escorted by a company vehicle.",
+        "2. Equipment must have an orange \"slow moving\" triangle and an amber beacon light as well as company vehicle.",
+        "3. The operator of a rubber tire equipment that will be driven on open public roads must have a valid driver's license.",
+        "4. No equipment shall be left overnight closer than 30 feet to any travel lanes.",
+        "5. Construction equipment shall not be operated on any interstate or state highway.",
+        "6. All crane operators shall be certified thru a recognized agency NCCCO. There will be no lifting next to live traffic!",
+        "7. All Manlifts (MEWP) must be equipped with secondary shut off.",
+      ] },
+      { at: "before", title: "Trucker orientation", heading: "Required for all truckers, needs to be coordinated with NTI Safety Department", items: [
+        "1. A flash drive with the trucker's orientation and sign in sheet shall be issued by the NTI Safety Department to the involved contractors.",
+        "2. The completed sign in sheet, drug test affidavit and photo of the driver shall be returned to NTI Safety",
+      ] },
+      { at: "before", title: "Visitors", items: [
+        "1. All visitors, vendors, mechanics, etc., who enter the jobsite must check in at the NTI office and receive a \"Visitor\" badge and check out at the end of the day and return \"Visitor\" badge.",
+        "2. Visitors are required to be escorted while on site by the contractor management or a designee.",
+        "3. The inviting contractor is responsible for controlling all activities of the invited visitors while on site.",
+      ] },
+      { at: "before", title: "Hazards, night work and electrical", items: [
+        "All hazards created or encountered such as, excavations, overhead work must be protected daily and give maintenance for the duration of the project or until the hazard no longer exists.",
+        "All night work shall be performed using adequate lighting to safely perform the work. The lighting shall be positioned so that it does not affect the traffic around the work zone or the public.",
+        "All electrical supply generators or other power supplies must be equipped with Ground Fault Circuit Interrupters (GFCI's) in addition the company shall comply with assured Grounding inspection requirements (White, Green, Red, Orange).",
+      ] },
+      { at: "before", title: "Excavation", items: [
+        "1. The excavator shall contact 811, and any non-member facility owner including NTI for locates of I.T.S., illumination etc. There shall be no penetration in the earth's surface regardless of depth without confirmation of a positive response from all utility owners. The excavator is responsible for determining exact location of all facilities that could potentially be in conflict with the excavation. Location of utilities shall be determined using non-mechanical means.",
+        { t: "2. Required documentation to retrieve at the time of orientation for each excavation operator:", s: ["a. Utility Locate Permit", "b. Daily Excavation Checklist"] },
+      ] },
+      { at: "before", title: "After-hours work, housekeeping and fall protection", items: [
+        "Notify the North Tarrant Infrastructure Safety and Construction Departments when any workers will be onsite between the hours of 5:30 PM and 6:30 AM.",
+        { t: "Housekeeping", s: ["1. Keep work area free of trash and trip/fall hazards at all times.", "2. Remove all protruding nails from lumber (DO NOT bend nails - remove them)"] },
+        "100% Fall Protection - Zero Tolerance",
+      ] },
+      { at: "before", title: "Accidents and utility strikes", heading: "All accidents and utility strikes must be reported to the North Tarrant Infrastructure, LLC. Safety Department immediately.", items: [
+        "1. The NTI Safety Department will notify the appropriate NTI personnel.",
+        "2. A post-accident drug test must be conducted, and a signed letter of verification must be forwarded to the NTI Safety Department confirming the results of the drug screen.",
+        "3. Follow your company policy for the situation.",
+      ] },
+      { at: "before", title: "Safety / environment orientation", items: [
+        { t: "1. Will be held on every Monday, and Tuesday starting at 7:30am - 12:30pm and 5:30 pm - 8:30 pm", s: ["I. Monday's orientation will be in English.", "II. Tuesday's orientation will be in Spanish."] },
+        "2. Notify NTI Safety Department ahead of time of employees attending orientation.",
+        "3. Employees must arrive on time and being late for orientation will result in your employee having to reschedule until next orientation.",
+        "4. All employees are required to attend orientation prior to work on this project.",
+      ] },
+      { at: "before", title: "Additional requirements", heading: "All documentation below must be submitted to: ntisafety@ferrovial.us", items: [
+        "A documented Job Hazard Analysis must be completed by each crew - DAILY.",
+        "Air monitoring documentation for all excavation, confined space - DAILY.",
+        "A documented pre-shift equipment inspection conducted by the operator - DAILY.",
+        "A documented pre-shift crane inspection conducted by the operator - DAILY.",
+        "A documented pre-shift inspection of excavations, confined spaces and scaffolding conducted by a company-designated \"Competent Person\" - DAILY.",
+        "A documented \"Tool-box\" safety meeting conducted by each crew - WEEKLY.",
+        "Mandatory attendance to the Job wide General Safety Meeting hosted by North Tarrant Infrastructure LLC. - QUARTERLY.",
+        "Documented Inspection verification form to be submitted to the NTI representative for (Ladders, Fall Protection Equipment, Assured Grounding Electrical, Rigging Equipment) - QUARTERLY",
+        "Documented Inspection verification form to be submitted to the NTI representative for Fire Extinguishers - MONTHLY",
+        "Work Plan - once accepted by NTI, a copy must be on site readily available for review.",
+      ] },
+      { at: "before", text: "This document is only a summary of the safety requirements and therefore does not include all safety requirements for the Project. The full safety program for the Project is detailed in the Safety Plan for Construction.", emphasis: true },
+      { at: "after", title: "Acknowledgment", text: "I hereby acknowledge the receipt of the Summary of Safety Requirements. The content has been thoroughly reviewed. If there are any further actions required on my part related to this document, I will not hesitate to contact NTI safety department." },
+      { at: "end", title: "NTI Representatives Signature", sigLines: { count: 3 } },
+      { at: "end", text: "Those that fail to comply with these safety requirements are subject to permanent removal from the project. The worst consequence would be that you or others suffer an injury or worse cause a fatality because of an employees' failure to comply with safety requirements.", emphasis: true },
+    ],
   },
   "Emergency Contacts List": {
     title: "Emergency Contacts List",
