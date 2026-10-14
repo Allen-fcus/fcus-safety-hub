@@ -6716,6 +6716,89 @@ const ORIENTATION_FORMS_DEFAULT = [
       { label: "Certification Organization", items: ["Texas Engineering Extension Service", "American Traffic Safety Services Association", "National Safety Council", "Other Approved Organization"] },
     ],
   },
+  {
+    title: "Competent Person Designation",
+    projects: ["nashville"],
+    description: "Designates an employee as a Competent Person in the areas you select. Copies of training documents must be attached with this form. Submit at orientation.",
+    submitEmail: "agarcia@ferrovial.us,mmaldonado@ferrovial.us",
+    pdfLink: "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/fw24-competent-person-designation.pdf",
+    pdfFillTemplate: "fw24-competent-person-designation",
+    requiresProof: true,
+    proofLabel: "Training Certification / Resume / Diploma",
+    proofRequired: false,
+    proofRequiredIfChoiceMade: 0,
+    requiresTwoSignatures: true,
+    signatureLabels: ["Employee Signature", "Authorized Representative Signature"],
+    fields: ["Employee Name", "Authorized Representative Name"],
+    choiceGroups: [
+      { label: "Competent Person Fulfilled By", items: ["Training (Cert.)", "Experience (Resume)", "Qualification (Diploma)"] },
+    ],
+    statusGroups: [
+      {
+        label: "Competent Person In The Following Areas",
+        options: ["Yes", "N/A"],
+        items: [
+          "Excavation", "Confined Space", "Ladder Inspection", "Traffic Control - CAT 1", "Traffic Control - CAT 2",
+          "Rigging Inspection (Cert.)", "Respiratory Protection", "Asbestos Abatement (Cert.)", "Fall Protection (Cert.)", "Fire Extinguisher",
+          "Flagging Work Zones (Cert.)", "Silica (Cert.)", "Aerial Lift (Cert.)", "Assured Grounding", "Scaffolds",
+        ],
+      },
+    ],
+  },
+  {
+    title: "Equipment Operator Designation",
+    projects: ["nashville"],
+    description: "All employees who will operate equipment on-site must be designated as qualified or certified operators. Submit prior to or at orientation.",
+    submitEmail: "agarcia@ferrovial.us,mmaldonado@ferrovial.us",
+    pdfLink: "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/fw24-equipment-operator-designation.pdf",
+    pdfFillTemplate: "fw24-equipment-operator-designation",
+    requiresProof: true,
+    proofLabel: "Equipment Certifications",
+    proofRequired: false,
+    proofRequiredIfStatusYes: { groupIndex: 0, itemIndices: [0, 3, 6, 30] },
+    requiresTwoSignatures: true,
+    signatureLabels: ["Operator Signature", "Authorized Representative Signature"],
+    fields: ["Authorized Representative Name", "Employee Name"],
+    statusGroups: [
+      {
+        label: "Qualified / Certified to Operate",
+        options: ["Yes", "N/A"],
+        note: "Aerial Man Lift, Forklift, Boom Lift, and Crane require a current certification or license to be uploaded above.",
+        items: [
+          "Aerial Man Lift", "Trackhoe", "Backhoe", "Forklift", "Skidsteer", "Excavator", "Boom Lift", "Mini Excavator",
+          "Skytrac", "Off Road Truck", "Water Truck", "Dozer", "Compactor", "Front End Loader", "Trencher",
+          "Sheep Foot Roller", "Motor Grader", "Scraper", "Scissor Lift", "Dump Truck", "Bore Machine", "Rock Hauler",
+          "Milling Machine", "Broom / Sweeper", "Shuttle Buggy", "Asphalt Paver", "Power Broom", "Lime Mixer",
+          "TMA", "Boat", "Crane", "Drill Rig",
+        ],
+      },
+    ],
+  },
+  {
+    title: "Flagger Designation",
+    projects: ["nashville"],
+    description: "Designates an employee as a flagger authorized to direct traffic on this project. Certification must be issued by a TN DOT-approved organization or a certified flagging instructor. A copy of the certificate must be provided with this form.",
+    submitEmail: "agarcia@ferrovial.us,mmaldonado@ferrovial.us",
+    pdfLink: "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/fw24-flagger-designation.pdf",
+    pdfFillTemplate: "fw24-flagger-designation",
+    requiresProof: true,
+    proofLabel: "Flagger Certification",
+    proofRequired: false,
+    requiresTwoSignatures: true,
+    signatureLabels: ["Employee Signature", "Authorized Representative Signature"],
+    fields: [
+      "Authorized Representative Name",
+      "Employee Name",
+      "Other Organization Name (if applicable)",
+      "Flagging Instructor Name (if applicable)",
+      "Instructor's Certifying Organization (if applicable)",
+      "Date of Instructor's Certification (if applicable)",
+    ],
+    trailingFieldLabels: ["Other Organization Name (if applicable)"],
+    choiceGroups: [
+      { label: "TN DOT-Approved Organization", items: ["American Traffic Safety Services Association", "National Safety Council", "Other Approved Organization"] },
+    ],
+  },
 ];
 
 // Crop a signature PNG to its ink, then draw it inside a box at its natural proportions (never stretched).
@@ -7335,6 +7418,15 @@ const EQUIPMENT_OPERATOR_CHECKBOX_ORDER = [
   "Check Box31", "Check Box32", "Check Box33", "Check Box34", "Check Box35", "Check Box36", "Check Box37", "Check Box38",
 ];
 
+// FW24's equipment form numbers its boxes in reading order down each column; this lists them in the same
+// order as the checklist items (columns of 10, 10, 10, then Crane and Drill Rig).
+const FW24_EQUIPMENT_CHECKBOX_ORDER = [
+  "Check Box4", "Check Box5", "Check Box6", "Check Box7", "Check Box8", "Check Box9", "Check Box10", "Check Box13", "Check Box11", "Check Box14",
+  "Check Box15", "Check Box17", "Check Box18", "Check Box19", "Check Box20", "Check Box21", "Check Box22", "Check Box24", "Check Box23", "Check Box25",
+  "Check Box26", "Check Box27", "Check Box28", "Check Box29", "Check Box30", "Check Box31", "Check Box32", "Check Box33", "Check Box34", "Check Box35",
+  "Check Box36", "Check Box37",
+];
+
 const DESIGNATION_PDF_CONFIGS = {
   "crane-ad-director-designation": {
     templateUrl: "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/crane-ad-director-designation-template.pdf",
@@ -7454,6 +7546,75 @@ const DESIGNATION_PDF_CONFIGS = {
     buildSignatures: ({ signatureDataUrls }) => [
       { dataUrl: signatureDataUrls[1], rect: { x: 105.1, y: 146.4, width: 304.1, height: 19.2 } }, // Authorized Rep
       { dataUrl: signatureDataUrls[0], rect: { x: 104.7, y: 80.6, width: 303.2, height: 19.2 } },   // Operator
+    ],
+  },
+  "fw24-competent-person-designation": {
+    templateUrl: "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/fw24-competent-person-designation.pdf",
+    buildTextFields: ({ standardValues, getField }) => ({
+      Text1: standardValues.subcontractor,
+      Date2_af_date: standardValues.date,
+      Text3: getField("Employee Name"),
+      Text24: getField("Authorized Representative Name") || standardValues.name,
+      Date26_af_date: standardValues.date,
+      Text27: getField("Employee Name"),
+      Date29_af_date: standardValues.date,
+    }),
+    buildCheckboxFields: ({ form, statusValues, choiceValues }) => {
+      const out = { "Check Box6": choiceValues[0] === 0, "Check Box7": choiceValues[0] === 1, "Check Box8": choiceValues[0] === 2 };
+      const sv = statusValues[0] || {};
+      for (let i = 0; i < 15; i++) out["Check Box" + (9 + i)] = sv[i] === "Yes";
+      return out;
+    },
+    buildSignatures: ({ signatureDataUrls }) => [
+      { dataUrl: signatureDataUrls[1], rect: { x: 104.7, y: 217.5, width: 304.4, height: 22.1 } }, // Authorized Rep (Signature25)
+      { dataUrl: signatureDataUrls[0], rect: { x: 104.0, y: 147.2, width: 304.7, height: 22.3 } }, // Employee (Signature28)
+    ],
+  },
+  "fw24-flagger-designation": {
+    templateUrl: "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/fw24-flagger-designation.pdf",
+    buildTextFields: ({ standardValues, getField }) => ({
+      Date1_af_date: standardValues.date,
+      Text3: standardValues.subcontractor,
+      Text2: getField("Employee Name"),
+      Text4: getField("Other Organization Name (if applicable)"),
+      Text9: getField("Flagging Instructor Name (if applicable)"),
+      Text10: getField("Instructor's Certifying Organization (if applicable)"),
+      Text11: getField("Date of Instructor's Certification (if applicable)"),
+      Text12: getField("Authorized Representative Name") || standardValues.name,
+      Date14_af_date: standardValues.date,
+      Text13: getField("Employee Name"),
+      Date15_af_date: standardValues.date,
+    }),
+    buildCheckboxFields: ({ choiceValues }) => ({
+      "Check Box5": choiceValues[0] === 0,
+      "Check Box6": choiceValues[0] === 1,
+      "Check Box8": choiceValues[0] === 2,
+    }),
+    buildSignatures: ({ signatureDataUrls }) => [
+      { dataUrl: signatureDataUrls[1], rect: { x: 105.0, y: 207.1, width: 303.8, height: 21.3 } }, // Authorized Rep (Signature16)
+      { dataUrl: signatureDataUrls[0], rect: { x: 105.0, y: 136.5, width: 303.8, height: 21.7 } }, // Employee (Signature17)
+    ],
+  },
+  "fw24-equipment-operator-designation": {
+    templateUrl: "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/fw24-equipment-operator-designation.pdf",
+    buildTextFields: ({ standardValues, getField }) => ({
+      Text1: standardValues.subcontractor,
+      Text2: getField("Employee Name"),
+      Date3_af_date: standardValues.date,
+      Text38: getField("Authorized Representative Name") || standardValues.name,
+      Date42_af_date: standardValues.date,
+      Text39: getField("Employee Name"),
+      Date43_af_date: standardValues.date,
+    }),
+    buildCheckboxFields: ({ statusValues }) => {
+      const sv = statusValues[0] || {};
+      const result = {};
+      FW24_EQUIPMENT_CHECKBOX_ORDER.forEach((box, i) => { result[box] = sv[i] === "Yes"; });
+      return result;
+    },
+    buildSignatures: ({ signatureDataUrls }) => [
+      { dataUrl: signatureDataUrls[1], rect: { x: 104.1, y: 175.7, width: 305.2, height: 19.8 } }, // Authorized Rep (Signature40)
+      { dataUrl: signatureDataUrls[0], rect: { x: 104.2, y: 109.9, width: 305.0, height: 19.9 } }, // Operator (Signature41)
     ],
   },
   "confined-space-evaluation": {
