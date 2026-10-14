@@ -505,7 +505,7 @@ function QuarterlyMonthlyScreen({ user, go }) {
               <div className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{viewingPdf.title}</div>
               <button onClick={() => setViewingPdf(null)}><X size={18} color={STEEL} /></button>
             </div>
-            <iframe src={inlineViewUrl(viewingPdf.pdfLink)} className="flex-1 w-full" style={{ border: "none" }} title={viewingPdf.title} />
+            <PdfFrame link={viewingPdf.pdfLink} title={viewingPdf.title} />
           </div>
         </div>
       )}
@@ -3609,6 +3609,32 @@ const WORK_PLANS_FLAT_DEFAULT = [
 
 // Opens uploaded documents inside the page instead of downloading them.
 // Google Drive links already preview; Office files use Microsoft's viewer, PDFs and anything else use Google's.
+function PdfFrame({ link, title }) {
+  const [state, setState] = useState("checking");
+  useEffect(() => {
+    let alive = true;
+    setState("checking");
+    if (!link) { setState("missing"); return; }
+    if (/drive\.google\.com|docs\.google\.com/i.test(link)) { setState("ok"); return; }
+    fetch(link, { method: "HEAD" }).then((r) => { if (alive) setState(r.ok ? "ok" : "missing"); }).catch(() => { if (alive) setState("ok"); });
+    return () => { alive = false; };
+  }, [link]);
+  const fname = fileNameFromLink(link || "", title);
+  if (state === "checking") return <div className="flex-1 flex items-center justify-center text-[12px]" style={{ color: STEEL }}>Loading form...</div>;
+  if (state === "missing") return (
+    <div className="flex-1 flex flex-col items-center justify-center text-center px-6 gap-2">
+      <div className="text-[13px] font-bold" style={{ color: INK }}>This blank form has not been uploaded yet</div>
+      <div className="text-[11px]" style={{ color: STEEL }}>Missing file: <span style={{ fontFamily: "IBM Plex Mono, monospace" }}>{fname}</span></div>
+      <div className="text-[11px]" style={{ color: STEEL }}>An admin needs to upload it to the documents storage bucket with exactly this name.</div>
+    </div>
+  );
+  return (
+    <div className="flex-1 flex flex-col min-h-0">
+      <iframe src={inlineViewUrl(link)} className="flex-1 w-full" style={{ border: "none" }} title={title} />
+      <a href={link} target="_blank" rel="noreferrer" className="text-center text-[11px] font-bold uppercase py-2 border-t" style={{ borderColor: "#E4E2DA", color: INK, fontFamily: "IBM Plex Mono, monospace", background: "#FAF9F5" }}>Not showing? Open in new tab</a>
+    </div>
+  );
+}
 function inlineViewUrl(link) {
   if (!link) return "";
   if (/drive\.google\.com|docs\.google\.com|view\.officeapps\.live\.com|docs\.google\.com\/gview/i.test(link)) return link;
@@ -3740,7 +3766,7 @@ function WorkPlansScreen({ user, go }) {
               </div>
             </div>
             {viewing.link ? (
-              <iframe src={inlineViewUrl(viewing.link)} className="flex-1 w-full" style={{ border: "none" }} title={viewing.title} />
+              <PdfFrame link={viewing.link} title={viewing.title} />
             ) : (
               <div className="flex-1 overflow-y-auto flex items-center justify-center py-12" style={{ background: "#FCFCFA" }}>
                 <div className="text-center px-6">
@@ -6897,9 +6923,9 @@ const ORIENTATION_FORMS_DEFAULT = [
         textBlocks: [
           header(true),
           appoint("an “OPERATOR” of a crane", "listed"),
-          { at: "top", plain: true, text: "The North Tarrant Infrastructure Safety Manual requires certification for Crane Operators" },
+          { at: "top", plain: true, text: "The Ferrovial Construction-Webber 99 JV Safety Manual requires certification for Crane Operators" },
           { at: "top", plain: true, text: "A certified “OPERATOR” is one who has completed a formal training program through an accredited operator testing organization and who has passed tests in both knowledge and skill for a particular type and capacity of equipment." },
-          { at: "end", title: "ACKNOWLEDGEMENT", ackCheck: "I acknowledge and agree to the statement above.", plain: true, text: "I, the Authorized “CONTRACTOR” Representative, understand that if at any point in the future this “EMPLOYEE” loses this certification, is terminated or is removed from the “PROJECT”, I will provide a written notification to the NTI Safety Department within 2 business days." },
+          { at: "end", title: "ACKNOWLEDGEMENT", ackCheck: "I acknowledge and agree to the statement above.", plain: true, text: "I, the Authorized “CONTRACTOR” Representative, understand that if at any point in the future this “EMPLOYEE” loses this certification, is terminated or is removed from the “PROJECT”, I will provide a written notification to the FCW 99 Safety Department within 2 business days." },
           submitAt(),
         ],
         choiceGroups: [
@@ -10870,7 +10896,7 @@ function FormsScreen({ user, go, activeProjectId }) {
               <button onClick={() => setViewingPdf(null)}><X size={18} color={STEEL} /></button>
             </div>
             {viewingPdf.pdfLink ? (
-              <iframe src={inlineViewUrl(viewingPdf.pdfLink)} className="flex-1 w-full" style={{ border: "none" }} title={viewingPdf.title} />
+              <PdfFrame link={viewingPdf.pdfLink} title={viewingPdf.title} />
             ) : (
               <div className="flex-1 overflow-y-auto flex items-center justify-center py-12" style={{ background: "#FCFCFA" }}>
                 <div className="text-center px-6">
@@ -12528,7 +12554,7 @@ function OrientationScreen({ user, go, activeProjectId }) {
               <button onClick={() => setViewingPdf(null)}><X size={18} color={STEEL} /></button>
             </div>
             {viewingPdf.pdfLink ? (
-              <iframe src={inlineViewUrl(viewingPdf.pdfLink)} className="flex-1 w-full" style={{ border: "none" }} title={viewingPdf.title} />
+              <PdfFrame link={viewingPdf.pdfLink} title={viewingPdf.title} />
             ) : (
               <div className="flex-1 flex items-center justify-center" style={{ color: STEEL }}>No preview available.</div>
             )}
