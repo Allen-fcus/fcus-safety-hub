@@ -5882,12 +5882,36 @@ const FORMS_DEFAULT = [
     genericPdfLongFields: ["Purpose of Excavation / Drilling / Boring", "Location of Excavation / Drilling / Boring"],
     pdfLinkByProject: {
       "nashville": "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/fcw24-utility-locate-permit.pdf",
-    },
-    statusItemsByProject: {
-      "sh99-houston": [["Electric", "Gas", "Communications", "Water", "Sewer", "Pipeline", "Telephone (TX-DOT)", "Storm Water / Slurry", "Other Utility 1", "Other Utility 2"]],
+      "sh99-houston": "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/sh99-utility-locate-permit.pdf",
     },
     // Tennessee (FCW24): Tennessee 811 rules. 3 working days notice (max 10), ticket valid 15 calendar days from the legal start date, update requested 3 working days before expiry.
     projectOverrides: {
+      // SH99 (Houston): 5A-15 Excavation, Drilling, Boring Permit - Utility Locate Permit
+      "sh99-houston": {
+        fields: [
+          "Requested By", "Competent Person", "Segment #", "Start Date", "Completion Date",
+          "Purpose of Excavation / Drilling / Boring",
+          "Location of Excavation / Drilling / Boring",
+          "Depth", "Width / Diameter", "Length",
+          "Submit a photo of the marked utilities in the specific work area",
+          "Ticket Date", "Ticket Number",
+          "Ticket Refresh Date 1", "Ticket Refresh Number 1",
+        ],
+        choiceGroups: [
+          { label: "Safe Guarding Used", items: ["Safety Fence", "Handrails", "Cover", "N/A"] },
+          { label: "Have locates been documented with video and/or photos?", items: ["Yes", "No"] },
+        ],
+        statusItems: [["Electric", "Gas", "Communications", "Water", "Sewer", "Pipeline", "Telephone", "TxDOT (HOU)", "Galveston County", "Brazoria County", "Storm Water / Slurry", "Other Utility 1", "Other Utility 2"]],
+        // reference numbers start with these prefixes (the driver/competent person adds the rest)
+        statusRefPrefixes: [{ "TxDOT (HOU)": "HOU-", "Galveston County": "3510-01-", "Brazoria County": "3510-02-" }],
+        textBlocks: [
+          { at: "before", text: "5A-15 Excavation, Drilling, Boring Permit", emphasis: true },
+          { at: "after", title: "Locate Requests", text: "TxDOT: (713-802-5668), HOU- locaterequest@txdot.gov. Galveston County reference numbers begin 3510-01-. Brazoria County reference numbers begin 3510-02-." },
+          { at: "after", title: "Ticket Refresh Required every 14 working days", text: "Record the original ticket and each refresh (date and ticket number) in the Ticket fields above.", emphasis: true },
+          { at: "after", text: "This permit is required to be completed by the Contractor's Designated Competent Person prior to any work commencing (e.g. drilling, boring, excavating, etc.). All located request tickets and confirmations are to be attached to this permit. The General Contractor's Supt. must view this permit as part of their daily safety survey of the work areas. Permit must be onsite until the work is completed and then submitted to the General Contractor's Safety Department." },
+          { at: "after", text: "*** The Work Plan, Job Hazard Analysis and Competent Person Designation(s) must be attached to this Permit and be available for review during the activity. ***", emphasis: true },
+        ],
+      },
       nashville: {
         ticketRules: {
           noticeDays: 3, maxAdvanceDays: 10, validDays: 15, renewLeadDays: 3,
@@ -8556,7 +8580,11 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
     return initial;
   });
   const [statusValues, setStatusValues] = useState({});
-  const [statusRefs, setStatusRefs] = useState({});
+  const [statusRefs, setStatusRefs] = useState(() => {
+    const init = {};
+    (form.statusGroups || []).forEach((g, gi) => { if (g.refPrefixes) g.items.forEach((it, ii) => { if (g.refPrefixes[it]) { init[gi] = init[gi] || {}; init[gi][ii] = g.refPrefixes[it]; } }); });
+    return init;
+  });
   const [choiceValues, setChoiceValues] = useState({});
   const [sigEmpty, setSigEmpty] = useState(true);
   const signatureCanvasRef = useRef(null);
@@ -9954,7 +9982,8 @@ function resolveFormForProject(f, pid) {
   if (po) {
     out = { ...out, ...po };
     if (po.statusItems) out.statusGroups = (out.statusGroups || []).map((g, gi) => (po.statusItems[gi] ? { ...g, items: po.statusItems[gi] } : g));
-    delete out.statusItems;
+    if (po.statusRefPrefixes) out.statusGroups = (out.statusGroups || []).map((g, gi) => (po.statusRefPrefixes[gi] ? { ...g, refPrefixes: po.statusRefPrefixes[gi] } : g));
+    delete out.statusItems; delete out.statusRefPrefixes;
   }
   return out;
 }
