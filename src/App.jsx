@@ -505,7 +505,7 @@ function QuarterlyMonthlyScreen({ user, go }) {
               <div className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{viewingPdf.title}</div>
               <button onClick={() => setViewingPdf(null)}><X size={18} color={STEEL} /></button>
             </div>
-            <iframe src={viewingPdf.pdfLink} className="flex-1 w-full" style={{ border: "none" }} title={viewingPdf.title} />
+            <iframe src={inlineViewUrl(viewingPdf.pdfLink)} className="flex-1 w-full" style={{ border: "none" }} title={viewingPdf.title} />
           </div>
         </div>
       )}
@@ -10490,7 +10490,7 @@ function FormsScreen({ user, go, activeProjectId }) {
               <button onClick={() => setViewingPdf(null)}><X size={18} color={STEEL} /></button>
             </div>
             {viewingPdf.pdfLink ? (
-              <iframe src={viewingPdf.pdfLink} className="flex-1 w-full" style={{ border: "none" }} title={viewingPdf.title} />
+              <iframe src={inlineViewUrl(viewingPdf.pdfLink)} className="flex-1 w-full" style={{ border: "none" }} title={viewingPdf.title} />
             ) : (
               <div className="flex-1 overflow-y-auto flex items-center justify-center py-12" style={{ background: "#FCFCFA" }}>
                 <div className="text-center px-6">
@@ -12125,7 +12125,7 @@ function OrientationScreen({ user, go, activeProjectId }) {
               <button onClick={() => setViewingPdf(null)}><X size={18} color={STEEL} /></button>
             </div>
             {viewingPdf.pdfLink ? (
-              <iframe src={viewingPdf.pdfLink} className="flex-1 w-full" style={{ border: "none" }} title={viewingPdf.title} />
+              <iframe src={inlineViewUrl(viewingPdf.pdfLink)} className="flex-1 w-full" style={{ border: "none" }} title={viewingPdf.title} />
             ) : (
               <div className="flex-1 flex items-center justify-center" style={{ color: STEEL }}>No preview available.</div>
             )}
