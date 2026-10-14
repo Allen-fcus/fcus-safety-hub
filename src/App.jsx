@@ -404,7 +404,6 @@ const QUARTERLY_MONTHLY_PROJECTS = ["nti-sylvania", "nti-golden-triangle"];
 const DESIGNATION_FORM_PROJECTS = ["nti-sylvania", "nti-golden-triangle"];
 
 // Period choices carry no year - the submission date supplies the year.
-const QM_QUARTERS = ["Q1", "Q2", "Q3", "Q4"];
 const QM_MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const QM_GC_BLOCK = { at: "before", title: "General Contractor", text: "North Tarrant Infrastructure, LLC" };
 
@@ -417,20 +416,14 @@ const QUARTERLY_MONTHLY_FORMS_DEFAULT = [
     pdfFillTemplate: "generic-form-pdf",
     genericPdfNeutral: true,
     prefillNameFields: ["Competent Person"],
-    fields: ["Competent Person", "Period"],
-    chipFields: { Period: { options: QM_QUARTERS } },
+    fields: ["Competent Person"],
+    periodFromChoice: 0,
+    choiceGroups: [{ label: "Color Code Program - select the quarter this verification covers", items: ["1st Quarter - WHITE (January, February and March)", "2nd Quarter - GREEN (April, May and June)", "3rd Quarter - RED (July, August and September)", "4th Quarter - ORANGE (October, November and December)"] }],
     signatureLabels: ["Authorized \"Competent Person\" Signature"],
     textBlocks: [
       QM_GC_BLOCK,
       { at: "before", text: "As an authorized \u201CCOMPETENT PERSON\u201D for the above named \u201CSUBCONTRACTOR\u201D on the above named \u201CPROJECT\u201D in the area(s) of:" },
       { at: "after", text: "I hereby verify that all electrical components in our use, temporary and permanent, have been inspected and maintained over the \u201CPERIOD\u201D indicated above, and meet all local, state and federal regulations for their safe use." },
-      {
-        at: "after", title: "Color Code Program",
-        text: "The following color code program will be required as a visual indicator of this inspection practice:",
-        rows: [["1st Quarter", "WHITE", "January, February and March"], ["2nd Quarter", "GREEN", "April, May and June"], ["3rd Quarter", "RED", "July, August and September"], ["4th Quarter", "ORANGE", "October, November and December"]],
-      },
-      { at: "after", text: "Frequency of submission of this form to the NTI Safety Department is QUARTERLY.", emphasis: true },
-      { at: "after", text: "*** This form is to be submitted to the Safety Coordinator at ntisafety@ferrovial.us.", emphasis: true },
     ],
     statusGroups: [
       {
@@ -462,8 +455,6 @@ const QUARTERLY_MONTHLY_FORMS_DEFAULT = [
       QM_GC_BLOCK,
       { at: "before", text: "As an authorized \u201CCOMPETENT PERSON\u201D for the above named \u201CSUBCONTRACTOR\u201D on the above named \u201CPROJECT\u201D in the area of Fire Protection, I hereby verify that all fire extinguishers at our disposal have been inspected and maintained over the \u201CPERIOD\u201D indicated above, and meet all local, state and federal regulations for their safe use." },
       { at: "before", title: "Note", text: "All extinguishers must be inspected by a third party entity, annually.", emphasis: true },
-      { at: "after", text: "Frequency of submission of this form to the NTI, LLC. Safety Department is MONTHLY. This form shall be emailed to the Segment Safety Coordinator.", emphasis: true },
-      { at: "after", text: "*** This form is to be submitted to Safety Department every month at ntisafety@ferrovial.us", emphasis: true },
     ],
   },
 ];
