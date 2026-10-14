@@ -6571,7 +6571,7 @@ const FORMS_DEFAULT = [
 const ORIENTATION_FORMS_DEFAULT = [
   {
     title: "Drug Screen Affidavit",
-    projects: ["nti-sylvania", "nti-golden-triangle", "nashville"],
+    projects: ["nti-sylvania", "nti-golden-triangle"],
     description: "All individuals attending orientation are required to provide a valid Drug Screening Affidavit. The drug screen must have been completed within the last 30 days. A copy of the affidavit must be submitted to our team prior to attending orientation or bring at the time of orientation. Individuals who fail to provide an acceptable Drug Screening Affidavit before the class will not be permitted to attend orientation until the requirement is met.",
     submitEmail: "ntisafety@ferrovial.us",
     pdfLink: "https://drive.google.com/file/d/1VJD4Los8KrtSySBJhpETnOgYXgkxZi3d/preview",
@@ -6750,104 +6750,24 @@ const ORIENTATION_FORMS_DEFAULT = [
       { label: "Certification Organization", items: ["Texas Engineering Extension Service", "American Traffic Safety Services Association", "National Safety Council", "Other Approved Organization"] },
     ],
   },
-  {
-    title: "Competent Person Designation",
-    projects: ["nashville"],
-    description: "Designates an employee as a Competent Person in the areas you select. Copies of training documents must be attached with this form. Submit at orientation.",
-    submitEmail: "agarcia@ferrovial.us,mmaldonado@ferrovial.us",
-    pdfLink: "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/fw24-competent-person-designation.pdf",
-    pdfFillTemplate: "fw24-competent-person-designation",
-    requiresProof: true,
-    proofLabel: "Training Certification / Resume / Diploma",
-    proofRequired: false,
-    proofRequiredIfChoiceMade: 0,
-    requiresTwoSignatures: true,
-    signatureLabels: ["Employee Signature", "Authorized Representative Signature"],
-    fields: ["Employee Name", "Authorized Representative Name"],
-    choiceGroups: [
-      { label: "Competent Person Fulfilled By", items: ["Training (Cert.)", "Experience (Resume)", "Qualification (Diploma)"] },
-    ],
-    statusGroups: [
-      {
-        label: "Competent Person In The Following Areas",
-        options: ["Yes", "N/A"],
-        items: [
-          "Excavation", "Confined Space", "Ladder Inspection", "Traffic Control - CAT 1", "Traffic Control - CAT 2",
-          "Rigging Inspection (Cert.)", "Respiratory Protection", "Asbestos Abatement (Cert.)", "Fall Protection (Cert.)", "Fire Extinguisher",
-          "Flagging Work Zones (Cert.)", "Silica (Cert.)", "Aerial Lift (Cert.)", "Assured Grounding", "Scaffolds",
-        ],
-      },
-    ],
-  },
-  {
-    title: "Equipment Operator Designation",
-    projects: ["nashville"],
-    description: "All employees who will operate equipment on-site must be designated as qualified or certified operators. Submit prior to or at orientation.",
-    submitEmail: "agarcia@ferrovial.us,mmaldonado@ferrovial.us",
-    pdfLink: "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/fw24-equipment-operator-designation.pdf",
-    pdfFillTemplate: "fw24-equipment-operator-designation",
-    requiresProof: true,
-    proofLabel: "Equipment Certifications",
-    proofRequired: false,
-    proofRequiredIfStatusYes: { groupIndex: 0, itemIndices: [0, 3, 6, 30] },
-    requiresTwoSignatures: true,
-    signatureLabels: ["Operator Signature", "Authorized Representative Signature"],
-    fields: ["Authorized Representative Name", "Employee Name"],
-    statusGroups: [
-      {
-        label: "Qualified / Certified to Operate",
-        options: ["Yes", "N/A"],
-        note: "Aerial Man Lift, Forklift, Boom Lift, and Crane require a current certification or license to be uploaded above.",
-        items: [
-          "Aerial Man Lift", "Trackhoe", "Backhoe", "Forklift", "Skidsteer", "Excavator", "Boom Lift", "Mini Excavator",
-          "Skytrac", "Off Road Truck", "Water Truck", "Dozer", "Compactor", "Front End Loader", "Trencher",
-          "Sheep Foot Roller", "Motor Grader", "Scraper", "Scissor Lift", "Dump Truck", "Bore Machine", "Rock Hauler",
-          "Milling Machine", "Broom / Sweeper", "Shuttle Buggy", "Asphalt Paver", "Power Broom", "Lime Mixer",
-          "TMA", "Boat", "Crane", "Drill Rig",
-        ],
-      },
-    ],
-  },
-  {
-    title: "Flagger Designation",
-    projects: ["nashville"],
-    description: "Designates an employee as a flagger authorized to direct traffic on this project. Certification must be issued by a TN DOT-approved organization or a certified flagging instructor. A copy of the certificate must be provided with this form.",
-    submitEmail: "agarcia@ferrovial.us,mmaldonado@ferrovial.us",
-    pdfLink: "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/fw24-flagger-designation.pdf",
-    pdfFillTemplate: "fw24-flagger-designation",
-    requiresProof: true,
-    proofLabel: "Flagger Certification",
-    proofRequired: false,
-    requiresTwoSignatures: true,
-    signatureLabels: ["Employee Signature", "Authorized Representative Signature"],
-    fields: [
-      "Authorized Representative Name",
-      "Employee Name",
-      "Other Organization Name (if applicable)",
-      "Flagging Instructor Name (if applicable)",
-      "Instructor's Certifying Organization (if applicable)",
-      "Date of Instructor's Certification (if applicable)",
-    ],
-    trailingFieldLabels: ["Other Organization Name (if applicable)"],
-    choiceGroups: [
-      { label: "TN DOT-Approved Organization", items: ["American Traffic Safety Services Association", "National Safety Council", "Other Approved Organization"] },
-    ],
-  },
-  // ---------------- SH99 (FCW99) orientation forms — redesigned fillable (generic-form-pdf) ----------------
+  // ---------------- SH99 (FCW99) and FCW24 orientation forms — redesigned fillable (generic-form-pdf) ----------------
   // Every sentence of the original FCW99 form is rendered as a text block so it shows in both the fillable and the final PDF.
-  ...(() => {
+  ...[
+    { slug: "sh99-houston", file: "sh99", email: "sh99safety@ferrovial.us", projShort: "FCW99", projSp: "FCW 99", gc: "Ferrovial Construction-Webber 99 JV", compEmail: "SH99safety@ferrovial.us", dept1: "SH99 Safety Department", deptEq: "SH 99 Safety Department", deptCrane: "FCW 99 Safety Department", manual: "Ferrovial Construction-Webber 99 JV", drugProj: "Ferrovial Construction-Webber JV 99" },
+    { slug: "nashville", file: "fcw24", email: "agarcia@ferrovial.us,mmaldonado@ferrovial.us", projShort: "FCW 24", projSp: "FCW 24", gc: "Ferrovial Construction-Webber 24 JV", compEmail: "agarcia@ferrovial.us and mmaldonado@ferrovial.us", dept1: "FCW24 Safety Department", deptEq: "FCW 24 Safety Department", deptCrane: "FCW 24 Safety Department", manual: "Ferrovial Construction-Webber 24JV", drugProj: "Ferrovial Construction-Webber 24 JV" },
+  ].flatMap((cfg) => {
     const B = "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/";
     const common = {
-      projects: ["sh99-houston"],
+      projects: [cfg.slug],
       genericPdfShowAllChoices: true,
-      submitEmail: "sh99safety@ferrovial.us",
+      submitEmail: cfg.email,
       pdfFillTemplate: "generic-form-pdf",
       genericPdfNeutral: true,
       requiresTwoSignatures: true,
       signatureLabels: ["Employee Signature", "Authorized Representative Signature"],
       prefillNameFields: [],
     };
-    const header = (gc) => ({ at: "top", plain: true, text: "PROJECT: FCW99" + (gc ? "     GENERAL CONTRACTOR: Ferrovial Construction-Webber 99 JV" : "") });
+    const header = (gc) => ({ at: "top", plain: true, text: "PROJECT: " + cfg.projShort + (gc ? "     GENERAL CONTRACTOR: " + cfg.gc : "") });
     const appoint = (role, quote) => ({ at: "top", plain: true, text: `As an Authorized Representative of the above named “CONTRACTOR”, I hereby appoint the above ${quote || "mentioned"} “EMPLOYEE” as ${role}.` });
     const QP = "A Qualified Person is an individual, who by possession of a recognized degree, certificate, or professional standing, or who by extensive knowledge, training and experience, can continually demonstrate the ability to successfully solve/resolve problems relating to the equipment, the work and the environment.";
     const CP = "The Occupational Safety and Health Administration (OSHA) defines a Competent Person as “one who is capable of identifying existing and predictable hazards in the surroundings or working conditions which are unsanitary, hazardous, or dangerous to employees, AND who has authorization to take prompt corrective measures to eliminate them”.";
@@ -6859,7 +6779,7 @@ const ORIENTATION_FORMS_DEFAULT = [
         ...common,
         title: "Drug Screen Affidavit",
         description: "All individuals attending orientation are required to provide a valid Drug Screening Affidavit. The drug screen must have been completed within the last 30 days. A copy of the affidavit must be submitted to our team prior to attending orientation or bring at the time of orientation. Individuals who fail to provide an acceptable Drug Screening Affidavit before the class will not be permitted to attend orientation until the requirement is met.",
-        pdfLink: B + "sh99-drug-screen-affidavit-template.pdf",
+        pdfLink: B + cfg.file + "-drug-screen-affidavit-template.pdf",
         requiresTwoSignatures: false,
         signatureLabels: ["Authorized Representative Signature"],
         allFieldsRequired: true,
@@ -6868,7 +6788,7 @@ const ORIENTATION_FORMS_DEFAULT = [
         bigTextFields: ["Employee Names Passing Drug Screen (one per line)"],
         prefillNameFields: ["Contact Name"],
         textBlocks: [
-          { at: "top", plain: true, text: "RE: Project: Ferrovial Construction-Webber JV 99 – Drug Screen - Safety/Environment Orientation" },
+          { at: "top", plain: true, text: "RE: Project: " + cfg.drugProj + " – Drug Screen - Safety/Environment Orientation" },
           { at: "top", plain: true, text: "This letter is to confirm that the following employees of the company named above have successfully passed their drug screen within the past 30 days. List names below." },
           { at: "end", plain: true, text: "Please feel free to contact me at the phone number above if more information is needed. Sincerely," },
         ],
@@ -6876,14 +6796,14 @@ const ORIENTATION_FORMS_DEFAULT = [
         ...common,
         title: "Competent Person Designation",
         description: "This form designates an employee as a Competent Person for specific project safety activities. For this project, the designated employee must have OSHA 10 or OSHA 30 training. The subcontractor must identify the applicable areas, submit supporting training certifications, and obtain signatures from both the employee and an authorized representative. The form must be submitted before or during orientation and updated if the designation changes.",
-        pdfLink: B + "sh99-competent-person-designation.pdf",
+        pdfLink: B + cfg.file + "-competent-person-designation.pdf",
         requiresProof: true, proofLabel: "Training / Certification Documents", proofRequired: false,
         fields: ["Authorized Representative Name", "Employee Name"],
         textBlocks: [
-          { at: "top", plain: true, text: "(TO BE COMPLETED AND SUBMITTED AT ORIENTATION)    PROJECT: FCW99" },
+          { at: "top", plain: true, text: "(TO BE COMPLETED AND SUBMITTED AT ORIENTATION)    PROJECT: " + cfg.projShort },
           { at: "top", plain: true, text: "As an authorized representative of the above named “SUBCONTRACTOR”, I hereby appoint the above mentioned “EMPLOYEE” as a “COMPETENT PERSON” in the areas I have indicated below." },
-          { at: "top", plain: true, text: "To clarify, the Occupational Safety and Health Administration (OSHA) defines a “COMPETENT PERSON” as “one who is capable of identifying existing and predictable hazards in the surroundings or working conditions which are unsanitary, hazardous, or dangerous to employees, AND who has authorization to take prompt corrective measures to eliminate them”. This can be fulfilled through training, qualification, experience, or a combination of them. Copies of the training documents are required to be attached and forwarded with this document to the SH99safety@ferrovial.us or in person at the time of orientation." },
-          { at: "end", ackCheck: "I acknowledge and agree to the statement above.", plain: true, text: "I understand that if at any point in the future this “EMPLOYEE” loses this designation, is terminated or is removed from the “PROJECT”, I will notify SH99 Safety Department." },
+          { at: "top", plain: true, text: "To clarify, the Occupational Safety and Health Administration (OSHA) defines a “COMPETENT PERSON” as “one who is capable of identifying existing and predictable hazards in the surroundings or working conditions which are unsanitary, hazardous, or dangerous to employees, AND who has authorization to take prompt corrective measures to eliminate them”. This can be fulfilled through training, qualification, experience, or a combination of them. Copies of the training documents are required to be attached and forwarded with this document to the " + cfg.compEmail + " or in person at the time of orientation." },
+          { at: "end", ackCheck: "I acknowledge and agree to the statement above.", plain: true, text: "I understand that if at any point in the future this “EMPLOYEE” loses this designation, is terminated or is removed from the “PROJECT”, I will notify " + cfg.dept1 + "." },
           submitAt("*** TO BE SUBMITTED PRIOR OR AT THE TIME OF ORIENTATION ***"),
         ],
         choiceGroups: [
@@ -6899,17 +6819,17 @@ const ORIENTATION_FORMS_DEFAULT = [
         ...common,
         title: "Equipment Operator Designation",
         description: "All employees who will operate heavy equipment on-site are required to submit a completed Equipment Operator Designation Form prior to performing any equipment-related work. This form documents the employee's authorization to operate designated equipment. A current certification or license must be submitted along with this form for Skytrac, Forklift, Aerial Lift/Boom Lift, and Crane. Failure to provide the required documentation will result in the employee being restricted from operating equipment on-site until all requirements are met.",
-        pdfLink: B + "sh99-equipment-operator-designation.pdf",
+        pdfLink: B + cfg.file + "-equipment-operator-designation.pdf",
         requiresProof: true, proofLabel: "Operator Certification", proofRequired: false,
         fields: [...repEmp, "Other Equipment (if applicable)"],
         trailingFieldLabels: ["Other Equipment (if applicable)"],
         textBlocks: [
-          { at: "top", plain: true, text: "(TO BE COMPLETED AND SUBMITTED AT ORIENTATION)    PROJECT: FCW 99" },
+          { at: "top", plain: true, text: "(TO BE COMPLETED AND SUBMITTED AT ORIENTATION)    PROJECT: " + cfg.projSp },
           appoint("an “OPERATOR”", "listed"),
           { at: "top", plain: true, text: "The Occupational Safety and Health Administration (OSHA) requires that an “OPERATOR” be qualified or certified, dependent upon the type of equipment to be operated." },
           { at: "top", plain: true, text: "A qualified “OPERATOR” is an individual who, by possession of a recognized degree, certificate, or professional standing, or who by extensive knowledge, training and experience, continually demonstrates the ability to successfully solve/resolve problems relating to the equipment, the work and the environment." },
           { at: "top", plain: true, text: "A certified “OPERATOR” is one who has completed a formal training program through an accredited operator testing organization and who has passed tests in both knowledge and skill for a particular type and capacity of equipment. Certified operators must submit copy of their certifications prior to receive a badge for equipments 1, 4, 9 and 31." },
-          { at: "end", ackCheck: "I acknowledge and agree to the statement above.", plain: true, text: "I, the Authorized “CONTRACTOR” Representative, understand that if at any point in the future this “EMPLOYEE” loses this designation, is terminated or is removed from the “PROJECT”, I will notify SH 99 Safety Department." },
+          { at: "end", ackCheck: "I acknowledge and agree to the statement above.", plain: true, text: "I, the Authorized “CONTRACTOR” Representative, understand that if at any point in the future this “EMPLOYEE” loses this designation, is terminated or is removed from the “PROJECT”, I will notify " + cfg.deptEq + "." },
           submitAt("*** TO BE SUBMITTED PRIOR OR AT THE TIME OF ORIENTATION ***"),
         ],
         choiceGroups: [
@@ -6927,16 +6847,16 @@ const ORIENTATION_FORMS_DEFAULT = [
         ...common,
         title: "Crane Operator Designation",
         description: "All employees who will operate a crane on-site are required to submit a completed Crane Operator Designation Form prior to performing any crane-related work. In addition, a current crane operator certification must be submitted with the designation form. Certifications must be issued by an accredited third-party organization. Accepted certifications include the National Commission for the Certification of Crane Operators (NCCCO) and Crane Institute Certification (CIC). Employees who fail to provide the required designation form and supporting certification documentation will not be authorized to operate a crane on-site until all requirements have been met.",
-        pdfLink: B + "sh99-crane-operator-designation.pdf",
+        pdfLink: B + cfg.file + "-crane-operator-designation.pdf",
         requiresProof: true, proofLabel: "Crane Operator Certification", proofRequired: false,
         fields: [...repEmp, "Name of Accredited Organization"],
         trailingFieldLabels: ["Name of Accredited Organization"],
         textBlocks: [
           header(true),
           appoint("an “OPERATOR” of a crane", "listed"),
-          { at: "top", plain: true, text: "The Ferrovial Construction-Webber 99 JV Safety Manual requires certification for Crane Operators" },
+          { at: "top", plain: true, text: "The " + cfg.manual + " Safety Manual requires certification for Crane Operators" },
           { at: "top", plain: true, text: "A certified “OPERATOR” is one who has completed a formal training program through an accredited operator testing organization and who has passed tests in both knowledge and skill for a particular type and capacity of equipment." },
-          { at: "end", title: "ACKNOWLEDGEMENT", ackCheck: "I acknowledge and agree to the statement above.", plain: true, text: "I, the Authorized “CONTRACTOR” Representative, understand that if at any point in the future this “EMPLOYEE” loses this certification, is terminated or is removed from the “PROJECT”, I will provide a written notification to the FCW 99 Safety Department within 2 business days." },
+          { at: "end", title: "ACKNOWLEDGEMENT", ackCheck: "I acknowledge and agree to the statement above.", plain: true, text: "I, the Authorized “CONTRACTOR” Representative, understand that if at any point in the future this “EMPLOYEE” loses this certification, is terminated or is removed from the “PROJECT”, I will provide a written notification to the " + cfg.deptCrane + " within 2 business days." },
           submitAt(),
         ],
         choiceGroups: [
@@ -6947,7 +6867,7 @@ const ORIENTATION_FORMS_DEFAULT = [
         ...common,
         title: "Assembly/Disassembly (A/D) Director Designation",
         description: "Designates an employee as the qualified Assembly/Disassembly Director responsible for overseeing crane assembly and disassembly operations on-site, as required before any A/D work begins.",
-        pdfLink: B + "sh99-crane-ad-director-designation.pdf",
+        pdfLink: B + cfg.file + "-crane-ad-director-designation.pdf",
         fields: repEmp,
         textBlocks: [
           header(true),
@@ -6955,7 +6875,7 @@ const ORIENTATION_FORMS_DEFAULT = [
           { at: "top", plain: true, text: "An “A/D DIRECTOR” is one who meets the criteria for both a Competent Person and a Qualified Person and is responsible for directing or performing crane assembly/disassembly (A/D) operations. This individual must meet the requirements of 29 CFR § 1926.1404." },
           { at: "top", plain: true, text: CP },
           { at: "top", plain: true, text: QP },
-          { at: "top", emphasis: true, text: "NOTE – A Competent Person Designation form must be submitted to the SH99 Safety Department with this form." },
+          { at: "top", emphasis: true, text: "NOTE – A Competent Person Designation form must be submitted to the " + cfg.dept1 + " with this form." },
           notify2,
           submitAt(),
         ],
@@ -6964,7 +6884,7 @@ const ORIENTATION_FORMS_DEFAULT = [
         ...common,
         title: "Crane-Specific Qualified Person Designation",
         description: "Designates an employee as a Qualified Person for crane-related duties (Rigger, Signal Person, or Maintenance and Repair Employee) on-site, based on their degree, certification, or demonstrated knowledge, training, and experience.",
-        pdfLink: B + "sh99-crane-specific-qualified-person-designation.pdf",
+        pdfLink: B + cfg.file + "-crane-specific-qualified-person-designation.pdf",
         fields: [...repEmp, "Option 1 - Name of Third Party", "Option 1 - Name of Qualified Evaluator", "Option 2 - Name of Qualified Evaluator (CONTRACTOR)"],
         trailingFieldLabels: ["Option 1 - Name of Third Party", "Option 1 - Name of Qualified Evaluator", "Option 2 - Name of Qualified Evaluator (CONTRACTOR)"],
         textBlocks: [
@@ -6983,7 +6903,7 @@ const ORIENTATION_FORMS_DEFAULT = [
         ...common,
         title: "Flagger Designation",
         description: "Designates an employee as a certified flagger authorized to direct traffic on this project. Certification must be issued by a TX DOT-approved organization or a certified flagging instructor.",
-        pdfLink: B + "sh99-flagger-designation.pdf",
+        pdfLink: B + cfg.file + "-flagger-designation.pdf",
         requiresProof: true, proofLabel: "Flagger Certification", proofRequired: false,
         fields: [...repEmp, "Other Approved Organization Name (if applicable)", "Instructor's Name (if applicable)", "Certifying Organization (if applicable)", "Date of Instructor's Certification (if applicable)"],
         trailingFieldLabels: ["Other Approved Organization Name (if applicable)"],
@@ -7002,7 +6922,7 @@ const ORIENTATION_FORMS_DEFAULT = [
         ],
       },
     ];
-  })(),
+  }),
 ];
 
 // Crop a signature PNG to its ink, then draw it inside a box at its natural proportions (never stretched).
