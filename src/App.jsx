@@ -581,6 +581,158 @@ function QuarterlySubmissionsScreen({ user, admin }) {
   );
 }
 
+// ---- Summary of Safety Requirements: submissions + NTI countersignature ----
+function SummarySubmissionsScreen({ user, admin }) {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [q, setQ] = useState("");
+  const [filter, setFilter] = useState("all");
+  const [signing, setSigning] = useState(null);
+  const [signName, setSignName] = useState(user?.name || "");
+  const [sigEmpty, setSigEmpty] = useState(true);
+  const sigRef = useRef(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const mono = { fontFamily: "IBM Plex Mono, monospace" };
+  const load = async () => {
+    setLoading(true);
+    const { data, error } = await supabase.rpc(admin ? "list_summary_submissions_admin" : "list_my_summary_submissions", { p_token: user.sessionToken });
+    setRows(error || !data ? [] : data);
+    setLoading(false);
+  };
+  useEffect(() => { load(); }, [user?.sessionToken, admin]);
+  const shown = rows.filter((r) => {
+    if (filter === "pending" && r.countersigned_at) return false;
+    if (filter === "signed" && !r.countersigned_at) return false;
+    if (q) return `${r.submitted_by || ""} ${r.employer || ""}`.toLowerCase().includes(q.toLowerCase());
+    return true;
+  });
+  const pendingCount = rows.filter((r) => !r.countersigned_at).length;
+  const doDelete = async (id) => {
+    if (confirmDeleteId !== id) { setConfirmDeleteId(id); return; }
+    const res = await supabase.rpc("delete_form_submission", { p_token: user.sessionToken, p_submission_id: id });
+    reportRpcFailure("Delete submission", res);
+    setConfirmDeleteId(null); load();
+  };
+  const countersign = async () => {
+    setBusy(true); setErr("");
+    try {
+      const { PDFDocument: PD, StandardFonts, rgb } = await import("pdf-lib");
+      const resp = await fetch(signing.filled_pdf_url);
+      if (!resp.ok) throw new Error("Couldn't load the submitted PDF.");
+      const doc = await PD.load(await resp.arrayBuffer());
+      const sans = await doc.embedFont(StandardFonts.Helvetica);
+      const sansB = await doc.embedFont(StandardFonts.HelveticaBold);
+      const ink = rgb(0.1, 0.1, 0.1), gold = rgb(0.98, 0.78, 0.02), grey = rgb(0.4, 0.42, 0.45);
+      const page = doc.addPage([612, 792]);
+      const M = 36;
+      page.drawRectangle({ x: 0, y: 792 - 54, width: 612, height: 54, color: ink });
+      page.drawText("SUMMARY OF SAFETY REQUIREMENTS", { x: M, y: 792 - 33, size: 14, font: sansB, color: gold });
+      page.drawRectangle({ x: M, y: 792 - 104, width: 612 - 2 * M, height: 16, color: gold });
+      page.drawText("NTI REVIEW AND COUNTERSIGNATURE", { x: M + 4, y: 792 - 100, size: 8, font: sansB, color: ink });
+      const when = new Date().toLocaleString("en-US", { timeZone: "America/Chicago" });
+      const lines = [
+        "The submitted Summary of Safety Requirements, including the contractor acknowledgment and signatures on the preceding pages, has been reviewed and accepted by the NTI Safety Department.",
+      ];
+      let y = 792 - 130;
+      lines.forEach((t) => {
+        const words = t.split(" "); let cur = "";
+        words.forEach((w) => { const tr = cur ? cur + " " + w : w; if (sans.widthOfTextAtSize(tr, 10) > 612 - 2 * M - 8) { page.drawText(cur, { x: M + 4, y, size: 10, font: sans, color: ink }); y -= 14; cur = w; } else cur = tr; });
+        if (cur) { page.drawText(cur, { x: M + 4, y, size: 10, font: sans, color: ink }); y -= 14; }
+      });
+      y -= 30;
+      page.drawText("NTI REPRESENTATIVE SIGNATURE", { x: M, y, size: 7, font: sansB, color: grey });
+      const dataUrl = sigRef.current ? sigRef.current.toDataURL("image/png") : null;
+      if (dataUrl) {
+        const bin = atob(dataUrl.split(",")[1]); const bytes = new Uint8Array(bin.length);
+        for (let k = 0; k < bin.length; k++) bytes[k] = bin.charCodeAt(k);
+        const img = await doc.embedPng(bytes);
+        const sc = Math.min(220 / img.width, 50 / img.height);
+        page.drawImage(img, { x: M, y: y - 6 - img.height * sc, width: img.width * sc, height: img.height * sc });
+      }
+      y -= 62;
+      page.drawLine({ start: { x: M, y }, end: { x: M + 260, y }, thickness: 0.6, color: ink });
+      page.drawText(`${signName.trim().replace(/[^\n -\u00ff]/g, "?")}   ${when}`, { x: M, y: y - 11, size: 8.5, font: sans, color: grey });
+      const pages = doc.getPages();
+      pages.forEach((p, i) => {
+        if (i === pages.length - 1) {
+          const t = `Page ${pages.length} of ${pages.length}`;
+          p.drawText(t, { x: 612 - M - sans.widthOfTextAtSize(t, 8), y: 22, size: 8, font: sans, color: grey });
+        }
+      });
+      const bytesOut = await doc.save();
+      const path = `summary-countersigned-${signing.id}-${Date.now()}.pdf`;
+      const up = await supabase.storage.from("documents").upload(path, new Blob([bytesOut], { type: "application/pdf" }));
+      if (up.error) throw new Error("Upload failed: " + up.error.message);
+      const { data: urlData } = supabase.storage.from("documents").getPublicUrl(path);
+      const res = await supabase.rpc("countersign_summary_submission", { p_token: user.sessionToken, p_submission_id: signing.id, p_pdf_url: urlData.publicUrl, p_name: signName.trim() });
+      if (res.error || res.data !== true) throw new Error("Couldn't save the countersignature.");
+      setSigning(null); setSigEmpty(true); load();
+    } catch (e) { setErr(e.message || "Something went wrong."); }
+    setBusy(false);
+  };
+  return (
+    <div className="px-4 pt-4 pb-8" style={{ background: "#F4F3EF", minHeight: "100%" }}>
+      <div className="text-[12px] mb-3" style={{ color: STEEL }}>
+        {admin ? "Every Summary of Safety Requirements submitted on this project. Review the contractor's signed copy, then countersign for NTI. Admin only." : "The Summary of Safety Requirements you've submitted, and whether NTI has countersigned it."}
+      </div>
+      {admin && (
+        <>
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name or employer" className="w-full rounded-md border px-3 py-2 text-[13px] mb-2" style={{ borderColor: "#C9C6BC" }} />
+          <div className="flex gap-2 mb-3">
+            {[["all", "All"], ["pending", `Needs signature (${pendingCount})`], ["signed", "Countersigned"]].map(([k, l]) => (
+              <button key={k} onClick={() => setFilter(k)} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm border" style={{ background: filter === k ? GOLD : "white", borderColor: "#C9C6BC", color: INK, ...mono }}>{l}</button>
+            ))}
+          </div>
+        </>
+      )}
+      {loading && <div className="text-[12px] mb-2" style={{ color: STEEL }}>Loading…</div>}
+      {shown.map((r) => (
+        <div key={r.id} className="bg-white rounded-md p-3 border mb-2" style={{ borderColor: "#E4E2DA" }}>
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{admin ? (r.employer || r.submitted_by) : "Summary of Safety Requirements"}</div>
+            <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-sm flex-shrink-0" style={{ background: r.countersigned_at ? "#DFF3E3" : "#FFF3C4", color: r.countersigned_at ? "#1E7A34" : "#7A5B00", ...mono }}>{r.countersigned_at ? "Countersigned" : "Awaiting NTI"}</span>
+          </div>
+          {admin && <div className="text-[11px] mt-0.5" style={{ color: STEEL }}>{r.submitted_by}</div>}
+          <div className="text-[10px] mt-0.5" style={{ color: STEEL, ...mono }}>Submitted {new Date(r.submitted_at).toLocaleString()}</div>
+          {r.countersigned_at && <div className="text-[10px] mt-0.5" style={{ color: "#1E7A34", ...mono }}>Countersigned by {r.countersigned_by} · {new Date(r.countersigned_at).toLocaleString()}</div>}
+          <div className="flex gap-2 mt-2 flex-wrap">
+            {r.filled_pdf_url && <button onClick={() => window.open(r.filled_pdf_url, "_blank")} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: INK, ...mono }}>View Submitted</button>}
+            {r.countersigned_pdf_url && <button onClick={() => window.open(r.countersigned_pdf_url, "_blank")} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm" style={{ background: GOLD, color: INK, ...mono }}>View Countersigned</button>}
+            {admin && !r.countersigned_at && r.filled_pdf_url && <button onClick={() => { setSigning(r); setErr(""); setSigEmpty(true); }} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm" style={{ background: INK, color: GOLD, ...mono }}>Review &amp; Countersign</button>}
+          </div>
+          {admin && (
+            <button onClick={() => doDelete(r.id)} className="w-full mt-2 text-[10px] font-bold uppercase py-1.5 rounded-sm" style={{ background: confirmDeleteId === r.id ? ALERT : "white", color: confirmDeleteId === r.id ? "white" : ALERT, border: `1px solid ${ALERT}`, ...mono }}>
+              {confirmDeleteId === r.id ? "Tap Again to Permanently Delete" : "Delete"}
+            </button>
+          )}
+        </div>
+      ))}
+      {!loading && shown.length === 0 && <div className="text-[12px] text-center py-6" style={{ color: STEEL }}>{rows.length === 0 ? "No submissions yet." : "No submissions match."}</div>}
+      {signing && (
+        <div className="fixed inset-0 z-30 flex items-end sm:items-center justify-center bg-black/70 p-3">
+          <div className="bg-white rounded-md w-full max-w-md p-4 max-h-[92vh] overflow-y-auto">
+            <div className="text-[15px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>Countersign for NTI</div>
+            <div className="text-[11px] mt-1" style={{ color: STEEL }}>{signing.employer || signing.submitted_by} - submitted {new Date(signing.submitted_at).toLocaleString()}</div>
+            <button onClick={() => window.open(signing.filled_pdf_url, "_blank")} className="w-full mt-3 text-[11px] font-bold uppercase py-2 rounded-sm border" style={{ borderColor: "#C9C6BC", color: INK, ...mono }}>1. Open the submitted document to review</button>
+            <label className="block mt-3 text-[11px] uppercase font-bold" style={{ color: STEEL, ...mono }}>2. NTI representative name</label>
+            <input value={signName} onChange={(e) => setSignName(e.target.value)} className="w-full rounded-md border px-3 py-2 text-[13px] mt-1" style={{ borderColor: "#C9C6BC" }} />
+            <label className="block mt-3 mb-1 text-[11px] uppercase font-bold" style={{ color: STEEL, ...mono }}>3. Signature</label>
+            <SignaturePad autoName={signName.trim()} onChange={setSigEmpty} canvasRef={sigRef} />
+            <div className="text-[10px] mt-2" style={{ color: STEEL }}>Signing adds an NTI countersignature page to the end of the submitted PDF and saves it as the countersigned copy.</div>
+            {err && <div className="text-[11px] mt-2" style={{ color: ALERT }}>{err}</div>}
+            <div className="flex gap-2 mt-3">
+              <button onClick={() => setSigning(null)} disabled={busy} className="flex-1 text-[11px] font-bold uppercase py-2 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, ...mono }}>Cancel</button>
+              <button onClick={countersign} disabled={busy || sigEmpty || !signName.trim()} className="flex-1 text-[11px] font-bold uppercase py-2 rounded-sm" style={{ background: GOLD, color: INK, opacity: busy || sigEmpty || !signName.trim() ? 0.5 : 1, ...mono }}>{busy ? "Saving…" : "Countersign"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ---- Screen: Home ----
 // Project logos. "plate" = show on a white rounded card (for logos with dark text);
 // NTI's logo is yellow/white lettering made for dark backgrounds, so it sits directly on the dark panel.
@@ -7759,7 +7911,7 @@ function flattenBlockItems(items) {
   return out;
 }
 
-async function buildGenericFormPdf({ form, slug, projectName, standardValues, fieldValues, choiceValues, statusValues, signatures, longFields, submittedAt, photos, statusRefs, mediaCount, linkRef, groupSigs }) {
+async function buildGenericFormPdf({ form, slug, projectName, standardValues, fieldValues, choiceValues, statusValues, signatures, longFields, submittedAt, photos, statusRefs, mediaCount, linkRef, groupSigs, acknowledged }) {
   const { StandardFonts, rgb } = await import("pdf-lib");
   const doc = await PDFDocument.create();
   const sans = await doc.embedFont(StandardFonts.Helvetica);
@@ -7956,6 +8108,13 @@ async function buildGenericFormPdf({ form, slug, projectName, standardValues, fi
       const lines = wrap(b.text, fnt, 9.5, CW - 8);
       lines.forEach((ln) => { need(14); page.drawText(ln, { x: M + 4, y: y - 10, size: 9.5, font: fnt, color: ink }); y -= 12.5; });
       y -= 6;
+    }
+    if (b.ackCheck) {
+      need(26);
+      page.drawRectangle({ x: M + 4, y: y - 13, width: 11, height: 11, borderColor: ink, borderWidth: 1 });
+      if (acknowledged) { page.drawLine({ start: { x: M + 6, y: y - 7 }, end: { x: M + 9, y: y - 11 }, thickness: 1.6, color: ink }); page.drawLine({ start: { x: M + 9, y: y - 11 }, end: { x: M + 14, y: y - 4 }, thickness: 1.6, color: ink }); }
+      page.drawText(clean(b.ackCheck), { x: M + 22, y: y - 11, size: 9.5, font: sansB, color: ink });
+      y -= 22;
     }
     if (b.items) {
       flattenBlockItems(b.items).forEach((it) => {
@@ -8714,6 +8873,7 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
   const [sig2Empty, setSig2Empty] = useState(true);
   const signature2CanvasRef = useRef(null);
   const personGroups = form.personSignatures || [];
+  const [ackChecked, setAckChecked] = useState(false);
   const [crewRowsMap, setCrewRowsMap] = useState({});
   const [crewSigEmpty, setCrewSigEmpty] = useState({});
   const crewRefs = useRef({});
@@ -8752,6 +8912,12 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
               </div>
             ))}
           </div>
+        )}
+        {b.ackCheck && (
+          <label className="mt-2 flex items-start gap-2 rounded-md border-2 p-2 cursor-pointer" style={{ borderColor: ackChecked ? GOLD : "#C9C6BC", background: ackChecked ? "#FFFBEA" : "white" }}>
+            <input type="checkbox" checked={ackChecked} onChange={(e) => setAckChecked(e.target.checked)} style={{ width: 20, height: 20, marginTop: 1, accentColor: "#1a1a1a" }} />
+            <span className="text-[12px] font-bold" style={{ color: INK }}>{b.ackCheck}</span>
+          </label>
         )}
         {b.sigLines && (
           <div className="mt-1 space-y-3">
@@ -9043,7 +9209,7 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
       try {
         const filledBytes = await buildGenericFormPdf({
           form, slug: activeProjectId, projectName: projName, standardValues, fieldValues: values,
-          choiceValues, statusValues: effectiveStatusValues, longFields: form.genericPdfLongFields, submittedAt, photos: photoBytes, statusRefs, mediaCount: mediaFiles.length, linkRef, groupSigs: groupSigData(),
+          choiceValues, statusValues: effectiveStatusValues, longFields: form.genericPdfLongFields, submittedAt, photos: photoBytes, statusRefs, mediaCount: mediaFiles.length, linkRef, groupSigs: groupSigData(), acknowledged: ackChecked,
           signatures: [
             { label: (form.signatureLabels && form.signatureLabels[0]) || "Signature", dataUrl: signatureCanvasRef.current ? signatureCanvasRef.current.toDataURL("image/png") : null },
             ...(form.requiresTwoSignatures ? [{ label: (form.signatureLabels && form.signatureLabels[1]) || "Signature 2", dataUrl: signature2CanvasRef.current ? signature2CanvasRef.current.toDataURL("image/png") : null }] : []),
@@ -9283,7 +9449,7 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
         // submissions become visible to the person who submitted them
         // (for the rest of that day only); Orientation submissions
         // stay admin-only, same as before.
-        const category = QUARTERLY_MONTHLY_FORMS_DEFAULT.some((f) => f.title === form.title) ? "quarterly" : FORMS_DEFAULT.some((f) => f.title === form.title) ? "forms" : "orientation";
+        const category = form.title === "Summary of Safety Requirements" ? "safetysummary" : QUARTERLY_MONTHLY_FORMS_DEFAULT.some((f) => f.title === form.title) ? "quarterly" : FORMS_DEFAULT.some((f) => f.title === form.title) ? "forms" : "orientation";
         await supabase.rpc("submit_form", {
           p_token: user.sessionToken,
           p_form_title: form.title,
@@ -9758,7 +9924,7 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
             return (
               <button
                 disabled={
-                  sigEmpty || (form.requiresTwoSignatures && sig2Empty) || submitting || crewMissing ||
+                  sigEmpty || (form.requiresTwoSignatures && sig2Empty) || submitting || crewMissing || ((form.textBlocks || []).some((b) => b.ackCheck) && !ackChecked) ||
                   proofMissing || Object.keys(form.photoFields || {}).some((l) => form.photoFields[l] !== "optional" && (fieldPhotos[l] || []).length === 0) ||
                   (form.requiresLogo && !logoFile) ||
                   (form.allFieldsRequired && (form.fields || []).some((label, i) => !/\(if applicable\)/i.test(label) && !(values[i] || "").trim()))
@@ -12246,7 +12412,7 @@ const PRECONSTRUCTION_FILLABLE_FORMS = {
     fields: ["Email for Weekly Toolbox, Quarterly Meeting and Other NTI Information"],
     genericPdfLongFields: ["Email for Weekly Toolbox, Quarterly Meeting and Other NTI Information"],
     trailingFieldLabels: ["Email for Weekly Toolbox, Quarterly Meeting and Other NTI Information"],
-    personSignatures: [{ field: "Contractor Senior Site Managers and/or Safety Manager", heading: "Contractor Senior Site Managers and/or Safety Manager", noun: "Manager", pdfTitle: "CONTRACTOR SENIOR SITE MANAGERS AND/OR SAFETY MANAGER", startRows: 1 }],
+    personSignatures: [{ field: "Contractor Senior Site Managers and/or Safety Manager", heading: "Contractor Senior Site Managers and/or Safety Manager - Signatures", noun: "Signer", pdfTitle: "CONTRACTOR SENIOR SITE MANAGERS AND/OR SAFETY MANAGER", startRows: 1 }],
     signatureLabels: ["Acknowledged By - Signature"],
     textBlocks: [
       { at: "before", title: "Required take-away documentation for contractor", items: [
@@ -12343,8 +12509,7 @@ const PRECONSTRUCTION_FILLABLE_FORMS = {
         "Work Plan - once accepted by NTI, a copy must be on site readily available for review.",
       ] },
       { at: "before", text: "This document is only a summary of the safety requirements and therefore does not include all safety requirements for the Project. The full safety program for the Project is detailed in the Safety Plan for Construction.", emphasis: true },
-      { at: "after", title: "Acknowledgment", text: "I hereby acknowledge the receipt of the Summary of Safety Requirements. The content has been thoroughly reviewed. If there are any further actions required on my part related to this document, I will not hesitate to contact NTI safety department." },
-      { at: "end", title: "NTI Representatives Signature", sigLines: { count: 3 } },
+      { at: "after", title: "Acknowledgment", ackCheck: "I acknowledge and agree to the statement above.", text: "I hereby acknowledge the receipt of the Summary of Safety Requirements. The content has been thoroughly reviewed. If there are any further actions required on my part related to this document, I will not hesitate to contact NTI safety department." },
       { at: "end", text: "Those that fail to comply with these safety requirements are subject to permanent removal from the project. The worst consequence would be that you or others suffer an injury or worse cause a fatality because of an employees' failure to comply with safety requirements.", emphasis: true },
     ],
   },
@@ -12402,11 +12567,19 @@ function PreConstructionScreen({ user, go, activeProjectId }) {
         <div className="text-[12px]" style={{ color: STEEL }}>
           Pre-construction documents for this project.
         </div>
+        <div className="flex gap-1 flex-shrink-0 ml-2 flex-wrap justify-end">
+        {user && user.sessionToken && (
+          <button onClick={() => go("summarymysubmissions")} className="text-[10px] font-bold uppercase px-2 py-1 rounded-sm border flex-shrink-0" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>My Summary</button>
+        )}
         {user && user.canAddPersonnel && (
-          <button onClick={() => go("managepreconstruction")} className="text-[10px] font-bold uppercase px-2 py-1 rounded-sm flex-shrink-0 ml-2" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>
+          <button onClick={() => go("summaryreview")} className="text-[10px] font-bold uppercase px-2 py-1 rounded-sm flex-shrink-0" style={{ background: INK, color: GOLD, fontFamily: "IBM Plex Mono, monospace" }}>Review &amp; Sign</button>
+        )}
+        {user && user.canAddPersonnel && (
+          <button onClick={() => go("managepreconstruction")} className="text-[10px] font-bold uppercase px-2 py-1 rounded-sm flex-shrink-0" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>
             Manage
           </button>
         )}
+        </div>
       </div>
       {loading && <div className="text-[12px] mb-2" style={{ color: STEEL }}>Loading…</div>}
       <div className="space-y-2">
@@ -14451,7 +14624,7 @@ function TruckDriverVerifyScreen() {
 // reporting, and the Labor Law QR code that anyone can scan).
 const ALWAYS_PUBLIC_SCREENS = ["emergency", "concern", "laborlaws", "trafficcontrol", "meetingsignin", "orientationsignin", "hsstandards", "orientationschedule", "verifybadge", "truckdriver", "verifytruckdriver"];
 // Normally-gated screens for every project.
-const BASE_GATED_SCREENS = ["forms", "safetyplan", "toolbox", "workplans", "mysubmissions", "quarterlymysubmissions", "preconstruction", "quarterlymonthly", "training", "meetings"];
+const BASE_GATED_SCREENS = ["forms", "safetyplan", "toolbox", "workplans", "mysubmissions", "quarterlymysubmissions", "summarymysubmissions", "preconstruction", "quarterlymonthly", "training", "meetings"];
 // Projects where EVERYTHING (except the always-public screens above)
 // requires a badge — including Home itself.
 const FULLY_GATED_PROJECTS = ["sh99-houston"];
@@ -14653,6 +14826,8 @@ export default function SafetyHubPrototype() {
     quarterlymonthly: "Quarterly/Monthly Inspections",
     quarterlymysubmissions: "My Quarterly/Monthly Submissions",
     managequarterlysubmissions: "Quarterly/Monthly Submissions",
+    summarymysubmissions: "My Summary of Safety Requirements",
+    summaryreview: "Review & Sign - Safety Requirements",
     emergency: t("emergencyContacts"),
     concern: t("reportConcern"),
     addperson: "Add Person",
@@ -14894,6 +15069,8 @@ export default function SafetyHubPrototype() {
             {screen === "quarterlymonthly" && <QuarterlyMonthlyScreen user={user} go={go} />}
             {screen === "quarterlymysubmissions" && <QuarterlySubmissionsScreen user={user} admin={false} />}
             {screen === "managequarterlysubmissions" && <QuarterlySubmissionsScreen user={user} admin />}
+            {screen === "summarymysubmissions" && <SummarySubmissionsScreen user={user} admin={false} />}
+            {screen === "summaryreview" && <SummarySubmissionsScreen user={user} admin />}
             {screen === "managepreconstruction" && <ManagePreConstructionScreen user={user} activeProjectId={activeProjectId} />}
             {screen === "manageworkplans" && <ManageWorkPlansScreen user={user} />}
             {screen === "emergency" && <EmergencyContactsScreen user={user} go={go} activeProjectId={activeProjectId} />}
