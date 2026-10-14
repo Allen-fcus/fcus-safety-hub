@@ -5902,8 +5902,8 @@ const FORMS_DEFAULT = [
           { label: "Have locates been documented with video and/or photos?", items: ["Yes", "No"] },
         ],
         statusItems: [["Electric", "Gas", "Communications", "Water", "Sewer", "Pipeline", "Telephone", "TxDOT (HOU)", "Galveston County", "Brazoria County", "Storm Water / Slurry", "Other Utility 1", "Other Utility 2"]],
-        // reference numbers start with these prefixes (the driver/competent person adds the rest)
-        statusRefPrefixes: [{ "TxDOT (HOU)": "HOU-", "Galveston County": "3510-01-", "Brazoria County": "3510-02-" }],
+        // Galveston and Brazoria reference numbers always start with a fixed prefix; the user types only the rest. TxDOT has no prefix.
+        statusRefPrefixes: [{ "Galveston County": "3510-01-", "Brazoria County": "3510-02-" }],
         textBlocks: [
           { at: "before", text: "5A-15 Excavation, Drilling, Boring Permit", emphasis: true },
           { at: "after", title: "Locate Requests", text: "TxDOT: (713-802-5668), HOU- locaterequest@txdot.gov. Galveston County reference numbers begin 3510-01-. Brazoria County reference numbers begin 3510-02-." },
@@ -6919,13 +6919,18 @@ function StatusGroup({ group, values, onChange, refs, onRef }) {
             </div>
           </div>
           {group.refNumbers && onRef && (
-            <input
-              value={(refs || {})[i] || ""}
-              onChange={(e) => onRef(i, e.target.value)}
-              placeholder={group.refNumbers}
-              className="w-full mt-1.5 rounded-md border px-2 py-1 text-[12px] bg-white"
-              style={{ borderColor: "#C9C6BC" }}
-            />
+            <div className="flex items-stretch mt-1.5">
+              {group.refPrefixes && group.refPrefixes[item] && (
+                <span className="flex items-center rounded-l-md border border-r-0 px-2 text-[12px] font-bold" style={{ borderColor: "#C9C6BC", background: "#F4F3EF", color: INK }}>{group.refPrefixes[item]}</span>
+              )}
+              <input
+                value={(refs || {})[i] || ""}
+                onChange={(e) => onRef(i, e.target.value)}
+                placeholder={group.refPrefixes && group.refPrefixes[item] ? "Enter the rest of the number" : group.refNumbers}
+                className={`w-full border px-2 py-1 text-[12px] bg-white ${group.refPrefixes && group.refPrefixes[item] ? "rounded-r-md" : "rounded-md"}`}
+                style={{ borderColor: "#C9C6BC" }}
+              />
+            </div>
           )}
           </div>
         ))}
@@ -8580,10 +8585,18 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
     return initial;
   });
   const [statusValues, setStatusValues] = useState({});
-  const [statusRefs, setStatusRefs] = useState(() => {
-    const init = {};
-    (form.statusGroups || []).forEach((g, gi) => { if (g.refPrefixes) g.items.forEach((it, ii) => { if (g.refPrefixes[it]) { init[gi] = init[gi] || {}; init[gi][ii] = g.refPrefixes[it]; } }); });
-    return init;
+  const [statusRefsRaw, setStatusRefs] = useState({});
+  // what the user typed is stored raw; the fixed prefix (if any) is added when the form is built/saved
+  const statusRefs = {};
+  (form.statusGroups || []).forEach((g, gi) => {
+    const raw = statusRefsRaw[gi];
+    if (!raw) return;
+    statusRefs[gi] = {};
+    Object.keys(raw).forEach((ii) => {
+      const rest = String(raw[ii] || "").trim();
+      const pre = (g.refPrefixes && g.refPrefixes[g.items[ii]]) || "";
+      statusRefs[gi][ii] = rest ? pre + rest : "";
+    });
   });
   const [choiceValues, setChoiceValues] = useState({});
   const [sigEmpty, setSigEmpty] = useState(true);
@@ -9375,7 +9388,7 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
           ))}
           {(form.statusGroups || []).map((group, gi) => (
             <React.Fragment key={gi}>
-            <StatusGroup group={group} values={statusValues[gi] || {}} onChange={(itemIdx, opt) => setStatus(gi, itemIdx, opt)} refs={statusRefs[gi] || {}} onRef={(itemIdx, val) => setStatusRefs((r) => ({ ...r, [gi]: { ...(r[gi] || {}), [itemIdx]: val } }))} />
+            <StatusGroup group={group} values={statusValues[gi] || {}} onChange={(itemIdx, opt) => setStatus(gi, itemIdx, opt)} refs={statusRefsRaw[gi] || {}} onRef={(itemIdx, val) => setStatusRefs((r) => ({ ...r, [gi]: { ...(r[gi] || {}), [itemIdx]: val } }))} />
             {form.mediaUpload && form.mediaUpload.afterGroup === gi && (
               <div className="mt-3 mb-1 rounded-md border-2 p-2.5" style={{ borderColor: GOLD, background: "#FFFBEA" }}>
                 <div className="text-[11px] uppercase font-bold" style={{ color: INK, fontFamily: "IBM Plex Mono, monospace" }}>{form.mediaUpload.label}</div>
