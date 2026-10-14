@@ -3463,9 +3463,9 @@ const FCW24_SAFETY_PLAN = [{
 }];
 const SAFETY_PLAN_DEFAULT = [{ title: "Chapter 5A – Safety Program", pages: 135, link: "https://drive.google.com/file/d/1CN4zxti0ovQd8cUkxfqy7WuXJMQfiYhd/preview", downloadable: false }];
 
-function HSStandardsQrCard() {
+function HSStandardsQrCard({ activeProjectId }) {
   const [qrUrl, setQrUrl] = useState(null);
-  const deepLink = `${window.location.origin}${window.location.pathname}?screen=hsstandards`;
+  const deepLink = `${window.location.origin}${window.location.pathname}?project=${activeProjectId}&screen=hsstandards`;
 
   useEffect(() => {
     QRCode.toDataURL(deepLink, { width: 400, margin: 1 }).then(setQrUrl).catch(() => setQrUrl(null));
@@ -3474,7 +3474,7 @@ function HSStandardsQrCard() {
   return (
     <div className="bg-white rounded-md p-3 border mb-3 text-center" style={{ borderColor: "#E4E2DA" }}>
       <div className="text-[12px] mb-2" style={{ color: STEEL }}>
-        Print and post this. Scanning it opens H&S Minimum Standards directly — works for anyone, on any project, no login needed.
+        Print and post this. Scanning it opens H&S Minimum Standards directly on this project - works for anyone, no login needed.
       </div>
       {qrUrl ? (
         <img src={qrUrl} alt="QR code" className="mx-auto" style={{ width: 200, height: 200 }} />
@@ -3491,14 +3491,14 @@ function HSStandardsQrCard() {
   );
 }
 
-function HSStandardsScreen({ user }) {
+function HSStandardsScreen({ user, activeProjectId }) {
   const [showQr, setShowQr] = useState(false);
   const [langIndex, setLangIndex] = useState(0);
   const doc = HS_STANDARDS_DOCS[langIndex];
   return (
     <div className="px-4 pt-4 pb-8 flex flex-col" style={{ background: "#F4F3EF", minHeight: "100%" }}>
       {user && user.canAddPersonnel && (
-        showQr ? <HSStandardsQrCard /> : (
+        showQr ? <HSStandardsQrCard activeProjectId={activeProjectId} /> : (
           <button
             onClick={() => setShowQr(true)}
             className="w-full mb-3 text-[11px] font-bold uppercase py-2.5 rounded-sm border"
@@ -14714,6 +14714,14 @@ export default function SafetyHubPrototype() {
       }
 
       const matchedSlug = projectSlugForId(data.project_id);
+      // A QR code for a different project's public page must open THAT project, not the
+      // project this device happens to be logged in to. Show it as a visitor; the saved
+      // login is untouched and comes back on the next normal open.
+      try {
+        const qp = new URLSearchParams(window.location.search).get("project");
+        const urlProj = qp ? Object.keys(PROJECTS).find((sl) => sl.toLowerCase() === decodeURIComponent(qp).trim().toLowerCase()) : null;
+        if (urlProj && matchedSlug && urlProj !== matchedSlug && ALWAYS_PUBLIC_SCREENS.includes(getInitialScreenFromUrl())) { setSessionChecked(true); return; }
+      } catch (e) { /* ignore */ }
       if (matchedSlug) {
         setActiveProjectId(matchedSlug);
         try { localStorage.setItem("safetyhub_last_project", matchedSlug); } catch (e) { /* ignore */ }
@@ -15042,7 +15050,7 @@ export default function SafetyHubPrototype() {
             ) : (
               <>
             {screen === "home" && <HomeScreen go={go} user={user} activeProjectId={activeProjectId} />}
-            {screen === "hsstandards" && <HSStandardsScreen user={user} />}
+            {screen === "hsstandards" && <HSStandardsScreen user={user} activeProjectId={activeProjectId} />}
             {screen === "safetyplan" && <SafetyPlanScreen />}
             {screen === "toolbox" && <ToolboxScreen user={user} go={go} activeProjectId={activeProjectId} />}
             {screen === "managetoolbox" && <ManageToolboxScreen user={user} />}
