@@ -13469,6 +13469,90 @@ function TruckDriverVideoStep({ driver, projectSlug, onUpdated }) {
   );
 }
 
+// ---- Public group session (run by a trucking company's group leader, no admin login) ----
+function TruckGroupLeader({ projectSlug }) {
+  const storeKey = `safetyhub_tdgroup_${projectSlug}`;
+  const [leader, setLeader] = useState(() => { try { return JSON.parse(localStorage.getItem(storeKey) || "null"); } catch (e) { return null; } });
+  const [ss, setSs] = useState(null);
+  const [mode, setMode] = useState("new");
+  const [f, setF] = useState({ company: "", name: "", phone: "", date: new Date().toLocaleDateString("en-CA"), location: "" });
+  const [rc, setRc] = useState({ code: "", phone: "" });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const inp = "w-full mt-1 mb-3 rounded-md border px-2.5 py-2 text-[14px]";
+  const lbl = { color: STEEL, fontFamily: "IBM Plex Mono, monospace" };
+  const save = (v) => { setLeader(v); try { if (v) localStorage.setItem(storeKey, JSON.stringify(v)); else localStorage.removeItem(storeKey); } catch (e) { /* ignore */ } };
+  const load = async () => {
+    if (!leader) return;
+    const { data } = await supabase.rpc("td_group_get", { p_session_id: leader.id, p_leader_key: leader.key });
+    if (data) setSs(data); else { save(null); setSs(null); }
+  };
+  useEffect(() => { load(); if (!leader) return undefined; const t = setInterval(load, 15000); return () => clearInterval(t); }, [leader && leader.id]);
+  const create = async () => {
+    setBusy(true); setErr("");
+    await loadProjectMap();
+    const { data } = await supabase.rpc("create_truck_session_public", { p_project_id: projectIdForSlug(projectSlug), p_company: f.company, p_leader_name: f.name, p_leader_phone: f.phone, p_date: f.date, p_location: f.location });
+    setBusy(false);
+    if (!data) { setErr("Please fill in the company, your name, and a phone number."); return; }
+    save({ id: data.id, key: data.leader_key });
+  };
+  const recover = async () => {
+    setBusy(true); setErr("");
+    await loadProjectMap();
+    const { data } = await supabase.rpc("td_group_recover", { p_project_id: projectIdForSlug(projectSlug), p_code: rc.code, p_phone: rc.phone });
+    setBusy(false);
+    if (!data) { setErr("No match. Use the session code and the phone number you gave when you created it."); return; }
+    save({ id: data.id, key: data.leader_key });
+  };
+  if (leader && ss) {
+    return (
+      <div>
+        <div className="text-[11px] mb-2" style={{ color: STEEL }}>You are running this group session. Show the video on a screen, have every driver scan the QR (or enter the code) to register on their own phone, then confirm who watched.</div>
+        <TruckSessionCard ss={ss} projectSlug={projectSlug} onChanged={load}
+          onConfirm={(ids) => supabase.rpc("td_group_confirm", { p_session_id: leader.id, p_leader_key: leader.key, p_driver_ids: ids })}
+          onCancel={() => supabase.rpc("td_group_cancel", { p_session_id: leader.id, p_leader_key: leader.key })} />
+        <div className="flex gap-2 mt-1">
+          <button onClick={load} className="text-[11px] font-bold uppercase px-3 py-1.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Refresh list</button>
+          {ss.status !== "open" && <button onClick={() => { save(null); setSs(null); }} className="text-[11px] font-bold uppercase px-3 py-1.5 rounded-sm" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>Start another session</button>}
+        </div>
+        <div className="text-[10px] mt-2" style={{ color: STEEL }}>Each driver still uploads their own CDL photos and signs their own form. The Safety Department reviews every driver before a badge is issued.</div>
+      </div>
+    );
+  }
+  if (leader && !ss) return <div className="text-[12px]" style={{ color: STEEL }}>Loading your session...</div>;
+  return (
+    <div>
+      <div className="flex rounded-md overflow-hidden border mb-3" style={{ borderColor: "#C9C6BC" }}>
+        {[["new", "Start a session"], ["recover", "Reopen mine"]].map(([m, l]) => (
+          <button key={m} onClick={() => { setMode(m); setErr(""); }} className="flex-1 py-1.5 text-[10px] font-bold uppercase" style={{ background: mode === m ? "#E4E2DA" : "white", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{l}</button>
+        ))}
+      </div>
+      {mode === "new" ? (<>
+        <div className="text-[11px] mb-3" style={{ color: STEEL }}>For a trucking company that sits a group in a room to watch the orientation together.</div>
+        <label className="text-[10px] uppercase font-bold" style={lbl}>Trucking Company</label>
+        <input value={f.company} onChange={(e) => setF({ ...f, company: e.target.value })} className={inp} style={{ borderColor: "#C9C6BC" }} />
+        <label className="text-[10px] uppercase font-bold" style={lbl}>Your Name (group leader)</label>
+        <input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} className={inp} style={{ borderColor: "#C9C6BC" }} />
+        <label className="text-[10px] uppercase font-bold" style={lbl}>Your Phone Number</label>
+        <input type="tel" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} className={inp} style={{ borderColor: "#C9C6BC" }} />
+        <label className="text-[10px] uppercase font-bold" style={lbl}>Date</label>
+        <input type="date" value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} className={inp} style={{ borderColor: "#C9C6BC" }} />
+        <label className="text-[10px] uppercase font-bold" style={lbl}>Room / Location (optional)</label>
+        <input value={f.location} onChange={(e) => setF({ ...f, location: e.target.value })} className={inp} style={{ borderColor: "#C9C6BC" }} />
+        {err && <div className="text-[11px] mb-2" style={{ color: ALERT }}>{err}</div>}
+        <button disabled={busy || !f.company.trim() || !f.name.trim() || f.phone.replace(/\D/g, "").length < 7} onClick={create} className="w-full rounded-md py-3 text-sm font-bold disabled:opacity-40" style={{ background: GOLD, color: INK, fontFamily: "Oswald, sans-serif" }}>{busy ? "Creating..." : "Create Group Session"}</button>
+      </>) : (<>
+        <label className="text-[10px] uppercase font-bold" style={lbl}>Session Code</label>
+        <input value={rc.code} onChange={(e) => setRc({ ...rc, code: e.target.value.toUpperCase() })} autoCapitalize="characters" className={inp} style={{ borderColor: "#C9C6BC", letterSpacing: "0.12em" }} />
+        <label className="text-[10px] uppercase font-bold" style={lbl}>Your Phone Number</label>
+        <input type="tel" value={rc.phone} onChange={(e) => setRc({ ...rc, phone: e.target.value })} className={inp} style={{ borderColor: "#C9C6BC" }} />
+        {err && <div className="text-[11px] mb-2" style={{ color: ALERT }}>{err}</div>}
+        <button disabled={busy || rc.code.trim().length < 4 || rc.phone.replace(/\D/g, "").length < 7} onClick={recover} className="w-full rounded-md py-3 text-sm font-bold disabled:opacity-40" style={{ background: GOLD, color: INK, fontFamily: "Oswald, sans-serif" }}>{busy ? "Checking..." : "Reopen Session"}</button>
+      </>)}
+    </div>
+  );
+}
+
 function TruckDriverScreen({ activeProjectId, user, go }) {
   const proj = useContext(ProjectContext) || {};
   const [driver, setDriver] = useState(undefined);
@@ -13579,12 +13663,12 @@ function TruckDriverScreen({ activeProjectId, user, go }) {
           <li>We review everything and issue your truck driver badge</li>
         </ol>
       </div>
-      <div className="flex rounded-md overflow-hidden border mb-3" style={{ borderColor: "#C9C6BC" }}>
-        {[["start", "New driver"], ["resume", "I have a code"], ["badge", "I have a badge"]].map(([m, l]) => (
-          <button key={m} onClick={() => { setMode(m); setErr(""); }} className="flex-1 py-2 text-[11px] font-bold uppercase" style={{ background: mode === m ? GOLD : "white", color: mode === m ? INK : STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{l}</button>
+      <div className="grid grid-cols-2 rounded-md overflow-hidden border mb-3" style={{ borderColor: "#C9C6BC" }}>
+        {[["start", "New driver"], ["group", "Group session"], ["resume", "I have a code"], ["badge", "I have a badge"]].map(([m, l]) => (
+          <button key={m} onClick={() => { setMode(m); setErr(""); }} className="py-2 text-[11px] font-bold uppercase" style={{ background: mode === m ? GOLD : "white", color: mode === m ? INK : STEEL, fontFamily: "IBM Plex Mono, monospace", borderBottom: "1px solid #E4E2DA" }}>{l}</button>
         ))}
       </div>
-      {mode === "start" ? (<>
+      {mode === "group" ? <TruckGroupLeader projectSlug={activeProjectId} /> : mode === "start" ? (<>
         <label className="text-[10px] uppercase font-bold" style={lbl}>Full Name</label>
         <input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} className={inp} style={{ borderColor: "#C9C6BC" }} />
         <label className="text-[10px] uppercase font-bold" style={lbl}>Phone Number</label>
@@ -13698,7 +13782,7 @@ function TruckDriverScreen({ activeProjectId, user, go }) {
 }
 
 // ---- Admin: review truck driver onboarding and badges ----
-function TruckSessionCard({ ss, user, projectSlug, onChanged }) {
+function TruckSessionCard({ ss, projectSlug, onConfirm, onCancel, onChanged }) {
   const link = `${window.location.origin}${window.location.pathname}?project=${projectSlug}&screen=truckdriver&session=${ss.code}`;
   const qr = useBadgeQr(link, 360);
   const att = ss.attendees || [];
@@ -13710,13 +13794,13 @@ function TruckSessionCard({ ss, user, projectSlug, onChanged }) {
   const confirm = async () => {
     if (!window.confirm(`Confirm the full orientation video was shown to the room? ${sel.size} driver(s) will be credited with watching it.`)) return;
     setBusy(true);
-    await supabase.rpc("confirm_truck_session", { p_token: user.sessionToken, p_session_id: ss.id, p_driver_ids: Array.from(sel) });
+    await onConfirm(Array.from(sel));
     setBusy(false); onChanged();
   };
   const cancel = async () => {
     if (!window.confirm("Cancel this session? The link will stop accepting registrations.")) return;
     setBusy(true);
-    await supabase.rpc("cancel_truck_session", { p_token: user.sessionToken, p_session_id: ss.id });
+    await onCancel();
     setBusy(false); onChanged();
   };
   const isOpen = ss.status === "open";
@@ -13806,7 +13890,9 @@ function TruckSessionsPanel({ user, projectSlug, onChanged }) {
               </div>
             </div>
           )}
-          {sessions.map((ss) => <TruckSessionCard key={ss.id} ss={ss} user={user} projectSlug={projectSlug} onChanged={refresh} />)}
+          {sessions.map((ss) => <TruckSessionCard key={ss.id} ss={ss} projectSlug={projectSlug} onChanged={refresh}
+            onConfirm={(ids) => supabase.rpc("confirm_truck_session", { p_token: user.sessionToken, p_session_id: ss.id, p_driver_ids: ids })}
+            onCancel={() => supabase.rpc("cancel_truck_session", { p_token: user.sessionToken, p_session_id: ss.id })} />)}
           {sessions.length === 0 && <div className="text-[11px]" style={{ color: STEEL }}>No sessions yet.</div>}
         </div>
       )}
@@ -13859,6 +13945,7 @@ function TruckDriverAdminCard({ d, user, projectSlug, projectName, onChanged }) 
             <div className="text-[11px] font-bold" style={{ color: d.video_completed_at ? "#2E7D32" : ALERT }}>
               {d.video_completed_at ? `Safety video completed ${new Date(d.video_completed_at).toLocaleString()}` : `Safety video not completed${d.video_duration ? ` (${Math.round(((d.video_seconds || 0) / d.video_duration) * 100)}% watched)` : ""}`}
             </div>
+            {d.video_session && <div className="text-[10px]" style={{ color: "#B7791F" }}>Video credited through group session: {d.video_session.company || "Group"}{d.video_session.location ? `, ${d.video_session.location}` : ""} on {d.video_session.session_date ? new Date(d.video_session.session_date + "T12:00:00").toLocaleDateString() : ""}. Confirmed by {d.video_session.confirmed_by || "-"}{d.video_session.leader_phone ? ` (${d.video_session.leader_phone})` : ""}.</div>}
             {d.affidavit_signed_at && <div className="text-[10px]" style={{ color: STEEL }}>Verification form signed {new Date(d.affidavit_signed_at).toLocaleString()}</div>}
             {d.reviewed_at && <div className="text-[10px]" style={{ color: STEEL }}>Reviewed by {d.reviewed_by || "-"} on {new Date(d.reviewed_at).toLocaleDateString()}{d.review_notes ? ` - ${d.review_notes}` : ""}</div>}
           </div>
