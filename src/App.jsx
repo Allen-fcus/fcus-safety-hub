@@ -7911,7 +7911,7 @@ function flattenBlockItems(items) {
   return out;
 }
 
-async function buildGenericFormPdf({ form, slug, projectName, standardValues, fieldValues, choiceValues, statusValues, signatures, longFields, submittedAt, photos, statusRefs, mediaCount, linkRef, groupSigs, acknowledged }) {
+async function buildGenericFormPdf({ form, slug, projectName, standardValues, fieldValues, choiceValues, statusValues, signatures, longFields, submittedAt, photos, statusRefs, mediaCount, linkRef, groupSigs, acknowledged, contactGroups }) {
   const { StandardFonts, rgb } = await import("pdf-lib");
   const doc = await PDFDocument.create();
   const sans = await doc.embedFont(StandardFonts.Helvetica);
@@ -8002,6 +8002,32 @@ async function buildGenericFormPdf({ form, slug, projectName, standardValues, fi
     page.drawRectangle({ x: M, y: y - bh, width: CW, height: bh, color: rgb(0.78, 0.07, 0.18) });
     lines.forEach((ln, li) => page.drawText(ln, { x: M + 6, y: y - 13 - li * 11, size: 9, font: sansB, color: rgb(1, 1, 1) }));
     y -= bh + 8;
+  }
+
+  // contact table (name / phone / email per role)
+  if (form.contactGroups && contactGroups) {
+    need(60);
+    const c1 = M + 4, c2 = M + CW * 0.40, c3 = M + CW * 0.66;
+    page.drawRectangle({ x: M, y: y - 16, width: CW, height: 16, color: ink });
+    [["CONTACT", c1], ["PHONE / CELL", c2], ["EMAIL", c3]].forEach(([t, x]) => page.drawText(t, { x, y: y - 11, size: 7.5, font: sansB, color: gold }));
+    y -= 16;
+    form.contactGroups.forEach((g, gi) => {
+      const rows = (contactGroups[gi] || []).filter((r) => (r.name || "").trim() || (r.phone || "").trim() || (r.email || "").trim());
+      need(36);
+      page.drawRectangle({ x: M, y: y - 15, width: CW, height: 15, color: gold });
+      page.drawText(clean(g.label).toUpperCase(), { x: c1, y: y - 10.5, size: 8, font: sansB, color: ink });
+      y -= 15;
+      if (!rows.length) { need(16); page.drawText("-", { x: c1, y: y - 11, size: 9, font: sans, color: grey }); y -= 16; page.drawLine({ start: { x: M, y }, end: { x: W - M, y }, thickness: 0.3, color: line }); }
+      rows.forEach((r) => {
+        need(20);
+        page.drawText(clean(g.noName ? "Office" : r.name).slice(0, 34), { x: c1, y: y - 12, size: 9.5, font: sansB, color: ink });
+        page.drawText(clean(r.phone).slice(0, 22), { x: c2, y: y - 12, size: 9.5, font: sans, color: ink });
+        page.drawText(clean(r.email).slice(0, 34), { x: c3, y: y - 12, size: 9, font: sans, color: ink });
+        y -= 20;
+        page.drawLine({ start: { x: M, y }, end: { x: W - M, y }, thickness: 0.3, color: line });
+      });
+    });
+    y -= 12;
   }
 
   // fields: short ones two-up, long ones full width
@@ -8874,6 +8900,23 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
   const signature2CanvasRef = useRef(null);
   const personGroups = form.personSignatures || [];
   const [ackChecked, setAckChecked] = useState(false);
+  const contactDefs = form.contactGroups || [];
+  const [contactMap, setContactMap] = useState({});
+  const contactRowsFor = (gi) => contactMap[gi] || Array.from({ length: contactDefs[gi].startRows || 1 }, () => ({ name: "", phone: "", email: "" }));
+  const setContactRows = (gi, rows) => setContactMap((m) => ({ ...m, [gi]: rows }));
+  const setContactCell = (gi, ri, key, val) => setContactRows(gi, contactRowsFor(gi).map((r, k) => (k === ri ? { ...r, [key]: val } : r)));
+  const phoneOk = (p) => (p || "").replace(/\D/g, "").length >= 10;
+  const rowStarted = (r) => (r.name || "").trim() || (r.phone || "").trim() || (r.email || "").trim();
+  const contactError = (gi, ri) => {
+    const g = contactDefs[gi], r = contactRowsFor(gi)[ri];
+    if (!rowStarted(r) && !(g.required && ri === 0)) return "";
+    if (!g.noName && !(r.name || "").trim()) return "Enter a name.";
+    if (!phoneOk(r.phone)) return "Enter a full 10-digit phone number.";
+    if ((r.email || "").trim() && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(r.email.trim())) return "Check the email address.";
+    return "";
+  };
+  const contactsMissing = contactDefs.some((g, gi) => contactRowsFor(gi).some((_, ri) => contactError(gi, ri)));
+  const contactData = () => contactDefs.map((g, gi) => contactRowsFor(gi).filter(rowStarted).map((r) => ({ name: (r.name || "").trim(), phone: (r.phone || "").trim(), email: (r.email || "").trim() })));
   const [crewRowsMap, setCrewRowsMap] = useState({});
   const [crewSigEmpty, setCrewSigEmpty] = useState({});
   const crewRefs = useRef({});
@@ -9057,6 +9100,7 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
       const txt = Array.isArray(chosenIdx) ? (chosenIdx.length ? chosenIdx.map((k) => group.items[k]).join(", ") : "—") : (chosenIdx != null ? group.items[chosenIdx] : "—");
       lines.push("", `${group.label}: ${txt}`);
     });
+    if (contactDefs.length) contactDefs.forEach((g, gi) => { lines.push("", g.label + ":"); contactData()[gi].forEach((r) => lines.push(`  ${[r.name, r.phone, r.email].filter(Boolean).join(" | ")}`)); });
     if (linkRef) lines.push("", `Linked Ref #: ${linkRef} (${form.linkLabel || "linked forms"})`);
     if (form.mediaUpload) lines.push("", `${form.mediaUpload.label}: ${mediaFiles.length} file(s) attached`);
     if (form.stepPlan) {
@@ -9209,7 +9253,7 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
       try {
         const filledBytes = await buildGenericFormPdf({
           form, slug: activeProjectId, projectName: projName, standardValues, fieldValues: values,
-          choiceValues, statusValues: effectiveStatusValues, longFields: form.genericPdfLongFields, submittedAt, photos: photoBytes, statusRefs, mediaCount: mediaFiles.length, linkRef, groupSigs: groupSigData(), acknowledged: ackChecked,
+          choiceValues, statusValues: effectiveStatusValues, longFields: form.genericPdfLongFields, submittedAt, photos: photoBytes, statusRefs, mediaCount: mediaFiles.length, linkRef, groupSigs: groupSigData(), acknowledged: ackChecked, contactGroups: contactData(),
           signatures: [
             { label: (form.signatureLabels && form.signatureLabels[0]) || "Signature", dataUrl: signatureCanvasRef.current ? signatureCanvasRef.current.toDataURL("image/png") : null },
             ...(form.requiresTwoSignatures ? [{ label: (form.signatureLabels && form.signatureLabels[1]) || "Signature 2", dataUrl: signature2CanvasRef.current ? signature2CanvasRef.current.toDataURL("image/png") : null }] : []),
@@ -9453,7 +9497,7 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
         await supabase.rpc("submit_form", {
           p_token: user.sessionToken,
           p_form_title: form.title,
-          p_data: { ...standardValues, lifeThreatening: form.stepPlan && form.stepPlan.useLibrary ? composeLifeText(lifePick) : undefined, linkId, linkRef, submittedAtLabel: submittedAt, statusRefs, refreshes: [], fields: values, statusValues: effectiveStatusValues, choiceValues, stepValues, filledPdfUrl, proofDocUrls, category },
+          p_data: { ...standardValues, lifeThreatening: form.stepPlan && form.stepPlan.useLibrary ? composeLifeText(lifePick) : undefined, linkId, linkRef, submittedAtLabel: submittedAt, statusRefs, refreshes: [], fields: values, statusValues: effectiveStatusValues, choiceValues, stepValues, filledPdfUrl, proofDocUrls, category, ...(form.periodFromChoice != null && choiceValues[form.periodFromChoice] != null ? { period: form.choiceGroups[form.periodFromChoice].items[choiceValues[form.periodFromChoice]] } : {}), ...(contactDefs.length ? { contacts: contactDefs.map((g, gi) => ({ role: g.label, rows: contactData()[gi] })) } : {}) },
           p_signature: null,
         });
       } catch (e) {
@@ -9700,6 +9744,29 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
             </div>
           )}
 
+          {contactDefs.map((g, gi) => (
+            <div key={"cg" + gi} className="rounded-md border p-2.5" style={{ borderColor: "#E4E2DA", background: "#FCFCFA" }}>
+              <div className="text-[11px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{g.label}{g.required ? " *" : ""}</div>
+              {g.hint && <div className="text-[10px] mb-1" style={{ color: STEEL }}>{g.hint}</div>}
+              {contactRowsFor(gi).map((r, ri) => (
+                <div key={ri} className="mt-2 rounded-md border bg-white p-2" style={{ borderColor: "#E4E2DA" }}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] font-bold" style={{ color: STEEL }}>{g.noName ? "Office" : `${g.noun || "Contact"} ${ri + 1}`}</span>
+                    {ri > 0 && <button onClick={() => setContactRows(gi, contactRowsFor(gi).filter((_, k) => k !== ri))} className="text-[10px] font-bold uppercase" style={{ color: ALERT }}>Remove</button>}
+                  </div>
+                  {!g.noName && <input value={r.name} onChange={(e) => setContactCell(gi, ri, "name", e.target.value)} placeholder="Full name" autoComplete="off" className="w-full rounded-md border px-2.5 py-2 text-[13px] mb-1.5" style={{ borderColor: "#C9C6BC" }} />}
+                  <div className="flex gap-1.5">
+                    <input value={r.phone} onChange={(e) => setContactCell(gi, ri, "phone", e.target.value)} placeholder="Phone / cell" inputMode="tel" autoComplete="off" className="w-1/2 rounded-md border px-2.5 py-2 text-[13px]" style={{ borderColor: "#C9C6BC" }} />
+                    <input value={r.email} onChange={(e) => setContactCell(gi, ri, "email", e.target.value)} placeholder="Email" inputMode="email" autoComplete="off" autoCapitalize="none" className="w-1/2 rounded-md border px-2.5 py-2 text-[13px]" style={{ borderColor: "#C9C6BC" }} />
+                  </div>
+                  {rowStarted(r) && contactError(gi, ri) && <div className="text-[10px] mt-1" style={{ color: ALERT }}>{contactError(gi, ri)}</div>}
+                </div>
+              ))}
+              {!g.noName && contactRowsFor(gi).length < (g.max || 5) && (
+                <button onClick={() => setContactRows(gi, [...contactRowsFor(gi), { name: "", phone: "", email: "" }])} className="w-full mt-2 rounded-md border-2 border-dashed py-2 text-[12px] font-bold" style={{ borderColor: "#C9C6BC", color: STEEL }}>+ Add Another {g.noun || "Contact"}</button>
+              )}
+            </div>
+          ))}
           {(form.textBlocks || []).filter((b) => (b.at || "before") === "before").map((b, bi) => renderTextBlock(b, "tbbefore" + bi))}
           {(form.statusGroups || []).map((group, gi) => (
             <React.Fragment key={gi}>
@@ -9924,7 +9991,7 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
             return (
               <button
                 disabled={
-                  sigEmpty || (form.requiresTwoSignatures && sig2Empty) || submitting || crewMissing || ((form.textBlocks || []).some((b) => b.ackCheck) && !ackChecked) ||
+                  sigEmpty || (form.requiresTwoSignatures && sig2Empty) || submitting || crewMissing || contactsMissing || ((form.textBlocks || []).some((b) => b.ackCheck) && !ackChecked) ||
                   proofMissing || Object.keys(form.photoFields || {}).some((l) => form.photoFields[l] !== "optional" && (fieldPhotos[l] || []).length === 0) ||
                   (form.requiresLogo && !logoFile) ||
                   (form.allFieldsRequired && (form.fields || []).some((label, i) => !/\(if applicable\)/i.test(label) && !(values[i] || "").trim()))
@@ -12514,15 +12581,26 @@ const PRECONSTRUCTION_FILLABLE_FORMS = {
     ],
   },
   "Emergency Contacts List": {
-    title: "Emergency Contacts List",
+    title: "Emergency, Personnel and Safety Contact List",
+    description: "Contact information for your company's office, project managers, superintendents, emergency contacts and safety representatives on this project.",
+    submitEmail: "ntisafety@ferrovial.us",
     pdfLink: "https://drive.google.com/file/d/1zpbe9zBqKNy4y1xqnL0C1BHwIolAeWro/preview",
-    pdfFillTemplate: "emergency-contacts-list",
+    pdfFillTemplate: "generic-form-pdf",
+    genericPdfNeutral: true,
     requiresProof: false,
-    fields: [
-      "Project Manager Name", "Project Manager Phone", "Project Manager Email",
-      "Onsite Superintendent Name", "Onsite Superintendent Phone", "Onsite Superintendent Email",
-      "Emergency Contact Name", "Emergency Contact Phone", "Emergency Contact Email",
-      "Mailing Address",
+    fields: ["Mailing Address"],
+    genericPdfLongFields: ["Mailing Address"],
+    signatureLabels: ["Submitted By - Signature"],
+    contactGroups: [
+      { label: "Office Number", noName: true, required: true, startRows: 1, hint: "Main office phone and a general email." },
+      { label: "Project Manager", noun: "Project Manager", required: true, startRows: 1, max: 4 },
+      { label: "Onsite Superintendent", noun: "Superintendent", required: true, startRows: 1, max: 4 },
+      { label: "Emergency Contact", noun: "Emergency Contact", required: true, startRows: 1, max: 4, hint: "Reachable 24/7 for onsite emergencies." },
+      { label: "Safety Representative", noun: "Safety Representative", required: true, startRows: 1, max: 4 },
+      { label: "Other", noun: "Contact", startRows: 1, max: 6, hint: "Foreman, equipment manager, or anyone else we should be able to reach. Leave blank if none." },
+    ],
+    textBlocks: [
+      { at: "before", text: "List the people from your company who must be reachable on this project. Phone numbers must be answered or returned promptly. Update this list whenever a contact changes." },
     ],
   },
   "Man Hour Work Submittal": {
