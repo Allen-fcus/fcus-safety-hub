@@ -881,7 +881,7 @@ function HomeScreen({ go, user, activeProjectId }) {
     { key: "orientation", label: t("orientation"), desc: t("orientationDesc"), icon: CalendarDays, count: `${ORIENTATION_SESSIONS_DEFAULT.length} sessions/wk` },
     { key: "hsstandards", label: t("hsStandardsFull"), desc: t("hsStandardsDesc"), icon: BookOpen, count: t("alwaysVisible") },
     { key: "safetyplan", label: t("safetyPlan"), desc: t("safetyPlanDesc"), icon: ClipboardCheck, count: `${fallbacks.safetyPlan.length} ${t(fallbacks.safetyPlan.length !== 1 ? "documentsCountPlural" : "documentsCount")}` },
-    { key: "preconstruction", label: "Pre-Construction", desc: "Safety summary, work plan template, man hour submittal", icon: FileText, count: "3 documents" },
+    { key: "preconstruction", label: "Pre-Construction", desc: "Safety summary, safety questionnaire, work plan template, man hour submittal", icon: FileText, count: "5 documents" },
     ...(QUARTERLY_MONTHLY_PROJECTS.includes(activeProjectId) ? [{ key: "quarterlymonthly", label: "Quarterly/Monthly Inspections", desc: "Quarterly and monthly Competent Person verifications", icon: ClipboardCheck, count: "2 forms" }] : []),
     { key: "forms", label: t("formsTemplates"), desc: t("formsDesc"), icon: FileText, count: `${FORMS_DEFAULT.length} forms` },
     { key: "training", label: "Training", desc: "Courses assigned to you, tracked as you go", icon: Play, count: "Portal" },
@@ -8415,9 +8415,11 @@ async function buildGenericFormPdf({ form, slug, projectName, standardValues, fi
 
   const kv = (label, value, x, width) => {
     const lines = wrap(value || "-", sansB, 10, width);
-    page.drawText(clean(label).toUpperCase(), { x, y: y - 8, size: 7, font: sansB, color: grey });
-    lines.forEach((ln, i) => page.drawText(ln, { x, y: y - 19 - i * 12, size: 10, font: sansB, color: ink }));
-    return 19 + lines.length * 12 + 3;
+    const lblLines = wrap(clean(label).toUpperCase(), sansB, 7, width);
+    lblLines.forEach((ln, j) => page.drawText(ln, { x, y: y - 8 - j * 8, size: 7, font: sansB, color: grey }));
+    const extra = (lblLines.length - 1) * 8;
+    lines.forEach((ln, i) => page.drawText(ln, { x, y: y - 19 - extra - i * 12, size: 10, font: sansB, color: ink }));
+    return 19 + extra + lines.length * 12 + 3;
   };
   // header facts
   const colW = (CW - 16) / 2;
@@ -8565,7 +8567,7 @@ async function buildGenericFormPdf({ form, slug, projectName, standardValues, fi
   while (k < items.length) {
     const a = items[k];
     if (a.full) {
-      const est = 19 + wrap(a.value || "-", sansB, 10, CW).length * 12 + 3;
+      const est = 19 + (wrap(clean(a.label).toUpperCase(), sansB, 7, CW).length - 1) * 8 + wrap(a.value || "-", sansB, 10, CW).length * 12 + 3;
       need(est); y -= kv(a.label, a.value, M, CW); k++;
     } else {
       const b = items[k + 1] && !items[k + 1].full ? items[k + 1] : null;
@@ -13335,12 +13337,41 @@ const FCW24_SAFETY_SUMMARY_BLOCKS = [
   { at: "end", text: "Those that fail to comply with these safety requirements are subject to permanent removal from the project. The worst consequence would be that you or others suffer an injury or worse cause a fatality because of failure to comply with safety requirements.", emphasis: true },
 ];
 
-const PRECONSTRUCTION_DOC_TITLES = ["Summary of Safety Requirements", "Emergency Contacts List", "Man Hour Work Submittal", "Work Plan Template"];
+const PRECONSTRUCTION_DOC_TITLES = ["Summary of Safety Requirements", "Emergency Contacts List", "Safety Questionnaire", "Man Hour Work Submittal", "Work Plan Template"];
 
 // Fixed, fill-and-sign templates — same pattern as any other form in
 // Forms & Templates, no per-project upload needed. Work Plan Template
 // is the only one left that stays view/download only, each project
 // uploading its own via Manage.
+const SAFETY_QUESTIONNAIRE_QUESTIONS = [
+  "1. What is your current experience modifier rating?",
+  "2. What is your experience modifier rating annually for the past three years?",
+  "3. Will you provide a full-time on-site safety representative for this project and if so, what are the qualifications for this representative?",
+  "4. Have you had any OSHA violations in the past 5 years? If so, please give details",
+  "5. Have you received any violations from a Ferrovial entity in the past 5 years? If so, please give details",
+  "6. Have you ever been removed or suspended from a project for safety reasons? If so, please give details",
+  "7. What is your current A.I.R (Auto Incident Rate)?",
+  "8. What is your LWD (lost workday) Case Rate?",
+  "9. What is your R.I.R (Recordable Incident Rate)?",
+  "10. Do you have a Return to Work or Modified Duty Program?",
+  "11. Do you have a formal incident review process?",
+  "12. Do you have a safety orientation for new hires that identifies the hazards associated with their tasks and how to prevent the hazards or what to do in the event one is encountered?",
+  "13. Do you conduct frequent and regular safety inspections of your jobsites?",
+  "14. What BMP's (best management practices) do you have in place, if any?",
+  "15. Have you had any serious injuries or fatalities in the last 5 years?",
+];
+const SAFETY_QUESTIONNAIRE_BASE = {
+  pdfFillTemplate: "generic-form-pdf",
+  genericPdfNeutral: true,
+  requiresProof: false,
+  allFieldsRequired: true,
+  fields: ["Date Completed", ...SAFETY_QUESTIONNAIRE_QUESTIONS, "Completed By"],
+  dateFields: ["Date Completed"],
+  bigTextFields: SAFETY_QUESTIONNAIRE_QUESTIONS,
+  genericPdfLongFields: [...SAFETY_QUESTIONNAIRE_QUESTIONS, "Completed By"],
+  prefillNameFields: ["Completed By"],
+  signatureLabels: ["Completed By - Signature"],
+};
 const PRECONSTRUCTION_FILLABLE_FORMS = {
   "Summary of Safety Requirements": {
     title: "Summary of Safety Requirements",
@@ -13505,6 +13536,23 @@ const PRECONSTRUCTION_FILLABLE_FORMS = {
     textBlocks: [
       { at: "before", text: "List the people from your company who must be reachable on this project. Phone numbers must be answered or returned promptly. Update this list whenever a contact changes." },
     ],
+  },
+  "Safety Questionnaire": {
+    ...SAFETY_QUESTIONNAIRE_BASE,
+    title: "Safety Questionnaire",
+    description: "Complete every question of the Safety Questionnaire for this project. Write \"None\" or \"N/A\" where a question does not apply.",
+    submitEmail: "ntisafety@ferrovial.us",
+    pdfLink: "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/nti-safety-questionnaire.pdf",
+    projectOverrides: {
+      "sh99-houston": {
+        submitEmail: "sh99safety@ferrovial.us",
+        pdfLink: "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/sh99-safety-questionnaire.pdf",
+      },
+      nashville: {
+        submitEmail: "agarcia@ferrovial.us,mmaldonado@ferrovial.us",
+        pdfLink: "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/fcw24-safety-questionnaire.pdf",
+      },
+    },
   },
   "Man Hour Work Submittal": {
     title: "Man Hour Work Submittal",
