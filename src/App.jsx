@@ -13655,8 +13655,22 @@ const PRECONSTRUCTION_FILLABLE_FORMS = {
     genericPdfLongFields: ["Mailing Address"],
     signatureLabels: ["Submitted By - Signature"],
     projectOverrides: {
-      "sh99-houston": { submitEmail: "sh99safety@ferrovial.us" },
-      nashville: { submitEmail: "agarcia@ferrovial.us,mmaldonado@ferrovial.us" },
+      "sh99-houston": {
+        submitEmail: "sh99safety@ferrovial.us",
+        pdfLink: "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/fcw99-emergency-contact-list-v2.pdf",
+        textBlocks: [
+          { at: "top", plain: true, text: "For Project: Ferrovial Construction-Webber 99 JV" },
+          { at: "before", text: "List the people from your company who must be reachable on this project. Phone numbers must be answered or returned promptly. Update this list whenever a contact changes." },
+        ],
+      },
+      nashville: {
+        submitEmail: "agarcia@ferrovial.us,mmaldonado@ferrovial.us",
+        pdfLink: "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/fcw24-emergency-contact-list-v2.pdf",
+        textBlocks: [
+          { at: "top", plain: true, text: "For Project: Ferrovial Construction-Webber 24 JV" },
+          { at: "before", text: "List the people from your company who must be reachable on this project. Phone numbers must be answered or returned promptly. Update this list whenever a contact changes." },
+        ],
+      },
     },
     contactGroups: [
       { label: "Office Number", noName: true, required: true, startRows: 1, hint: "Main office phone and a general email." },
