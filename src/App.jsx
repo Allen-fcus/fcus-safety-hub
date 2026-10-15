@@ -874,6 +874,13 @@ function SiteWeatherCard({ projectId }) {
   );
 }
 
+// Order of the tabs/menu on every project (items not listed keep their relative order before Truck Drivers).
+const NAV_ORDER = ["home", "orientation", "forms", "hsstandards", "safetyplan", "workplans", "preconstruction", "meetings", "reports", "toolbox", "quarterlymonthly", "training", "laborlaws", "trafficcontrol", "concern", "truckdriver", "emergency", "personnel"];
+const sortByNavOrder = (items) => {
+  const rank = (k) => { const i = NAV_ORDER.indexOf(k); return i === -1 ? NAV_ORDER.indexOf("concern") : i; };
+  return items.map((it, i) => ({ it, i })).sort((a, b) => rank(a.it.key) - rank(b.it.key) || a.i - b.i).map((x) => x.it);
+};
+
 function HomeScreen({ go, user, activeProjectId }) {
   const { fallbacks, name: projectName } = useContext(ProjectContext);
   const { t } = useTranslation();
@@ -896,6 +903,7 @@ function HomeScreen({ go, user, activeProjectId }) {
     ...(user && user.canViewMeetings ? [{ key: "meetings", label: "Sign In Sheets", desc: "Sign-in sheets with QR code, for GC and Ferrovial staff", icon: Users, count: "Sign-ins" }] : []),
     { key: "concern", label: t("reportConcern"), desc: t("reportConcernDesc"), icon: MessageSquare, count: t("alwaysAvailable") },
   ];
+  const orderedSections = sortByNavOrder(sections);
 
   const [posts, setPosts] = useState([]);
   const [loadingPosts, setLoadingPosts] = useState(true);
@@ -1102,7 +1110,7 @@ function HomeScreen({ go, user, activeProjectId }) {
         Jump to
       </div>
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-        {sections.map((s) => (
+        {orderedSections.map((s) => (
           <button
             key={s.key}
             onClick={() => go(s.key)}
@@ -16471,6 +16479,7 @@ export default function SafetyHubPrototype() {
     ...(TRAFFIC_CONTROL_PROJECTS.includes(activeProjectId) ? [{ key: "trafficcontrol", icon: ShieldAlert, label: "Traffic Control" }] : []),
     ...(user && user.canViewMeetings ? [{ key: "meetings", icon: Users, label: "Sign In Sheets" }] : []),
   ];
+  const orderedSidebarItems = sortByNavOrder(sidebarItems);
 
   return (
     <LanguageContext.Provider value={{ lang, setLang, t }}>
@@ -16493,7 +16502,7 @@ export default function SafetyHubPrototype() {
           <div className="text-white text-[16px] mt-2" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>Safety Hub</div>
         </div>
         <div className="flex-1 py-3">
-          {sidebarItems.map((t) => {
+          {orderedSidebarItems.map((t) => {
             const active = screen === t.key;
             const locked = isScreenGated(t.key, activeProjectId) && !user;
             return (
@@ -16648,7 +16657,7 @@ export default function SafetyHubPrototype() {
 
         {/* Mobile bottom tab bar */}
         <div className="flex border-t md:hidden sticky bottom-0" style={{ borderColor: "#E4E2DA", background: "white" }}>
-          {tabs.map((t) => {
+          {sortByNavOrder(tabs).map((t) => {
             const active = screen === t.key;
             const locked = isScreenGated(t.key, activeProjectId) && !user;
             return (
