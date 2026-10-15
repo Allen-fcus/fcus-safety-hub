@@ -3200,6 +3200,166 @@ function ManageOrientationSchedulesScreen({ user }) {
   );
 }
 
+// ---- Designation review: derive the badge designation names from what was filled in on a submitted form ----
+const titleCaseDesig = (t) => String(t).toLowerCase().replace(/\b([a-z])/g, (m) => m.toUpperCase()).replace(/\bOsha\b/g, "OSHA").replace(/\bTma\b/g, "TMA").replace(/\bTx Dot\b/g, "TX DOT");
+function submissionFormDef(sub, slug) {
+  return ORIENTATION_FORMS_DEFAULT.find((f) => f.title === sub.form_title && (!f.projects || f.projects.includes(slug)));
+}
+function submissionFieldValue(sub, def, label) {
+  const i = def ? (def.fields || []).indexOf(label) : -1;
+  const arr = sub.data && Array.isArray(sub.data.fields) ? sub.data.fields : [];
+  return i === -1 ? "" : String(arr[i] || "");
+}
+function designationLabelsFor(sub, slug) {
+  const def = submissionFormDef(sub, slug);
+  const t = sub.form_title || "";
+  const cv = (sub.data && sub.data.choiceValues) || {};
+  const picked = (gi) => {
+    const g = def && (def.choiceGroups || [])[gi]; const v = cv[gi];
+    if (!g || v === undefined || v === null) return [];
+    return (Array.isArray(v) ? v : [v]).map((k) => g.items[k]).filter(Boolean);
+  };
+  if (/^Competent Person/i.test(t)) {
+    const areas = picked(1).map((x) => titleCaseDesig(x.replace(/^[A-Z]\.\s*/, "").replace(/\s*\(Cert\.?\)/i, "").trim()));
+    return areas.length ? areas.map((a) => `Competent Person – ${a}`) : ["Competent Person"];
+  }
+  if (/^Equipment Operator/i.test(t)) {
+    const eq = picked(0).map((x) => titleCaseDesig(x.replace(/^\d+\.\s*/, "").replace(/\s*\((Req\.? ?Cert\.?)\)/i, "").trim())).filter((x) => x !== "Other");
+    const other = submissionFieldValue(sub, def, "Other Equipment (if applicable)").trim();
+    if (other) eq.push(other);
+    return eq.length ? eq.map((e) => `Equipment Operator – ${e}`) : ["Equipment Operator"];
+  }
+  if (/^Crane Operator/i.test(t)) return ["Crane Operator"];
+  if (/^Assembly/i.test(t)) return ["Assembly/Disassembly Director"];
+  if (/^Crane-Specific/i.test(t)) return ["Crane-Specific Qualified Person"];
+  if (/^Flagger/i.test(t)) return ["Flagger"];
+  return [t.replace(/\s*Designation$/i, "")];
+}
+
+function ReviewDesignationPanel({ sub, user, slug, roster, onDone }) {
+  const initialLabels = designationLabelsFor(sub, slug);
+  const def = submissionFormDef(sub, slug);
+  const empName = (sub.data && sub.data.employeeName) || submissionFieldValue(sub, def, "Employee Name") || sub.submitted_by || "";
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState(empName === "Unknown" ? "" : empName);
+  const [person, setPerson] = useState(null);
+  const [labels, setLabels] = useState(initialLabels.map((l) => ({ text: l, on: true })));
+  const [extra, setExtra] = useState("");
+  const [issued, setIssued] = useState(new Date().toISOString().slice(0, 10));
+  const [expires, setExpires] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const q = search.trim().toLowerCase();
+  const matches = (roster || []).filter((r) => q && String(r.name || "").toLowerCase().includes(q)).slice(0, 8);
+
+  if (sub.reviewed_at) {
+    return (
+      <div className="mt-2 rounded-sm px-2.5 py-2 text-[11px]" style={{ background: "#EEF7EF", border: "1px solid #BFDCC4", color: "#1F6B2C" }}>
+        <strong>Added to badge:</strong> {sub.assigned_to_name || "—"}{sub.assigned_labels ? ` — ${sub.assigned_labels}` : ""} · reviewed {fmtD(sub.reviewed_at)}
+      </div>
+    );
+  }
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} className="w-full mt-2 text-[10px] font-bold uppercase py-1.5 rounded-sm" style={{ background: INK, color: GOLD, fontFamily: "IBM Plex Mono, monospace" }}>
+        Review &amp; Add to Badge
+      </button>
+    );
+  }
+  const chosen = [...labels.filter((l) => l.on).map((l) => l.text.trim()), ...(extra.trim() ? [extra.trim()] : [])].filter(Boolean);
+  const approve = async () => {
+    if (!person || chosen.length === 0) return;
+    setBusy(true); setErr("");
+    const res = await supabase.rpc("assign_submission_to_badge", {
+      p_token: user.sessionToken, p_submission_id: sub.id, p_person_id: person.id, p_labels: chosen,
+      p_issued_at: issued || null, p_expires_at: expires || null,
+    });
+    setBusy(false);
+    if (!res.data) { setErr("Could not add the designation. Make sure the SQL update has been run, then try again."); return; }
+    onDone();
+  };
+  const lab = { color: STEEL, fontFamily: "IBM Plex Mono, monospace" };
+  return (
+    <div className="mt-2 rounded-md p-2.5" style={{ background: "#FFFBEA", border: `1px solid ${GOLD}` }}>
+      <div className="text-[10px] uppercase font-bold mb-1" style={lab}>1. Badge holder</div>
+      {person ? (
+        <div className="flex items-center justify-between bg-white rounded-sm px-2.5 py-1.5 border mb-2" style={{ borderColor: "#E4E2DA" }}>
+          <div className="text-[12px]"><strong>{person.name}</strong> <span style={{ color: STEEL }}>{person.employer || ""}</span></div>
+          <button onClick={() => setPerson(null)} className="text-[10px] font-bold uppercase" style={{ color: STEEL }}>Change</button>
+        </div>
+      ) : (
+        <div className="mb-2">
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search the roster by name" className="w-full rounded-md border px-2.5 py-1.5 text-[12px]" style={{ borderColor: "#C9C6BC" }} />
+          {matches.map((r) => (
+            <button key={r.id} onClick={() => setPerson(r)} className="w-full text-left flex justify-between bg-white rounded-sm px-2.5 py-1.5 border mt-1 text-[12px]" style={{ borderColor: "#E4E2DA" }}>
+              <span>{r.name}</span><span className="text-[11px]" style={{ color: STEEL }}>{r.employer || ""}</span>
+            </button>
+          ))}
+          {q && matches.length === 0 && <div className="text-[11px] mt-1" style={{ color: STEEL }}>No one on the roster matches. Add them to the roster first, then come back.</div>}
+        </div>
+      )}
+      <div className="text-[10px] uppercase font-bold mb-1" style={lab}>2. Designations to add</div>
+      {labels.map((l, i) => (
+        <label key={i} className="flex items-center gap-2 text-[12px] mb-1">
+          <input type="checkbox" checked={l.on} onChange={() => setLabels((ls) => ls.map((x, j) => (j === i ? { ...x, on: !x.on } : x)))} />
+          <input value={l.text} onChange={(e) => setLabels((ls) => ls.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)))} className="flex-1 rounded-md border px-2 py-1 text-[12px]" style={{ borderColor: "#C9C6BC" }} />
+        </label>
+      ))}
+      <input value={extra} onChange={(e) => setExtra(e.target.value)} placeholder="Add another designation (optional)" className="w-full rounded-md border px-2 py-1 text-[12px] mb-2" style={{ borderColor: "#C9C6BC" }} />
+      <div className="flex gap-2 mb-2">
+        <div className="flex-1"><div className="text-[9px] uppercase font-bold" style={lab}>Issued</div><input type="date" value={issued} onChange={(e) => setIssued(e.target.value)} className="w-full rounded-md border px-2 py-1 text-[12px]" style={{ borderColor: "#C9C6BC" }} /></div>
+        <div className="flex-1"><div className="text-[9px] uppercase font-bold" style={lab}>Expires (optional)</div><input type="date" value={expires} onChange={(e) => setExpires(e.target.value)} className="w-full rounded-md border px-2 py-1 text-[12px]" style={{ borderColor: "#C9C6BC" }} /></div>
+      </div>
+      {err && <div className="text-[11px] mb-2" style={{ color: ALERT }}>{err}</div>}
+      <div className="flex gap-2">
+        <button onClick={() => setOpen(false)} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm border bg-white" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Cancel</button>
+        <button onClick={approve} disabled={busy || !person || chosen.length === 0} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm disabled:opacity-40" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>{busy ? "Adding…" : "Approve & Add to Badge"}</button>
+      </div>
+    </div>
+  );
+}
+
+function DrugScreenFolders({ submissions, slug }) {
+  const [q, setQ] = useState("");
+  const [openSub, setOpenSub] = useState(null);
+  const drug = submissions.filter((s) => s.form_title === "Drug Screen Affidavit");
+  const groups = {};
+  drug.forEach((s) => { const k = (s.employer || "Unknown subcontractor").trim(); (groups[k] = groups[k] || []).push(s); });
+  const names = Object.keys(groups).filter((k) => !q.trim() || k.toLowerCase().includes(q.trim().toLowerCase())).sort((a, b) => a.localeCompare(b));
+  return (
+    <div>
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search subcontractor" className="w-full rounded-md border px-3 py-2 text-[13px] mb-2" style={{ borderColor: "#C9C6BC" }} />
+      <div className="text-[10px] mb-2" style={{ color: STEEL }}>{names.length} subcontractor{names.length === 1 ? "" : "s"} · {drug.length} affidavit{drug.length === 1 ? "" : "s"} on file</div>
+      {names.map((k) => (
+        <div key={k} className="bg-white rounded-md border mb-2" style={{ borderColor: "#E4E2DA" }}>
+          <button onClick={() => setOpenSub(openSub === k ? null : k)} className="w-full flex items-center justify-between p-3 text-left">
+            <span className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{k}</span>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-sm" style={{ background: "#FFF8E1", color: "#93650A", fontFamily: "IBM Plex Mono, monospace" }}>{groups[k].length}</span>
+          </button>
+          {openSub === k && (
+            <div className="px-3 pb-3 space-y-1.5">
+              {groups[k].map((s) => {
+                const def = submissionFormDef(s, slug);
+                const covered = submissionFieldValue(s, def, "Employee Names Passing Drug Screen (one per line)").split(/\n+/).map((x) => x.trim()).filter(Boolean);
+                return (
+                  <div key={s.id} className="rounded-sm border px-2.5 py-2" style={{ borderColor: "#E4E2DA" }}>
+                    <div className="flex items-center justify-between">
+                      <div className="text-[11px]" style={{ fontFamily: "IBM Plex Mono, monospace", color: STEEL }}>{fmtDT(s.submitted_at)}{s.session_day ? ` · ${s.session_day}` : ""}</div>
+                      {s.filled_pdf_url && <button onClick={() => window.open(s.filled_pdf_url, "_blank")} className="text-[9px] font-bold uppercase px-2 py-1 rounded-sm" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>View</button>}
+                    </div>
+                    <div className="text-[12px] mt-1">{covered.length ? `${covered.length} employee${covered.length === 1 ? "" : "s"}: ${covered.join(", ")}` : "No names listed"}</div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ))}
+      {names.length === 0 && <div className="text-[12px] text-center py-6" style={{ color: STEEL }}>No drug screen affidavits on file yet.</div>}
+    </div>
+  );
+}
+
 function OrientationSubmissionsScreen({ user }) {
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -3207,6 +3367,9 @@ function OrientationSubmissionsScreen({ user }) {
   const [searchText, setSearchText] = useState("");
   const [formFilter, setFormFilter] = useState("");
   const [dateFilter, setDateFilter] = useState("");
+  const [view, setView] = useState("all"); // "all" | "drug"
+  const [roster, setRoster] = useState([]);
+  const { id: activeSlug } = useContext(ProjectContext) || {};
 
   const load = async () => {
     setLoading(true);
@@ -3216,6 +3379,9 @@ function OrientationSubmissionsScreen({ user }) {
   };
 
   useEffect(() => { load(); }, [user?.sessionToken]);
+  useEffect(() => {
+    supabase.rpc("list_personnel_admin", { p_token: user.sessionToken }).then(({ data }) => setRoster(Array.isArray(data) ? data : []));
+  }, [user?.sessionToken]);
 
   const doDelete = async (id) => {
     if (confirmDeleteId !== id) { setConfirmDeleteId(id); return; }
@@ -3242,6 +3408,12 @@ function OrientationSubmissionsScreen({ user }) {
       <div className="text-[12px] mb-3" style={{ color: STEEL }}>
         Every form submitted through Orientation Scheduling only — with the actual completed document. This never includes Site Safety Forms submissions. Admin only.
       </div>
+      <div className="flex gap-2 mb-3">
+        {[["all", "All Forms"], ["drug", "Drug Screens by Subcontractor"]].map(([k, l]) => (
+          <button key={k} onClick={() => setView(k)} className="flex-1 text-[10px] font-bold uppercase py-2 rounded-sm" style={{ background: view === k ? GOLD : "white", color: view === k ? INK : STEEL, border: `1px solid ${view === k ? GOLD : "#C9C6BC"}`, fontFamily: "IBM Plex Mono, monospace" }}>{l}</button>
+        ))}
+      </div>
+      {view === "drug" ? <DrugScreenFolders submissions={submissions} slug={activeSlug} /> : (<>
 
       <input
         value={searchText}
@@ -3295,6 +3467,7 @@ function OrientationSubmissionsScreen({ user }) {
               </button>
             ))}
           </div>
+          {/designation$/i.test(s.form_title || "") && <ReviewDesignationPanel sub={s} user={user} slug={activeSlug} roster={roster} onDone={load} />}
           <button
             onClick={() => doDelete(s.id)}
             className="w-full mt-2 text-[10px] font-bold uppercase py-1.5 rounded-sm"
@@ -3309,6 +3482,7 @@ function OrientationSubmissionsScreen({ user }) {
           {submissions.length === 0 ? "No submissions yet." : "No submissions match these filters."}
         </div>
       )}
+      </>)}
     </div>
   );
 }
