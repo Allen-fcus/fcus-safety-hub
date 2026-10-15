@@ -727,7 +727,7 @@ function SummarySubmissionsScreen({ user, admin }) {
             <div className="text-[11px] mt-1" style={{ color: STEEL }}>{signing.employer || signing.submitted_by} - submitted {fmtDT(signing.submitted_at)}</div>
             <button onClick={() => window.open(signing.filled_pdf_url, "_blank")} className="w-full mt-3 text-[11px] font-bold uppercase py-2 rounded-sm border" style={{ borderColor: "#C9C6BC", color: INK, ...mono }}>1. Open the submitted document to review</button>
             <label className="block mt-3 text-[11px] uppercase font-bold" style={{ color: STEEL, ...mono }}>2. NTI representative name</label>
-            <input value={signName} onChange={(e) => setSignName(e.target.value)} className="w-full rounded-md border px-3 py-2 text-[13px] mt-1" style={{ borderColor: "#C9C6BC" }} />
+            <input value={signName} onChange={(e) => { if (!user?.name) setSignName(e.target.value); }} readOnly={!!user?.name} title={user?.name ? "Name is locked to your login" : undefined} className="w-full rounded-md border px-3 py-2 text-[13px] mt-1" style={{ borderColor: "#C9C6BC", ...(user?.name ? { background: "#F1EFE8", color: "#5A574D", cursor: "not-allowed" } : {}) }} />
             <label className="block mt-3 mb-1 text-[11px] uppercase font-bold" style={{ color: STEEL, ...mono }}>3. Signature</label>
             <SignaturePad autoName={signName.trim()} onChange={setSigEmpty} canvasRef={sigRef} />
             <div className="text-[10px] mt-2" style={{ color: STEEL }}>Signing adds an NTI countersignature page to the end of the submitted PDF and saves it as the countersigned copy.</div>
@@ -9249,7 +9249,7 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
       const next = { ...v };
       nameLabels.forEach((l) => {
         const i = (form.fields || []).indexOf(l);
-        if (i !== -1 && (!next[i] || next[i] === prevNameRef.current)) next[i] = standardValues.name;
+        if (i !== -1 && (nameLocked || !next[i] || next[i] === prevNameRef.current)) next[i] = standardValues.name;
       });
       coLabels.forEach((l) => {
         const i = (form.fields || []).indexOf(l);
@@ -9294,7 +9294,10 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
     setStepValues((v) => ({ ...v, [si]: { ...(v[si] || {}), 1: hz, 2: ct } }));
   };
 
-  const setStd = (key, val) => setStandardValues((v) => ({ ...v, [key]: val }));
+  // The Name (and any field that mirrors it) comes from the logged-in account and cannot be edited
+  const nameLocked = !!(user && user.name);
+  const lockedNameLabels = nameLocked ? (form.prefillNameFields || []) : [];
+  const setStd = (key, val) => { if (key === "name" && nameLocked) return; setStandardValues((v) => ({ ...v, [key]: val })); };
   const setStepField = (stepIdx, fieldIdx, val) => {
     setStepValues((v) => ({ ...v, [stepIdx]: { ...(v[stepIdx] || {}), [fieldIdx]: val } }));
   };
@@ -9813,8 +9816,10 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
               <input
                 value={standardValues.name}
                 onChange={(e) => setStd("name", e.target.value)}
+                readOnly={nameLocked}
+                title={nameLocked ? "Name is locked to your login" : undefined}
                 className="w-full mt-1 rounded-md border px-2.5 py-1.5 text-[13px]"
-                style={{ borderColor: "#C9C6BC" }}
+                style={{ borderColor: "#C9C6BC", ...(nameLocked ? { background: "#F1EFE8", color: "#5A574D", cursor: "not-allowed" } : {}) }}
               />
             </div>
             <div>
@@ -9912,10 +9917,11 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
                 <textarea
                   rows={(form.bigTextFields || []).includes(f) ? 5 : (f.length > 30 ? 2 : 1)}
                   placeholder={(form.bigTextHints || {})[f] || ((form.bigTextFields || []).includes(f) ? "Type here. Write \"None\" if there is nothing to add." : undefined)}
-                  value={values[i] || ""}
-                  onChange={(e) => setValues((v) => ({ ...v, [i]: e.target.value }))}
+                  value={lockedNameLabels.includes(f) ? standardValues.name : (values[i] || "")}
+                  onChange={(e) => { if (lockedNameLabels.includes(f)) return; setValues((v) => ({ ...v, [i]: e.target.value })); }}
+                  readOnly={lockedNameLabels.includes(f)}
                   className="w-full mt-1 rounded-md border px-2.5 py-1.5 text-[13px]"
-                  style={{ borderColor: "#C9C6BC" }}
+                  style={{ borderColor: "#C9C6BC", ...(lockedNameLabels.includes(f) ? { background: "#F1EFE8", color: "#5A574D", cursor: "not-allowed" } : {}) }}
                 />
                 )}
                 {i === 0 && form.noteBelowFirstField && (
@@ -10091,10 +10097,11 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
                 <textarea
                   rows={(form.bigTextFields || []).includes(f) ? 5 : (f.length > 30 ? 2 : 1)}
                   placeholder={(form.bigTextHints || {})[f] || ((form.bigTextFields || []).includes(f) ? "Type here. Write \"None\" if there is nothing to add." : undefined)}
-                  value={values[i] || ""}
-                  onChange={(e) => setValues((v) => ({ ...v, [i]: e.target.value }))}
+                  value={lockedNameLabels.includes(f) ? standardValues.name : (values[i] || "")}
+                  onChange={(e) => { if (lockedNameLabels.includes(f)) return; setValues((v) => ({ ...v, [i]: e.target.value })); }}
+                  readOnly={lockedNameLabels.includes(f)}
                   className="w-full mt-1 rounded-md border px-2.5 py-1.5 text-[13px]"
-                  style={{ borderColor: "#C9C6BC" }}
+                  style={{ borderColor: "#C9C6BC", ...(lockedNameLabels.includes(f) ? { background: "#F1EFE8", color: "#5A574D", cursor: "not-allowed" } : {}) }}
                 />
                 )}
               </div>
