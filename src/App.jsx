@@ -14253,6 +14253,7 @@ function WeeklyReportScreen({ user, go, activeProjectId }) {
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [viewing, setViewing] = useState(null);
+  const [showOlder, setShowOlder] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -14288,23 +14289,47 @@ function WeeklyReportScreen({ user, go, activeProjectId }) {
       </div>
       {loading && <div className="text-[12px] mb-2" style={{ color: STEEL }}>{t("loading")}</div>}
       <div className="space-y-2">
-        {reports.map((r, i) => (
-          <button
-            key={i}
-            onClick={() => setViewing(r)}
-            className="w-full text-left bg-white rounded-md p-3 flex items-center gap-3 border"
-            style={{ borderColor: "#E4E2DA" }}
-          >
-            <div className="w-11 h-11 rounded-md flex items-center justify-center flex-shrink-0" style={{ background: INK }}>
-              <AlertTriangle size={18} color={GOLD} />
+        {reports.slice(0, 1).map((r) => (
+          <div key={r.id || "latest"} className="rounded-md p-3 border-2" style={{ background: "#fff", borderColor: GOLD }}>
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-md flex items-center justify-center flex-shrink-0" style={{ background: INK }}>
+                <AlertTriangle size={18} color={GOLD} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[9px] uppercase font-bold inline-block px-1.5 py-0.5 rounded-sm mb-1" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>Latest</div>
+                <div className="text-[14px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{r.title}</div>
+                <div className="text-[10px] uppercase font-bold mt-0.5" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{fmtD(r.posted_at)}</div>
+              </div>
             </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{r.title}</div>
-              <div className="text-[10px] uppercase font-bold mt-0.5" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{fmtD(r.posted_at)}</div>
+            <div className="flex gap-2 mt-3">
+              <button onClick={() => setViewing(r)} className="flex-1 flex items-center justify-center gap-1 text-[11px] font-bold uppercase py-2 rounded-sm" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>
+                <Eye size={13} /> View
+              </button>
+              {r.doc_link && (
+                <button onClick={() => window.open(r.doc_link, "_blank")} className="flex-1 flex items-center justify-center gap-1 text-[11px] font-bold uppercase py-2 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>
+                  <Download size={13} /> Download
+                </button>
+              )}
             </div>
-            <ChevronRight size={16} color={STEEL} className="flex-shrink-0" />
-          </button>
+          </div>
         ))}
+        {reports.length > 1 && (
+          <>
+            <button onClick={() => setShowOlder((v) => !v)} className="w-full flex items-center justify-between text-[11px] font-bold uppercase px-3 py-2.5 rounded-md border" style={{ borderColor: "#C9C6BC", color: STEEL, background: "#FAF9F5", fontFamily: "IBM Plex Mono, monospace" }}>
+              <span>Previous reports ({reports.length - 1})</span>
+              <ChevronRight size={14} style={{ transform: showOlder ? "rotate(90deg)" : "none", transition: "transform .15s" }} />
+            </button>
+            {showOlder && reports.slice(1).map((r, i) => (
+              <button key={r.id || i} onClick={() => setViewing(r)} className="w-full text-left bg-white rounded-md px-3 py-2 flex items-center gap-3 border" style={{ borderColor: "#E4E2DA" }}>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[12px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 500 }}>{r.title}</div>
+                  <div className="text-[10px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{fmtD(r.posted_at)}</div>
+                </div>
+                <ChevronRight size={14} color={STEEL} className="flex-shrink-0" />
+              </button>
+            ))}
+          </>
+        )}
         {!loading && reports.length === 0 && (
           <div className="text-[12px] text-center py-6" style={{ color: STEEL }}>{t("noReportsYet")}</div>
         )}
@@ -14337,7 +14362,7 @@ function WeeklyReportScreen({ user, go, activeProjectId }) {
 }
 
 function WeeklyReportEditor({ report, user, onDone }) {
-  const [title, setTitle] = useState(report ? report.title : "");
+  const [title, setTitle] = useState(report ? report.title : `Week of ${fmtD(new Date())}`);
   const [docLink, setDocLink] = useState(report ? report.doc_link || "" : "");
   const [file, setFile] = useState(null);
   const [fileName, setFileName] = useState("");
@@ -14409,7 +14434,7 @@ function WeeklyReportEditor({ report, user, onDone }) {
 
       {error && <div className="text-[11px] mb-2" style={{ color: ALERT }}>{error}</div>}
       <div className="flex gap-2">
-        <button onClick={submit} disabled={saving} className="flex-1 text-[11px] font-bold uppercase py-2 rounded-sm disabled:opacity-50" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>
+        <button onClick={submit} disabled={saving || (!report && !file && !docLink.trim())} className="flex-1 text-[11px] font-bold uppercase py-2 rounded-sm disabled:opacity-50" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>
           {saving ? (uploading ? "Uploading…" : "Saving…") : report ? "Save Changes" : "Post Report"}
         </button>
         <button onClick={onDone} className="flex-1 text-[11px] font-bold uppercase py-2 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>
@@ -14436,6 +14461,7 @@ function ManageWeeklyReportScreen({ user }) {
   useEffect(() => { load(); }, [user?.sessionToken]);
 
   const remove = async (id) => {
+    if (!window.confirm("Delete this report? This cannot be undone.")) return;
     await supabase.rpc("delete_weekly_report", { p_token: user.sessionToken, p_report_id: id });
     load();
   };
@@ -14443,7 +14469,7 @@ function ManageWeeklyReportScreen({ user }) {
   return (
     <div className="px-4 pt-4 pb-8" style={{ background: "#F4F3EF", minHeight: "100%" }}>
       <div className="text-[12px] mb-3" style={{ color: STEEL }}>
-        Post this week's report — everyone on this project sees it immediately, no login required to view.
+        Upload this week's PDF — it becomes the Latest report everyone sees first, and earlier reports are tucked under "Previous reports". No login is required to view.
       </div>
 
       {!showNew && !editingId && (
