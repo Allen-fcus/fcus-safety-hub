@@ -13346,7 +13346,7 @@ const PRECONSTRUCTION_FILLABLE_FORMS = {
     title: "Summary of Safety Requirements",
     description: "Review the full Summary of Safety Requirements, then acknowledge receipt. Signed by the contractor's senior site manager(s) and/or Safety Manager.",
     submitEmail: "ntisafety@ferrovial.us",
-    pdfLink: "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/nti-summary-of-safety-requirements.pdf",
+    pdfLink: "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/nti-summary-of-safety-requirements-v4.pdf",
     pdfFillTemplate: "generic-form-pdf",
     genericPdfNeutral: true,
     requiresProof: false,
@@ -13408,8 +13408,9 @@ const PRECONSTRUCTION_FILLABLE_FORMS = {
       { at: "before", title: "Safety requirements of the project - Minimum required PPE", items: [
         { t: "Class III apparel for all employees", s: ["Lime green for Construction", "Orange vest for work near Railroad"] },
         "ANSI Z87 Safety Glasses",
-        "Hard Hat must be Type 1, Class G, and meet the ANSI Z89.1 standard.",
+        "Hard Hat must be Type 2, with chinstrap.",
         "Safety shoes and boots must meet ANSI Z41-1991 and provide impact and compression protection to the foot.",
+        "Class E reflective pants must be worn for all night operations.",
       ] },
       { at: "before", title: "Traffic control", items: [
         "1. Traffic Control that meets applicable requirements for local, state, and federal regulations must be provided when working in or adjacent to roadways. The NTI Traffic department must be made aware of all traffic control operations prior to the commencement of the work.",
