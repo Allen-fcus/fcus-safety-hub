@@ -9932,7 +9932,7 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
         // submissions become visible to the person who submitted them
         // (for the rest of that day only); Orientation submissions
         // stay admin-only, same as before.
-        const category = form.title === "Summary of Safety Requirements" ? "safetysummary" : QUARTERLY_MONTHLY_FORMS_DEFAULT.some((f) => f.title === form.title) ? "quarterly" : FORMS_DEFAULT.some((f) => f.title === form.title) ? "forms" : "orientation";
+        const category = form.title === "Summary of Safety Requirements" ? "safetysummary" : Object.values(PRECONSTRUCTION_FILLABLE_FORMS).some((f) => f.title === form.title) ? "preconstruction" : QUARTERLY_MONTHLY_FORMS_DEFAULT.some((f) => f.title === form.title) ? "quarterly" : FORMS_DEFAULT.some((f) => f.title === form.title) ? "forms" : "orientation";
         await supabase.rpc("submit_form", {
           p_token: user.sessionToken,
           p_form_title: form.title,
@@ -13571,6 +13571,84 @@ const PRECONSTRUCTION_FILLABLE_FORMS = {
   },
 };
 
+function PreconSubmissionsScreen({ user }) {
+  const [subs, setSubs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [searchText, setSearchText] = useState("");
+  const [formFilter, setFormFilter] = useState("");
+  const [dateFilter, setDateFilter] = useState("");
+  const admin = !!(user && user.canAddPersonnel);
+  const load = async () => {
+    setLoading(true);
+    const { data, error } = await supabase.rpc("list_preconstruction_submissions", { p_token: user.sessionToken });
+    setSubs(error || !Array.isArray(data) ? [] : data);
+    setLoading(false);
+  };
+  useEffect(() => { load(); }, [user?.sessionToken]);
+  const doDelete = async (id) => {
+    if (confirmDeleteId !== id) { setConfirmDeleteId(id); return; }
+    const res = await supabase.rpc("delete_form_submission", { p_token: user.sessionToken, p_submission_id: id });
+    reportRpcFailure("Delete submission", res);
+    setConfirmDeleteId(null);
+    load();
+  };
+  const titles = Array.from(new Set(subs.map((x) => x.form_title))).sort();
+  const filtered = subs.filter((x) => {
+    if (formFilter && x.form_title !== formFilter) return false;
+    if (dateFilter && new Date(x.submitted_at).toISOString().slice(0, 10) !== dateFilter) return false;
+    if (searchText && !`${x.submitted_by || ""} ${x.employer || ""}`.toLowerCase().includes(searchText.toLowerCase())) return false;
+    return true;
+  });
+  return (
+    <div className="px-4 pt-4 pb-8" style={{ background: "#F4F3EF", minHeight: "100%" }}>
+      <div className="text-[12px] mb-3" style={{ color: STEEL }}>
+        {admin ? "Every Pre-Construction form submitted on this project (Man Hour Work Submittals, Emergency Contact Lists), with the completed document. Summary of Safety Requirements has its own Review & Sign list." : "The Pre-Construction forms you've submitted, with the completed document."}
+      </div>
+      {admin && (
+        <input value={searchText} onChange={(e) => setSearchText(e.target.value)} placeholder="Search by name or subcontractor" className="w-full rounded-md border px-3 py-2 text-[13px] mb-2" style={{ borderColor: "#C9C6BC" }} />
+      )}
+      <div className="flex gap-2 mb-3">
+        <select value={formFilter} onChange={(e) => setFormFilter(e.target.value)} className="flex-1 rounded-md border px-2.5 py-2 text-[12px] bg-white" style={{ borderColor: "#C9C6BC" }}>
+          <option value="">All Forms</option>
+          {titles.map((t) => <option key={t} value={t}>{t}</option>)}
+        </select>
+        <input type="date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} className="flex-1 rounded-md border px-2.5 py-2 text-[12px]" style={{ borderColor: "#C9C6BC" }} />
+        {(formFilter || dateFilter || searchText) && (
+          <button onClick={() => { setFormFilter(""); setDateFilter(""); setSearchText(""); }} className="text-[10px] font-bold uppercase px-3 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Clear</button>
+        )}
+      </div>
+      <div className="text-[10px] mb-2" style={{ color: STEEL }}>{filtered.length} of {subs.length} submissions</div>
+      {loading && <div className="text-[12px] mb-2" style={{ color: STEEL }}>Loading…</div>}
+      {filtered.map((x) => (
+        <div key={x.id} className="bg-white rounded-md p-3 border mb-2" style={{ borderColor: "#E4E2DA" }}>
+          <div className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{x.form_title}</div>
+          <div className="text-[11px] mt-0.5" style={{ color: STEEL }}>{x.submitted_by} · {x.employer || "—"}</div>
+          <div className="text-[10px] mt-0.5" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{fmtDT(x.submitted_at)}</div>
+          <div className="flex gap-2 mt-2 flex-wrap">
+            {x.filled_pdf_url ? (
+              <button onClick={() => window.open(x.filled_pdf_url, "_blank")} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>View Filled Form</button>
+            ) : (
+              <div className="flex-1 text-[10px] text-center py-1.5" style={{ color: STEEL }}>No generated PDF for this form</div>
+            )}
+            {(x.proof_doc_urls || []).map((url, i) => (
+              <button key={i} onClick={() => window.open(url, "_blank")} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Attachment {(x.proof_doc_urls || []).length > 1 ? i + 1 : ""}</button>
+            ))}
+          </div>
+          {admin && (
+            <button onClick={() => doDelete(x.id)} className="w-full mt-2 text-[10px] font-bold uppercase py-1.5 rounded-sm" style={{ background: confirmDeleteId === x.id ? ALERT : "white", color: confirmDeleteId === x.id ? "white" : ALERT, border: `1px solid ${ALERT}`, fontFamily: "IBM Plex Mono, monospace" }}>
+              {confirmDeleteId === x.id ? "Tap Again to Permanently Delete" : "Delete"}
+            </button>
+          )}
+        </div>
+      ))}
+      {!loading && filtered.length === 0 && (
+        <div className="text-[12px] text-center py-6" style={{ color: STEEL }}>{subs.length === 0 ? "No submissions yet." : "No submissions match these filters."}</div>
+      )}
+    </div>
+  );
+}
+
 function PreConstructionScreen({ user, go, activeProjectId }) {
   const [docs, setDocs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -13608,9 +13686,9 @@ function PreConstructionScreen({ user, go, activeProjectId }) {
         {user && user.canAddPersonnel && (
           <button onClick={() => go("summaryreview")} className="text-[10px] font-bold uppercase px-2 py-1 rounded-sm flex-shrink-0" style={{ background: INK, color: GOLD, fontFamily: "IBM Plex Mono, monospace" }}>Review &amp; Sign</button>
         )}
-        {user && user.canAddPersonnel && (
-          <button onClick={() => go("managepreconstruction")} className="text-[10px] font-bold uppercase px-2 py-1 rounded-sm flex-shrink-0" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>
-            Manage
+        {user && user.sessionToken && (
+          <button onClick={() => go("preconsubmissions")} className="text-[10px] font-bold uppercase px-2 py-1 rounded-sm flex-shrink-0" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>
+            {user.canAddPersonnel ? "All Submissions" : "My Submissions"}
           </button>
         )}
         </div>
@@ -15829,7 +15907,7 @@ function TruckDriverVerifyScreen() {
 // reporting, and the Labor Law QR code that anyone can scan).
 const ALWAYS_PUBLIC_SCREENS = ["emergency", "concern", "laborlaws", "trafficcontrol", "meetingsignin", "orientationsignin", "hsstandards", "orientationschedule", "verifybadge", "truckdriver", "verifytruckdriver"];
 // Normally-gated screens for every project.
-const BASE_GATED_SCREENS = ["forms", "safetyplan", "toolbox", "workplans", "mysubmissions", "quarterlymysubmissions", "summarymysubmissions", "preconstruction", "quarterlymonthly", "training", "meetings"];
+const BASE_GATED_SCREENS = ["forms", "safetyplan", "toolbox", "workplans", "mysubmissions", "quarterlymysubmissions", "summarymysubmissions", "preconsubmissions", "preconstruction", "quarterlymonthly", "training", "meetings"];
 // Projects where EVERYTHING (except the always-public screens above)
 // requires a badge — including Home itself.
 const FULLY_GATED_PROJECTS = ["sh99-houston"];
@@ -16046,6 +16124,7 @@ export default function SafetyHubPrototype() {
     quarterlymysubmissions: "My Quarterly/Monthly Submissions",
     managequarterlysubmissions: "Quarterly/Monthly Submissions",
     summarymysubmissions: "My Summary of Safety Requirements",
+    preconsubmissions: "Pre-Construction Submissions",
     summaryreview: "Review & Sign - Safety Requirements",
     emergency: t("emergencyContacts"),
     concern: t("reportConcern"),
@@ -16293,6 +16372,7 @@ export default function SafetyHubPrototype() {
             {screen === "quarterlymonthly" && <QuarterlyMonthlyScreen user={user} go={go} />}
             {screen === "quarterlymysubmissions" && <QuarterlySubmissionsScreen user={user} admin={false} />}
             {screen === "managequarterlysubmissions" && <QuarterlySubmissionsScreen user={user} admin />}
+            {screen === "preconsubmissions" && <PreconSubmissionsScreen user={user} />}
             {screen === "summarymysubmissions" && <SummarySubmissionsScreen user={user} admin={false} />}
             {screen === "summaryreview" && <SummarySubmissionsScreen user={user} admin />}
             {screen === "managepreconstruction" && <ManagePreConstructionScreen user={user} activeProjectId={activeProjectId} />}
