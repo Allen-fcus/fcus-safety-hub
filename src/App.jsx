@@ -1708,13 +1708,1098 @@ function MeetingFormCard({ initial, onSave, onCancel, saving }) {
   );
 }
 
+// ============================================================
+// SAFETY REPORTS (incident management) - lives inside Sign In Sheets
+// ============================================================
+const SR_L = {"area": ["3C Sylvania", "CI-Segment 1", "CI-Segment 2", "Off Site"], "type": ["AL", "GL", "MVA", "Near Miss", "Theft", "Utility Strike"], "yn1": ["Yes", "No"], "yn2": ["Yes", "No"], "drug": ["Yes", "No", "Requested"], "activity": ["ACT-01 Site establishment (Clearance, fencing, welfate, set-up, etc)", "ACT-02 Demolition (Service isolation, restricted areas/zones, asbestos)", "ACT-03 Service Diversions (Overhead cables, underground ducts, substations)", "ACT-04 Excavations and earthworks (Leveling, piling, drainage, trenches, etc.)", "ACT-05 Pavements", "ACT-06 Signaling, Beaconing and defense elements", "ACT-07 Erection of Structures (Steel works, falsework, scaffolding, tower cranes)", "ACT-08 Concrete (In-situ, Precast concrete, structural)", "ACT-09 Tunnels (Hand dig, mechanical, TBM (Open/Close face), sprayed concrete, etc.)", "ACT-10 Railway Assembly", "ACT-11 Building envelope (Blockwork, brickwork, stonework, cladding, window, doors, stairs)", "ACT-12 Roof Works (Fragile surfaces, Bitumen, Felt & Batton, tiled, glazed)", "ACT-13 Partitioning (Block/Brick work, Plasterboard,property systems)", "ACT-14 Installation (Mechanical, Heating & Ventilation, Electrical, Telecoms, Security, Carpentry)", "ACT-15 Finishing works (Cladding, Carpentry, Paint & Decorating, Ceilings, etc.)", "ACT-16 Services (Fire, Fuel, Water, Gas, Electrical mains)", "ACT-17 Landscaping and Ecology", "ACT-18 Testing & Commissioning (Electrical, Mechanical, Telecoms, etc.)", "ACT-19 Maintenance & Operation"], "standard": ["FER-MIN-STD-01 PPE", "FER-MIN-STD-02 Fall Protection", "FER-MIN-STD-03 Opening Protection", "FER-MIN-STD-04 Machinery and Equipment", "FER-MIN-STD-05 Lifting Loads", "FER-MIN-STD-06 Aerial Work Platforms", "FER-MIN-STD-07 Trench and Shaft excavations", "FER-MIN-STD-08 Traffic Control", "FER-MIN-STD-09 Working Platforms", "FER-MIN-STD-10 Ladders", "FER-MIN-STD-11 Electrical Safety", "FER-MIN-STD-12 Illuminations", "FER-MIN-STD-13 Utilities", "FER-MIN-STD-14 Explosives", "FER-MIN-STD-15 Air quality and Confined Space", "FER-MIN-STD-16 Mobile devices", "FER-MIN-STD-17 Sanitation", "FER-MIN-STD-18 Housekeeping", "FER-MIN-STD-19 Manual Handling", "FER-MIN-STD-20 Chemical, biological agents and radiations", "FER-MIN-STD-22 Safety Planning", "FER-MIN-STD-23 Organization and Coordination of activities", "FER-MIN-STD-24 Safety Supervision"], "causation": ["FER-01 Falls from a heights", "FER-02 Slip, trip and fall on the same level", "FER-03 Struck by falling objects", "FER-04 Struck by vehicle/machinery", "FER-05 Being hit by moving objects", "FER-06 Caught in, cut or compressed by equipment or objects", "FER-07 Projection of fragments or particles", "FER-08 Trapping", "FER-09 Overexertion", "FER-10 Other muscular stress", "FER-11 Contact with electricity", "FER-12 Contact or exposure to heat and cold", "FER-13 Vehicle accident", "FER-14 Contact with chemical or substance", "FER-15 Exposure to radiation", "FER-16 Exposure to noise", "FER-17 Exposure to mechanical vibration", "FER-18 Other and multiple mechanism of incident", "FER-19 Fire", "FER-20 Explosion", "FER-21 Assault", "FER-22 Other"], "conditions": ["01-PREM-01 Premises - Access and egress not adequate", "01-PREM-02 Premises - Access and egress points not used", "01-PREM-03 Premises - Hazards of the working area not protected", "01-PREM-04 Premises - Workplace unsuitable for the task in hand", "01-PREM-05 Premises - Insufficient space for the task in hand", "01-PREM-06 Premises - Workplace not used as intended", "01-PREM-07 Premises - People not segregated from hazardous areas/Substances/Machines", "01-PREM-08 Premises - Light, temperature and ventilation not suitable", "01-PREM-09 Premises - The ergonomics of the workstation don't suit the person", "01-PREM-10 Premises - The work area was not clean and tidy", "01-PREM-11 Premises - Weather conditions", "01-PREM-12 Premises - Appropriate warning signs not in place", "01-PREM-13 Premises - Unforeseable hazard (external to the work performed)", "02-PLANT-01 Plant and Equipment - Unsuitable plant and equipment for the job", "02-PLANT-02 Plant and Equipment - Plant and equipment in bad working condition and poorly maintained", "02-PLANT-03 Plant and Equipment - Pland and equipment improperly used", "02-PLANT-04 Plant and Equipment - Inadequate controls or guards for the safe use of the equipment", "02-PLANT-05 Plant and Equipment - Controls or guards improperly used or maintained", "02-PLANT-06 Plant and Equipment - Materials/substances improperly used", "02-PLANT-07 Plant and Equipment - Improper materials/ substances being used", "02-PLANT-08 Plant and Equipment - Materials/ Substances improperly used", "02-PLANT-09 Plant and Equipment - Exposure to hazardous materials and by-products improperly controlled", "02-PLANT-10 Plant and Equipment - Suitable PPE not available", "02-PLANT-11 Plant and Equipment - PPE in poor conditions", "02-PLANT-12 Plant and Equipment - Necessary PPE not used", "02-PLANT-13 Plant and Equipment - Necessary PPE improperly used", "03-WORK-01 Procedures - Inexistence of working procedures and instructions for the task", "03-WORK-02 Procedures - Working procedures and instructions outdated", "03-WORK-03 Procedures - Working procedures and instructions not realistic, accurate or inadequate", "03-WORK-04 Procedures - Working procedures and instructions dont deal with the circumstances of the adverse event", "03-WORK-05 Procedures - Working procedures and instructions not followed", "03-WORK-06 Procedures - Working procedures and instructions not available or provided to those carrying out to work", "03-WORK-07 Procedures - Working procedures and instructions were not supervised", "03-WORK-08 Procedures - Workers were not informed of the working procedures they should adopt", "04-PERS-01 People - People involved not suited for their job (Competence, Physically, Emotionally ...)", "04-PERS-02 People - Fatigue", "04-PERS-03 People - Lack of risk perception", "04-PERS-04 People - Being distracted", "04-PERS-05 People - Horseplay", "04-PERS-06 People - Taking substances such as alcohol, drugs, medicines", "04-PERS-07 People - Violations of working procedures and instructions", "04-PERS-08 People - Taking short cuts"], "coordinator": ["Jim Quinn", "Paul Vares", "Allen Garcia"]};
+const SR_AREAS = { "nti-sylvania": SR_L.area, "nti-golden-triangle": SR_L.area };
+const SR_COORDINATORS = { "nti-sylvania": SR_L.coordinator };
+const SR_TYPES = [...SR_L.type, "Injury / Illness", "Other"];
+const SR_MONO = { fontFamily: "IBM Plex Mono, monospace" };
+const SR_DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
+const SR_FORM_META = {
+  incident_report: { label: "Incident Report", short: "Incident Report", multiple: false },
+  employee_statement: { label: "Employee Statement", short: "Statement", multiple: true },
+  investigation_report: { label: "Incident Investigation Report", short: "Investigation", multiple: false },
+  cority_entry: { label: "Near Miss / HiPo - Cority Entry", short: "Cority Entry", multiple: false },
+};
+
+// which forms a case needs, based on how it is classified
+function srRequiredForms(c, forms) {
+  const has = (t) => (forms || []).some((f) => f.form_type === t);
+  const severe = c.hipo || c.sif || c.fatality || c.recordable || c.lost_time || c.osha_reportable || c.medical_treatment;
+  const list = [{ type: "incident_report", need: "required", why: "Every event starts with an Incident Report." }];
+  const witness = c.injury || c.incident_type === "MVA" || c.incident_type === "Utility Strike" || c.hipo || c.near_miss;
+  list.push({ type: "employee_statement", need: witness ? "recommended" : "optional", why: "Complete one for each employee or witness involved. Attach to the Investigation Report." });
+  if (c.near_miss || c.hipo || c.injury) list.push({ type: "cority_entry", need: "required", why: "Near Miss, HiPo and injury events are entered in Cority. This checklist walks through it." });
+  list.push({ type: "investigation_report", need: severe ? "required" : (c.near_miss || c.property_damage || c.first_aid ? "recommended" : "optional"),
+    why: c.hipo ? "HiPo events need an investigation to be completed." : severe ? "Injury / recordable / SIF events require a completed investigation with corrective actions." : "Complete after the investigation meeting to record root causes and corrective actions." });
+  return list.map((r) => ({ ...r, done: has(r.type) }));
+}
+
+function srClassLabel(c) {
+  if (c.fatality) return "Fatality";
+  if (c.sif) return "SIF (Serious Injury / Fatality)";
+  if (c.hipo) return "HiPo (High Potential)";
+  if (c.lost_time) return "Lost Time";
+  if (c.recordable) return "Recordable";
+  if (c.medical_treatment) return "Medical Treatment";
+  if (c.first_aid) return "First Aid";
+  if (c.near_miss) return "Near Miss";
+  if (c.property_damage) return "Property Damage";
+  return "Incident";
+}
+function srClassColor(label) {
+  if (/Fatality|SIF/.test(label)) return { bg: "#B3261E", fg: "#fff" };
+  if (/HiPo/.test(label)) return { bg: "#C2570C", fg: "#fff" };
+  if (/Lost|Recordable|Medical/.test(label)) return { bg: "#E2A21B", fg: "#1a1a1a" };
+  if (/Near/.test(label)) return { bg: "#2F5D8A", fg: "#fff" };
+  return { bg: "#E4E2DA", fg: "#3a3a3a" };
+}
+
+// turning a classification box on also turns on what it implies
+const SR_IMPLIES = {
+  fatality: ["injury", "sif", "recordable", "osha_reportable"],
+  sif: ["injury", "recordable"],
+  lost_time: ["injury", "recordable"],
+  medical_treatment: ["injury", "recordable"],
+  recordable: ["injury"],
+  first_aid: ["injury"],
+};
+
+// ---------- form schemas ----------
+// field: { k, l, t, opts, req, hint, full, showIf }  t: text|textarea|date|time|select|yesno|number|combo|check|checks|rows|sig|info
+const SR_ANALYSIS_HS = [
+  "Protective systems: Edge protection not implemented or defective",
+  "Protective systems: Personal fall arrest system not implemented / defective",
+  "Protective systems: Inadequate or defective protective devices",
+  "Protective systems: Inadequate or defective warning systems",
+  "Protective systems: Inadequate or defective safety devices",
+  "Scaffolds / platforms / ladders: Defective scaffolding, without necessary protections or improperly used",
+  "Scaffolds / platforms / ladders: Defective work platforms, without necessary protections or improperly used",
+  "Scaffolds / platforms / ladders: Defective ladders or improperly used",
+  "Tools, equipment or vehicles: Defective equipment, plant or machinery or without necessary protections",
+  "Tools, equipment or vehicles: Inadequate equipment, plant or machinery for the purpose",
+  "Tools, equipment or vehicles: Inadequate maintenance of equipment, plant or machinery",
+  "Tools, equipment or vehicles: Defective tools or inadequate for the purpose",
+  "Materials: Improper identification of hazardous materials",
+  "Materials: Improper storage or handling of materials",
+  "Workplace environment: Inadequate housekeeping",
+  "Workplace environment: Inadequate access and egress",
+  "Workplace environment: Inadequate signals",
+  "Workplace environment: Inadequate work conditions (illumination, ventilation, ...)",
+  "Emergency and evacuation systems: Inadequate housekeeping",
+  "Emergency and evacuation systems: Inadequate access and egress",
+  "Emergency and evacuation systems: Inadequate signals",
+];
+const SR_ANALYSIS_HF = [
+  "Human error (lack of attention, lack of risk perception, ...)",
+  "Improper use / use of defective tools or equipment",
+  "PPE not used / improperly used",
+  "Disabled / removal of guards, warning systems or safety devices",
+  "Non-existent or inadequate supervision of work / task",
+  "Breach of work instructions",
+];
+const SR_ANALYSIS_MGMT = [
+  "Competence / training: No employee training",
+  "Competence / training: Inadequate employee training",
+  "Competence / training: Inadequate employee competence",
+  "Competence / training: Work procedure not briefed to worker",
+  "Competence / training: Operating equipment without authorization",
+  "Control of subcontractors: Inadequate communication with subcontractor",
+  "Control of subcontractors: Inadequate coordination with subcontractor",
+  "Control of subcontractors: Lack of subcontractor input into Safety Coordination Meeting",
+  "Control of subcontractors: No information collected from / issued to subcontractor",
+  "Control of subcontractors: Inadequate information collected from / issued to subcontractor",
+  "Control of suppliers: Incorrect materials / work equipment supplied",
+  "Control of suppliers: Inadequate procurement of materials / equipment",
+  "Work procedure / permits: Non-existent, insufficient or inadequate work procedure",
+  "Work procedure / permits: Lack of permit / authorization to work",
+];
+
+function srSchema(type, ctx) {
+  const areas = SR_AREAS[ctx.slug] || ["On Site", "Off Site"];
+  const coord = SR_COORDINATORS[ctx.slug] || [];
+  const yn = ["Yes", "No"];
+  if (type === "incident_report") return {
+    title: "Incident Report", pdfTitle: "INCIDENT REPORT",
+    sections: [
+      { title: "Incident details", fields: [
+        { k: "date", l: "Date", t: "date", req: true }, { k: "time", l: "Time", t: "time", req: true },
+        { k: "where", l: "Where", t: "select", opts: areas, req: true }, { k: "type", l: "Type of incident", t: "select", opts: SR_TYPES, req: true },
+        { k: "company", l: "Company involved", t: "text" }, { k: "location", l: "Location", t: "text" },
+        { k: "driver", l: "Involved company driver / operator", t: "text" }, { k: "otherDriver", l: "Other driver", t: "text" },
+        { k: "vehicle", l: "Company year / make / model / VIN / license plate", t: "text" }, { k: "insurance", l: "3rd party insurance and policy number", t: "text" },
+        { k: "segmentMgr", l: "Segment manager", t: "text" }, { k: "projectMgr", l: "Project manager", t: "text" },
+        { k: "superintendent", l: "Superintendent", t: "text" },
+        { k: "description", l: "Description", t: "textarea", req: true, full: true },
+      ] },
+      { title: "Injuries, damage and follow-up", fields: [
+        { k: "injuries", l: "Injuries", t: "yesno", req: true }, { k: "injuriesNote", l: "Injury details", t: "text", showIf: (d) => d.injuries === "Yes" },
+        { k: "propertyDamage", l: "Property damage", t: "yesno", req: true }, { k: "propertyNote", l: "Property damage details", t: "text", showIf: (d) => d.propertyDamage === "Yes" },
+        { k: "drugScreen", l: "Drug screen completed", t: "select", opts: SR_L.drug }, { k: "policeReport", l: "Police report #", t: "text" },
+      ] },
+      { title: "Classification", fields: [
+        { k: "riskClass", l: "Classification of risk", t: "text" },
+        { k: "activity", l: "Activity", t: "select", opts: SR_L.activity, full: true },
+        { k: "standard", l: "H&S minimum standard", t: "select", opts: SR_L.standard, full: true },
+        { k: "causation", l: "Incident causation", t: "select", opts: SR_L.causation, full: true },
+        { k: "conditions", l: "Contributing conditions", t: "select", opts: SR_L.conditions, full: true },
+        { k: "lifesaving", l: "Was there a lifesaving control present?", t: "yesno" },
+        { k: "lifesavingNote", l: "If yes, indicate the preventive, mitigating or alternative control measure used. If no, indicate the control measures that could allow future fail-safe outcomes.", t: "textarea", full: true },
+        { k: "coordinator", l: "Safety coordinator", t: coord.length ? "combo" : "text", opts: coord },
+      ] },
+    ],
+  };
+  if (type === "employee_statement") return {
+    title: "Employee Statement", pdfTitle: "EMPLOYEE STATEMENT",
+    sections: [
+      { title: "Employee", fields: [
+        { k: "name", l: "Employee name", t: "text", req: true }, { k: "jobTitle", l: "Title", t: "text" },
+        { k: "address", l: "Home address", t: "text" }, { k: "city", l: "City", t: "text" },
+        { k: "state", l: "State", t: "text" }, { k: "zip", l: "Zip", t: "text" },
+        { k: "phone", l: "Phone", t: "text" }, { k: "department", l: "Department", t: "text" },
+      ] },
+      { title: "Account of incident", fields: [
+        { k: "date", l: "Date", t: "date", req: true }, { k: "time", l: "Time", t: "time" },
+        { k: "location", l: "Location of incident", t: "text", full: true },
+        { k: "task", l: "Task being performed", t: "text", full: true },
+        { k: "whereYou", l: "Where were you located at the time", t: "text", full: true },
+        { k: "account", l: "Briefly describe how the incident occurred and / or what you observed", t: "textarea", req: true, full: true },
+      ] },
+      { title: "Certification", fields: [
+        { k: "_c1", t: "info", l: "The information I have provided either in my own writing or verbally for the purpose of this form is true and correct. I understand that providing false or misleading information or omission of information on this report or any other forms relating to this claim may result in termination of my employment." },
+        { k: "signature", l: "Employee signature (type your full name)", t: "sig", req: true },
+        { k: "interpreter", l: "Reader / interpreter (if used)", t: "text" },
+      ] },
+    ],
+  };
+  if (type === "investigation_report") return {
+    title: "Incident Investigation Report", pdfTitle: "INCIDENT INVESTIGATION REPORT",
+    sections: [
+      { title: "Project", fields: [
+        { k: "projectName", l: "Project name", t: "text" }, { k: "client", l: "Client", t: "text" },
+        { k: "location", l: "Location", t: "text" }, { k: "projectDescription", l: "Project description", t: "text" },
+        { k: "incidentTypes", l: "Type of incident", t: "checks", opts: ["Near miss", "Non-lost time", "Lost time", "Serious", "Recordable"], full: true },
+        { k: "date", l: "Incident date", t: "date", req: true }, { k: "time", l: "Time of the incident", t: "time" },
+        { k: "brief", l: "Brief description of incident", t: "textarea", req: true, full: true },
+      ] },
+      { title: "Findings (root cause, as determined from investigation)", fields: [
+        { k: "findings", l: "Root causes", t: "rows", cols: [{ k: "text", l: "Finding", t: "text" }], min: 3, max: 10, full: true },
+      ] },
+      { title: "Lessons learned (completed by Senior Safety Manager)", fields: [
+        { k: "llPolicy", l: "Change in policy", t: "checks", opts: ["Local", "National"] },
+        { k: "llProcedure", l: "Change in procedure", t: "checks", opts: ["Local", "National"] },
+        { k: "llTraining", l: "Change in training", t: "checks", opts: ["Local", "National"] },
+        { k: "authorization", l: "Authorization required by others", t: "checks", opts: ["Legal", "Client", "Human Resources"] },
+      ] },
+      { title: "Corrective actions (re-training, letter of commitment, disciplinary action, etc.)", fields: [
+        { k: "actions", l: "Actions", t: "rows", cols: [{ k: "text", l: "Description of action", t: "text", w: 3 }, { k: "who", l: "Responsible", t: "text", w: 1.4 }, { k: "done", l: "Date completed", t: "date", w: 1.2 }], min: 3, max: 8, full: true },
+      ] },
+      { title: "Injured person details (if applicable)", fields: [
+        { k: "initials", l: "Injured person initials", t: "text" },
+        { k: "workerType", l: "Type of worker", t: "select", opts: ["F-C Employee", "Subcontractor", "Self-employed", "Partner employee", "Agency", "Joint Venture", "Other"] },
+        { k: "position", l: "Position", t: "text" }, { k: "years", l: "Years of experience", t: "text" },
+        { k: "age", l: "Age", t: "number" }, { k: "hireDate", l: "Hire date", t: "date" },
+        { k: "priorIssues", l: "Any prior safety issues", t: "yesno" }, { k: "behavioral", l: "Behavioral considerations", t: "yesno" },
+        { k: "environmental", l: "Environmental considerations", t: "yesno" },
+      ] },
+      { title: "Incident data", fields: [
+        { k: "dayOfWeek", l: "Day of the week", t: "select", opts: SR_DAYS },
+        { k: "nature", l: "Nature of injury or illness", t: "text" }, { k: "bodyPart", l: "Part of the body", t: "text" },
+      ] },
+      { title: "Incident analysis (check all that apply)", fields: [
+        { k: "anHs", l: "Health and safety conditions", t: "checks", opts: SR_ANALYSIS_HS, full: true },
+        { k: "anHf", l: "Human factor", t: "checks", opts: SR_ANALYSIS_HF, full: true },
+        { k: "anMgmt", l: "Health and safety management", t: "checks", opts: SR_ANALYSIS_MGMT, full: true },
+      ] },
+      { title: "Sign-off", fields: [
+        { k: "investigatedBy", l: "Investigated by", t: "text", req: true },
+        { k: "signature", l: "Signature (type your full name)", t: "sig", req: true },
+        { k: "signDate", l: "Date", t: "date" },
+      ] },
+    ],
+  };
+  // cority_entry
+  return {
+    title: "Near Miss / HiPo - Cority Entry", pdfTitle: "NEAR MISS / HIPO - CORITY ENTRY CHECKLIST",
+    sections: [
+      { title: "Part 1 - Event reporting (Cority: hard hat icon > Event reporting > New > Near Miss)", fields: [
+        { k: "category", l: "Report category", t: "select", opts: ["Near Miss", "HiPo", "Injury"], req: true },
+        { k: "date", l: "Date occurred (incident date)", t: "date", req: true },
+        { k: "area", l: "Workplace area (incident physical location)", t: "text", req: true },
+        { k: "time", l: "Time occurred (military time)", t: "text", hint: "Use military time, for example 14:30", req: true },
+        { k: "workRelated", l: "Work related?", t: "select", opts: ["1 - Yes", "2 - No"] },
+        { k: "risk", l: "Estimation of risk", t: "select", opts: ["1 - Low", "2 - Medium", "3 - High"], req: true },
+        { k: "summary", l: "Title / summary", t: "text", full: true, hint: "For a HiPo use the HiPo category plus something that describes it (company name, 'Struck by TMA hit', 'Injury - back strain')." },
+        { k: "brief", l: "Brief description", t: "textarea", full: true, hint: "Short and concise. Try not to add names." },
+        { k: "attached", l: "Attached the SIR (HiPo) or the Incident Report (Near Miss)", t: "check", full: true },
+        { k: "coritId", l: "Cority report ID", t: "text", hint: "Write down the report ID once saved." },
+      ] },
+      { title: "Part 2 - Incident review (appears after you submit Part 1)", fields: [
+        { k: "detail", l: "Detailed description (same as above)", t: "textarea", full: true },
+        { k: "causation", l: "Incident causation", t: "text", hint: "Use the magnifying icon to pick the one that matches the report. Do not guess - ask your manager." },
+        { k: "immediateCause", l: "Immediate cause", t: "text" },
+        { k: "hipo", l: "HiPo?", t: "select", opts: ["1 - Yes", "2 - No"] },
+        { k: "immediateAction", l: "Immediate action taken", t: "text", hint: "Most likely 'Work Stopped'. Do not guess - ask your manager." },
+        { k: "scenario", l: "HiPo scenario", t: "text", full: true },
+        { k: "approver", l: "Approval contact", t: "text", full: true },
+        { k: "role", l: "Role", t: "text" },
+        { k: "logged", l: "Added the report number to the control / log spreadsheet or the accident folder", t: "check", full: true },
+      ] },
+      { title: "Approval follow-up", fields: [
+        { k: "approval", l: "Approval status", t: "select", opts: ["Not yet reviewed", "Reviewed and approved"] },
+        { k: "_n", t: "info", l: "HiPos need an investigation to be completed. A couple of days after submitting for approval, come back to Event reporting in Cority to confirm the report was approved, then update the status here." },
+      ] },
+    ],
+  };
+}
+
+// starting values for a new form, taken from the case
+function srDefaults(type, ctx) {
+  const c = ctx.caseRow || {};
+  const yesNo = (v) => (v === true ? "Yes" : v === false ? "No" : "");
+  if (type === "incident_report") return {
+    date: c.incident_date ? String(c.incident_date).slice(0, 10) : todayISO(), time: c.incident_time || "", where: c.area || "", type: c.incident_type || "",
+    company: c.company_involved || "", location: c.location_detail || "", injuries: c.injury ? "Yes" : "", propertyDamage: c.property_damage ? "Yes" : "",
+    drugScreen: c.drug_screen || "", policeReport: c.police_report || "", riskClass: c.risk_class || "", lifesaving: c.lifesaving_control === "yes" ? "Yes" : c.lifesaving_control === "no" ? "No" : "",
+    description: "",
+  };
+  if (type === "employee_statement") return { date: c.incident_date ? String(c.incident_date).slice(0, 10) : "", time: c.incident_time || "", location: [c.area, c.location_detail].filter(Boolean).join(" - "), state: "TX" };
+  if (type === "investigation_report") {
+    const t = [];
+    if (c.near_miss) t.push("Near miss");
+    if (c.injury && !c.lost_time) t.push("Non-lost time");
+    if (c.lost_time) t.push("Lost time");
+    if (c.sif || c.fatality) t.push("Serious");
+    if (c.recordable) t.push("Recordable");
+    const d = c.incident_date ? String(c.incident_date).slice(0, 10) : "";
+    let dow = "";
+    if (d) { const [y, m, dd] = d.split("-").map(Number); dow = SR_DAYS[(new Date(y, m - 1, dd).getDay() + 6) % 7]; }
+    return {
+      projectName: ctx.projectName || "", client: ctx.slug === "nti-sylvania" ? "North Tarrant Express Mobility Partners" : "", location: [c.area, c.location_detail].filter(Boolean).join(" - "),
+      incidentTypes: t, date: d, time: c.incident_time || "", dayOfWeek: dow, brief: "", investigatedBy: ctx.userName || "", signDate: todayISO(),
+      findings: [{}, {}, {}], actions: [{}, {}, {}],
+    };
+  }
+  return {
+    category: c.hipo ? "HiPo" : c.near_miss ? "Near Miss" : c.injury ? "Injury" : "", date: c.incident_date ? String(c.incident_date).slice(0, 10) : "",
+    area: [c.area, c.location_detail].filter(Boolean).join(" - "), time: c.incident_time || "", workRelated: "1 - Yes", hipo: c.hipo ? "1 - Yes" : "2 - No",
+    scenario: c.hipo_scenario || "", summary: c.title || "", immediateAction: "Work Stopped",
+    approver: "Freeman, Kyle (C3270@ferrovial.com)", role: "LocalAdmin_USA", approval: "Not yet reviewed",
+  };
+}
+
+// what to copy from a saved form back onto the case
+function srCasePatchFromForm(type, d) {
+  const p = {};
+  const set = (k, v) => { if (v !== undefined && v !== null && String(v).trim() !== "") p[k] = v; };
+  if (type === "incident_report") {
+    set("incident_date", d.date); set("incident_time", d.time); set("area", d.where); set("incident_type", d.type);
+    set("company_involved", d.company); set("location_detail", d.location); set("police_report", d.policeReport);
+    set("drug_screen", d.drugScreen); set("risk_class", d.riskClass);
+    if (d.lifesaving) p.lifesaving_control = d.lifesaving === "Yes" ? "yes" : "no";
+    if (d.propertyDamage) p.property_damage = d.propertyDamage === "Yes";
+    if (d.injuries === "Yes") p.injury = true;
+    if (d.type === "Near Miss") p.near_miss = true;
+  }
+  return p;
+}
+
+// ---------- PDF for any incident form ----------
+async function buildIncidentFormPdf({ schema, data, caseRow, projectName, extraSections }) {
+  const { StandardFonts, rgb } = await import("pdf-lib");
+  const doc = await PDFDocument.create();
+  const sans = await doc.embedFont(StandardFonts.Helvetica);
+  const sansB = await doc.embedFont(StandardFonts.HelveticaBold);
+  const script = await doc.embedFont(StandardFonts.HelveticaBoldOblique);
+  const clean = (t) => String(t == null ? "" : t).replace(/[–—]/g, "-").replace(/[“”]/g, '"').replace(/[‘’]/g, "'").replace(/[^\x20-\xFF\n]/g, "?");
+  const ink = rgb(0.1, 0.1, 0.1), gold = rgb(0.98, 0.78, 0.02), grey = rgb(0.4, 0.42, 0.45), line = rgb(0.8, 0.79, 0.75), pale = rgb(0.96, 0.95, 0.92);
+  const W = 612, H = 792, M = 36, CW = W - 2 * M, colW = (CW - 16) / 2;
+  const wrap = (text, font, size, max) => {
+    const out = [];
+    clean(text).split("\n").forEach((para) => {
+      let cur = "";
+      (para.trim() ? para.split(/\s+/) : [""]).forEach((word) => {
+        const t = cur ? cur + " " + word : word;
+        if (font.widthOfTextAtSize(t, size) <= max) { cur = t; return; }
+        if (cur) out.push(cur);
+        let w = word;
+        while (font.widthOfTextAtSize(w, size) > max && w.length > 1) {
+          let k = w.length - 1;
+          while (k > 1 && font.widthOfTextAtSize(w.slice(0, k), size) > max) k--;
+          out.push(w.slice(0, k)); w = w.slice(k);
+        }
+        cur = w;
+      });
+      out.push(cur);
+    });
+    return out;
+  };
+  let page, y, pageNo = 0;
+  const header = (first) => {
+    page = doc.addPage([W, H]); pageNo++;
+    page.drawRectangle({ x: 0, y: H - 54, width: W, height: 54, color: ink });
+    page.drawText(clean(schema.pdfTitle), { x: M, y: H - 34, size: first ? 15 : 11, font: sansB, color: gold });
+    const pn = clean(projectName || "").toUpperCase();
+    page.drawText(pn, { x: W - M - sansB.widthOfTextAtSize(pn, 8), y: H - 33, size: 8, font: sansB, color: rgb(1, 1, 1) });
+    y = H - 54 - 16;
+  };
+  const need = (h) => { if (y - h < 50) header(false); };
+  header(true);
+
+  // case banner
+  const cls = caseRow ? srClassLabel(caseRow) : "";
+  page.drawRectangle({ x: M, y: y - 34, width: CW, height: 34, color: pale });
+  const bs = (label, val, x) => { page.drawText(clean(label).toUpperCase(), { x, y: y - 11, size: 6.5, font: sansB, color: grey }); page.drawText(clean(val || "-"), { x, y: y - 25, size: 10, font: sansB, color: ink }); };
+  bs("Case #", caseRow && caseRow.case_number, M + 8);
+  bs("Classification", cls, M + 150);
+  bs("Incident date", caseRow && caseRow.incident_date ? fmtD(caseRow.incident_date) : "", M + 380);
+  y -= 34 + 12;
+
+  const val = (f, d) => {
+    const v = d[f.k];
+    if (f.t === "date") return v ? fmtD(v) : "";
+    if (f.t === "time") return v || "";
+    return v == null ? "" : String(v);
+  };
+  const kv = (label, value, x, width) => {
+    const lbl = wrap(String(label || "").toUpperCase(), sansB, 6.5, width);
+    const lines = wrap(value || "-", sansB, 10, width);
+    lbl.forEach((ln, j) => page.drawText(ln, { x, y: y - 8 - j * 8, size: 6.5, font: sansB, color: grey }));
+    const extra = (lbl.length - 1) * 8;
+    lines.forEach((ln, i) => page.drawText(ln, { x, y: y - 19 - extra - i * 12, size: 10, font: sansB, color: ink }));
+    return 19 + extra + lines.length * 12 + 4;
+  };
+  const kvH = (label, value, width) => 19 + (wrap(String(label || "").toUpperCase(), sansB, 6.5, width).length - 1) * 8 + wrap(value || "-", sansB, 10, width).length * 12 + 4;
+  const box = (x, yy, on) => {
+    page.drawRectangle({ x, y: yy, width: 8, height: 8, borderColor: ink, borderWidth: 0.8, color: rgb(1, 1, 1) });
+    if (on) { page.drawLine({ start: { x: x + 1.5, y: yy + 1.5 }, end: { x: x + 6.5, y: yy + 6.5 }, thickness: 1.2, color: ink }); page.drawLine({ start: { x: x + 1.5, y: yy + 6.5 }, end: { x: x + 6.5, y: yy + 1.5 }, thickness: 1.2, color: ink }); }
+  };
+
+  const secs = [...schema.sections, ...(extraSections || [])];
+  for (const sec of secs) {
+    need(40);
+    page.drawRectangle({ x: M, y: y - 14, width: CW, height: 14, color: gold });
+    page.drawText(clean(sec.title).toUpperCase().slice(0, 100), { x: M + 4, y: y - 10, size: 7.5, font: sansB, color: ink });
+    y -= 20;
+    const fields = (sec.fields || []).filter((f) => !f.showIf || f.showIf(data));
+    let pend = null;
+    const flush = () => { if (pend) { need(kvH(pend.l, val(pend, data), colW)); y -= kv(pend.l, val(pend, data), M, colW); pend = null; } };
+    for (const f of fields) {
+      const simple = ["text", "date", "time", "select", "yesno", "number", "combo"].includes(f.t) && !f.full;
+      if (simple) {
+        if (!pend) { pend = f; continue; }
+        const a = pend, b = f; pend = null;
+        const h = Math.max(kvH(a.l, val(a, data), colW), kvH(b.l, val(b, data), colW));
+        need(h);
+        const ha = kv(a.l, val(a, data), M, colW), hb = kv(b.l, val(b, data), M + colW + 16, colW);
+        y -= Math.max(ha, hb);
+        continue;
+      }
+      flush();
+      if (f.t === "info") {
+        const ls = wrap(f.l, sans, 8.5, CW);
+        need(ls.length * 11 + 6);
+        ls.forEach((ln, i) => page.drawText(ln, { x: M, y: y - 9 - i * 11, size: 8.5, font: sans, color: grey }));
+        y -= ls.length * 11 + 6;
+      } else if (f.t === "check") {
+        const ls = wrap(f.l, sans, 9.5, CW - 16);
+        need(ls.length * 12 + 6);
+        box(M, y - 9, !!data[f.k]);
+        ls.forEach((ln, i) => page.drawText(ln, { x: M + 14, y: y - 9 - i * 12, size: 9.5, font: sans, color: ink }));
+        y -= ls.length * 12 + 6;
+      } else if (f.t === "checks") {
+        const sel = Array.isArray(data[f.k]) ? data[f.k] : [];
+        need(26);
+        page.drawText(clean(f.l).toUpperCase(), { x: M, y: y - 8, size: 6.5, font: sansB, color: grey });
+        y -= 14;
+        const inline = f.opts.every((o) => o.length < 28) && f.opts.length <= 7;
+        if (inline) {
+          let x = M;
+          need(16);
+          f.opts.forEach((o) => {
+            const w = sans.widthOfTextAtSize(clean(o), 9.5) + 26;
+            if (x + w > W - M) { x = M; y -= 14; need(16); }
+            box(x, y - 8, sel.includes(o)); page.drawText(clean(o), { x: x + 13, y: y - 8, size: 9.5, font: sans, color: ink });
+            x += w + 8;
+          });
+          y -= 18;
+        } else {
+          f.opts.forEach((o) => {
+            const ls = wrap(o, sans, 8.5, CW - 16);
+            need(ls.length * 10.5 + 3);
+            box(M, y - 8, sel.includes(o));
+            ls.forEach((ln, i) => page.drawText(ln, { x: M + 13, y: y - 8 - i * 10.5, size: 8.5, font: sel.includes(o) ? sansB : sans, color: ink }));
+            y -= ls.length * 10.5 + 3;
+          });
+          y -= 4;
+        }
+      } else if (f.t === "rows") {
+        const rows = (Array.isArray(data[f.k]) ? data[f.k] : []).filter((r) => f.cols.some((c) => r && r[c.k]));
+        need(30);
+        page.drawText(clean(f.l).toUpperCase(), { x: M, y: y - 8, size: 6.5, font: sansB, color: grey });
+        y -= 14;
+        const tw = f.cols.reduce((s, c) => s + (c.w || 1), 0);
+        const cw = f.cols.map((c) => ((c.w || 1) / tw) * (CW - 22));
+        if (!rows.length) { page.drawText("None recorded", { x: M, y: y - 9, size: 9, font: sans, color: grey }); y -= 16; continue; }
+        // header
+        need(14);
+        let x0 = M + 22;
+        f.cols.forEach((c, i) => { page.drawText(clean(c.l).toUpperCase(), { x: x0 + 2, y: y - 8, size: 6.5, font: sansB, color: grey }); x0 += cw[i]; });
+        y -= 12;
+        rows.forEach((r, ri) => {
+          const cells = f.cols.map((c, i) => wrap(c.t === "date" ? fmtD(r[c.k]) : r[c.k] || "", sans, 9, cw[i] - 6));
+          const rh = Math.max(...cells.map((l) => l.length)) * 11 + 6;
+          need(rh);
+          page.drawLine({ start: { x: M, y: y }, end: { x: W - M, y: y }, thickness: 0.4, color: line });
+          page.drawText(String(ri + 1) + ".", { x: M + 2, y: y - 11, size: 9, font: sansB, color: ink });
+          let cx = M + 22;
+          cells.forEach((ls, i) => { ls.forEach((ln, j) => page.drawText(ln, { x: cx + 2, y: y - 11 - j * 11, size: 9, font: sans, color: ink })); cx += cw[i]; });
+          y -= rh;
+        });
+        page.drawLine({ start: { x: M, y: y }, end: { x: W - M, y: y }, thickness: 0.4, color: line });
+        y -= 8;
+      } else if (f.t === "sig") {
+        need(58);
+        page.drawText(clean(f.l).toUpperCase(), { x: M, y: y - 8, size: 6.5, font: sansB, color: grey });
+        const nm = clean(data[f.k] || "");
+        if (nm) page.drawText(nm, { x: M + 4, y: y - 34, size: 18, font: script, color: ink });
+        page.drawLine({ start: { x: M, y: y - 40 }, end: { x: M + 280, y: y - 40 }, thickness: 0.7, color: ink });
+        const at = data[f.k + "_at"];
+        page.drawText(nm ? (at ? "Signed electronically " + fmtDT(at) : "Signed electronically") : "Not signed", { x: M, y: y - 50, size: 7.5, font: sans, color: grey });
+        y -= 58;
+      } else {
+        const v = val(f, data);
+        need(kvH(f.l, v, CW));
+        y -= kv(f.l, v, M, CW);
+      }
+    }
+    flush();
+    y -= 4;
+  }
+  const pages = doc.getPages();
+  pages.forEach((p, i) => {
+    p.drawText(clean(`Generated by the Safety Hub  -  ${caseRow ? caseRow.case_number : ""}`), { x: M, y: 22, size: 7.5, font: sans, color: grey });
+    const t = `Page ${i + 1} of ${pages.length}`;
+    p.drawText(t, { x: W - M - sans.widthOfTextAtSize(t, 7.5), y: 22, size: 7.5, font: sans, color: grey });
+  });
+  return await doc.save();
+}
+
+// ---------- form fields ----------
+function SrFormFields({ schema, data, setData, readOnly }) {
+  const bd = { borderColor: "#C9C6BC" };
+  const inp = "w-full mt-1 rounded-md border px-2.5 py-1.5 text-[13px] bg-white disabled:bg-[#F4F3EF] disabled:text-[#5A574D]";
+  const upd = (k, v) => setData((d) => ({ ...d, [k]: v }));
+  const Lbl = ({ f }) => (
+    <>
+      <label className="text-[10px] uppercase font-bold block" style={{ color: STEEL, ...SR_MONO }}>{f.l}{f.req ? " *" : ""}</label>
+      {f.hint && <div className="text-[10px] mt-0.5" style={{ color: STEEL }}>{f.hint}</div>}
+    </>
+  );
+  const one = (f) => {
+    const v = data[f.k];
+    if (f.t === "info") return <div className="text-[11px] leading-snug" style={{ color: STEEL }}>{f.l}</div>;
+    if (f.t === "check") return (
+      <label className="flex items-start gap-2 text-[12px]"><input type="checkbox" disabled={readOnly} checked={!!v} onChange={(e) => upd(f.k, e.target.checked)} className="mt-0.5" /><span>{f.l}</span></label>
+    );
+    if (f.t === "checks") {
+      const sel = Array.isArray(v) ? v : [];
+      const toggle = (o) => upd(f.k, sel.includes(o) ? sel.filter((x) => x !== o) : [...sel, o]);
+      return (
+        <div>
+          <Lbl f={f} />
+          <div className={f.opts.length > 8 ? "mt-1 space-y-1" : "mt-1 flex flex-wrap gap-x-4 gap-y-1"}>
+            {f.opts.map((o) => (
+              <label key={o} className="flex items-start gap-2 text-[12px]"><input type="checkbox" disabled={readOnly} checked={sel.includes(o)} onChange={() => toggle(o)} className="mt-0.5" /><span>{o}</span></label>
+            ))}
+          </div>
+        </div>
+      );
+    }
+    if (f.t === "rows") {
+      const rows = Array.isArray(v) ? v : [];
+      const n = Math.max(f.min || 1, rows.length);
+      const list = Array.from({ length: n }, (_, i) => rows[i] || {});
+      const setRow = (i, k, val) => { const next = list.map((r, j) => (j === i ? { ...r, [k]: val } : r)); upd(f.k, next); };
+      return (
+        <div>
+          <Lbl f={f} />
+          <div className="space-y-2 mt-1">
+            {list.map((r, i) => (
+              <div key={i} className="rounded-md border p-2 bg-white" style={bd}>
+                <div className="text-[10px] font-bold mb-1" style={{ color: STEEL, ...SR_MONO }}>{i + 1}.</div>
+                <div className={f.cols.length > 1 ? "grid grid-cols-1 sm:grid-cols-3 gap-2" : ""}>
+                  {f.cols.map((c) => (
+                    <div key={c.k} className={c.w >= 3 ? "sm:col-span-3" : ""}>
+                      {f.cols.length > 1 && <label className="text-[9px] uppercase font-bold" style={{ color: STEEL, ...SR_MONO }}>{c.l}</label>}
+                      <input type={c.t === "date" ? "date" : "text"} disabled={readOnly} value={r[c.k] || ""} onChange={(e) => setRow(i, c.k, e.target.value)} placeholder={f.cols.length === 1 ? c.l : ""} className={inp} style={bd} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+          {!readOnly && n < (f.max || 10) && (
+            <button type="button" onClick={() => upd(f.k, [...list, {}])} className="mt-2 text-[10px] font-bold uppercase px-2.5 py-1.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, ...SR_MONO }}>+ Add row</button>
+          )}
+        </div>
+      );
+    }
+    if (f.t === "sig") return (
+      <div>
+        <Lbl f={f} />
+        {readOnly ? (
+          <div className="mt-1 rounded-md border px-3 py-2" style={{ ...bd, background: "#FCFCFA", fontFamily: '"Dancing Script", cursive', fontWeight: 600, fontSize: 28, color: INK }}>{v || <span className="text-[11px]" style={{ color: STEEL, fontFamily: "Inter, sans-serif", fontWeight: 400 }}>Not signed</span>}</div>
+        ) : (
+          <TypedSignatureField value={v || ""} onChange={(val) => setData((d) => { const n = { ...d, [f.k]: val }; if (val.trim()) n[f.k + "_at"] = d[f.k + "_at"] || new Date().toISOString(); else delete n[f.k + "_at"]; return n; })} />
+        )}
+      </div>
+    );
+    return (
+      <div>
+        <Lbl f={f} />
+        {f.t === "textarea" ? (
+          <textarea rows={4} disabled={readOnly} value={v || ""} onChange={(e) => upd(f.k, e.target.value)} className={inp} style={bd} />
+        ) : f.t === "select" || f.t === "yesno" ? (
+          <select disabled={readOnly} value={v || ""} onChange={(e) => upd(f.k, e.target.value)} className={inp} style={bd}>
+            <option value="">Select…</option>
+            {(f.t === "yesno" ? ["Yes", "No"] : f.opts).map((o) => <option key={o} value={o}>{o}</option>)}
+            {v && !(f.t === "yesno" ? ["Yes", "No"] : f.opts).includes(v) && <option value={v}>{v}</option>}
+          </select>
+        ) : f.t === "combo" ? (
+          <>
+            <input list={`dl-${f.k}`} disabled={readOnly} value={v || ""} onChange={(e) => upd(f.k, e.target.value)} className={inp} style={bd} />
+            <datalist id={`dl-${f.k}`}>{(f.opts || []).map((o) => <option key={o} value={o} />)}</datalist>
+          </>
+        ) : (
+          <input type={f.t === "date" ? "date" : f.t === "time" && f.k !== "time2" ? "time" : f.t === "number" ? "number" : "text"} inputMode={f.t === "number" ? "numeric" : undefined} disabled={readOnly} value={v || ""} onChange={(e) => upd(f.k, e.target.value)} className={inp} style={bd} />
+        )}
+      </div>
+    );
+  };
+  return (
+    <div className="space-y-3">
+      {schema.sections.map((sec) => (
+        <div key={sec.title} className="bg-white rounded-md p-3 border" style={{ borderColor: "#E4E2DA" }}>
+          <div className="text-[11px] uppercase font-bold mb-2" style={{ ...SR_MONO }}>{sec.title}</div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {sec.fields.filter((f) => !f.showIf || f.showIf(data)).map((f) => {
+              const wide = f.full || ["textarea", "info", "check", "checks", "rows", "sig"].includes(f.t);
+              return <div key={f.k} className={wide ? "sm:col-span-2" : ""}>{one(f)}</div>;
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ---------- one form on a case ----------
+function SrFormView({ user, activeProjectId, projectName, detail, form, type, attendees, onBack, onChanged }) {
+  const token = user.sessionToken;
+  const ctx = { slug: activeProjectId, projectName, caseRow: detail, userName: user.name };
+  const schema = useMemo(() => srSchema(type, ctx), [type, activeProjectId]);
+  const [data, setData] = useState(() => (form ? { ...form.data } : srDefaults(type, ctx)));
+  const [formId, setFormId] = useState(form ? form.id : null);
+  const [status, setStatus] = useState(form ? form.status : "draft");
+  const [pdfUrl, setPdfUrl] = useState(form ? form.pdf_url : null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [err, setErr] = useState("");
+  const readOnly = status === "submitted";
+  const subjectOf = (d) => (type === "employee_statement" ? d.name : type === "investigation_report" ? d.brief && d.brief.slice(0, 80) : type === "incident_report" ? d.type : d.summary) || "";
+
+  const missing = () => {
+    const out = [];
+    schema.sections.forEach((s) => s.fields.forEach((f) => {
+      if (!f.req || (f.showIf && !f.showIf(data))) return;
+      const v = data[f.k];
+      if (v == null || (typeof v === "string" && !v.trim()) || (Array.isArray(v) && v.length === 0)) out.push(f.l);
+    }));
+    return out;
+  };
+  const extra = () => {
+    if (type !== "investigation_report" || !attendees || !attendees.length) return [];
+    const txt = attendees.map((a) => [`${a.first_name} ${a.last_name}`, a.title, a.organization].filter(Boolean).join(" - ")).join("\n");
+    return [{ title: "Investigation meeting attendees (sign-in sheet)", fields: [{ k: "_att", t: "info", l: txt }] }];
+  };
+  const makePdf = async () => buildIncidentFormPdf({ schema, data, caseRow: detail, projectName, extraSections: extra() });
+
+  const persist = async (submit) => {
+    setBusy(true); setErr(""); setMsg("");
+    try {
+      let url = null;
+      if (submit) {
+        try {
+          const bytes = await makePdf();
+          const path = `incident-reports/${detail.id}/${type}-${Date.now()}.pdf`;
+          const up = await supabase.storage.from("documents").upload(path, new Blob([bytes], { type: "application/pdf" }), { contentType: "application/pdf" });
+          if (!up.error) url = (supabase.storage.from("documents").getPublicUrl(path).data || {}).publicUrl || null;
+        } catch (e) { /* the form still saves without a filed PDF */ }
+      }
+      const { data: res, error } = await supabase.rpc("save_incident_form", {
+        p_token: token, p_case_id: detail.id, p_form_id: formId, p_form_type: type, p_subject: subjectOf(data), p_data: data, p_submit: !!submit, p_pdf_url: url,
+      });
+      if (error || !res) throw new Error("save");
+      setFormId(res.id); setStatus(res.status); if (res.pdf_url) setPdfUrl(res.pdf_url);
+      const patch = srCasePatchFromForm(type, data);
+      if (Object.keys(patch).length) await supabase.rpc("update_incident_case", { p_token: token, p_case_id: detail.id, p_data: patch });
+      setMsg(submit ? "Submitted and filed on this case." : "Draft saved.");
+      onChanged && onChanged();
+    } catch (e) { setErr("Couldn't save. Please try again."); }
+    setBusy(false);
+  };
+  const submit = () => {
+    const m = missing();
+    if (m.length) { setErr("Still needed: " + m.join(", ")); return; }
+    persist(true);
+  };
+  const download = async () => {
+    setBusy(true); setErr("");
+    try { saveBlobAs(new Blob([await makePdf()], { type: "application/pdf" }), `${safeFile(detail.case_number)}-${type}.pdf`); } catch (e) { setErr("Couldn't build the PDF."); }
+    setBusy(false);
+  };
+  const reopen = async () => {
+    await supabase.rpc("reopen_incident_form", { p_token: token, p_form_id: formId });
+    setStatus("draft"); setMsg("Reopened - make your changes, then submit again."); onChanged && onChanged();
+  };
+  const lab = { color: STEEL, ...SR_MONO };
+  return (
+    <div className="px-4 pt-4 pb-10" style={{ background: "#F4F3EF", minHeight: "100%" }}>
+      <button onClick={onBack} className="text-[11px] font-bold uppercase mb-3" style={lab}>← Back to case {detail.case_number}</button>
+      <div className="flex items-start justify-between gap-2 mb-3">
+        <div>
+          <div className="text-[16px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{SR_FORM_META[type].label}</div>
+          <div className="text-[11px]" style={{ color: STEEL }}>Case {detail.case_number} · {srClassLabel(detail)}</div>
+        </div>
+        <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-sm flex-shrink-0" style={{ background: status === "submitted" ? "#E7F4E4" : "#FFF3CD", color: status === "submitted" ? "#2F6B2A" : "#7A5B00", ...SR_MONO }}>{status === "submitted" ? "Submitted" : formId ? "Draft" : "New"}</span>
+      </div>
+      {type === "cority_entry" && status === "submitted" && data.approval !== "Reviewed and approved" && (
+        <div className="rounded-md p-2.5 mb-3 text-[12px]" style={{ background: "#FFF3CD", color: "#5A4300" }}>Check Cority a couple of days after submitting to confirm approval. Reopen this checklist and set the approval status when it's approved.</div>
+      )}
+      <SrFormFields schema={schema} data={data} setData={setData} readOnly={readOnly} />
+      {err && <div className="text-[12px] mt-3" style={{ color: ALERT }}>{err}</div>}
+      {msg && <div className="text-[12px] mt-3" style={{ color: "#2F6B2A" }}>{msg}</div>}
+      <div className="flex flex-wrap gap-2 mt-4">
+        {!readOnly && <button disabled={busy} onClick={() => persist(false)} className="flex-1 text-[11px] font-bold uppercase py-2.5 rounded-sm border disabled:opacity-50" style={{ borderColor: "#C9C6BC", color: STEEL, ...SR_MONO }}>{busy ? "Saving…" : "Save draft"}</button>}
+        {!readOnly && <button disabled={busy} onClick={submit} className="flex-1 text-[11px] font-bold uppercase py-2.5 rounded-sm disabled:opacity-50" style={{ background: GOLD, color: INK, ...SR_MONO }}>Submit</button>}
+        {readOnly && <button onClick={reopen} className="flex-1 text-[11px] font-bold uppercase py-2.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, ...SR_MONO }}>Reopen to edit</button>}
+        <button disabled={busy} onClick={download} className="flex-1 flex items-center justify-center gap-1 text-[11px] font-bold uppercase py-2.5 rounded-sm disabled:opacity-50" style={{ background: INK, color: "white", ...SR_MONO }}><Download size={13} /> PDF</button>
+      </div>
+      {pdfUrl && <a href={pdfUrl} target="_blank" rel="noreferrer" className="block text-center text-[11px] mt-3 underline" style={{ color: STEEL }}>Open the filed copy</a>}
+    </div>
+  );
+}
+
+// ---------- a case ----------
+function SrCaseView({ user, activeProjectId, projectName, caseId, onBack, onOpenForm, onOpenMeeting }) {
+  const token = user.sessionToken;
+  const canDelete = !!(user.canAddPersonnel || user.isHubAdmin);
+  const [detail, setDetail] = useState(null);
+  const [cls, setCls] = useState({});
+  const [attendees, setAttendees] = useState([]);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState("");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const areas = SR_AREAS[activeProjectId] || ["On Site", "Off Site"];
+
+  const load = async () => {
+    const { data } = await supabase.rpc("get_incident_case", { p_token: token, p_case_id: caseId });
+    setDetail(data || null);
+    if (data) {
+      setCls({
+        title: data.title || "", incident_date: data.incident_date ? String(data.incident_date).slice(0, 10) : "", incident_time: data.incident_time || "",
+        area: data.area || "", location_detail: data.location_detail || "", incident_type: data.incident_type || "", company_involved: data.company_involved || "",
+        injury: data.injury, fatality: data.fatality, sif: data.sif, hipo: data.hipo, near_miss: data.near_miss, first_aid: data.first_aid,
+        medical_treatment: data.medical_treatment, recordable: data.recordable, lost_time: data.lost_time, lost_days: data.lost_days == null ? "" : String(data.lost_days),
+        restricted_days: data.restricted_days == null ? "" : String(data.restricted_days), osha_reportable: data.osha_reportable, property_damage: data.property_damage,
+        drug_screen: data.drug_screen || "", police_report: data.police_report || "", hipo_scenario: data.hipo_scenario || "",
+      });
+      if (data.meeting_id) {
+        const m = await supabase.rpc("get_meeting_admin", { p_token: token, p_meeting_id: data.meeting_id });
+        setAttendees((m.data && m.data.attendees) || []);
+      } else setAttendees([]);
+    }
+  };
+  useEffect(() => { load(); }, [caseId]);
+
+  if (!detail) return <div className="px-4 pt-6 text-[12px]" style={{ color: STEEL }}>Loading…</div>;
+
+  const live = { ...detail, ...cls };
+  const label = srClassLabel(live);
+  const col = srClassColor(label);
+  const setFlag = (k, on) => setCls((c) => {
+    const n = { ...c, [k]: on };
+    if (on) (SR_IMPLIES[k] || []).forEach((x) => { n[x] = true; });
+    if (on && k === "medical_treatment") n.first_aid = false;
+    if (on && k === "first_aid") n.medical_treatment = false;
+    return n;
+  });
+  const setNum = (k, v) => setCls((c) => {
+    const n = { ...c, [k]: v.replace(/\D/g, "") };
+    if ((k === "lost_days" || k === "restricted_days") && Number(n[k]) > 0) { n.injury = true; n.recordable = true; if (k === "lost_days") n.lost_time = true; }
+    return n;
+  });
+  const saveCls = async () => {
+    setSaving(true); setErr(""); setSaved("");
+    const p = { ...cls, lost_days: cls.lost_days === "" ? "" : cls.lost_days, restricted_days: cls.restricted_days === "" ? "" : cls.restricted_days };
+    const { data, error } = await supabase.rpc("update_incident_case", { p_token: token, p_case_id: caseId, p_data: p });
+    setSaving(false);
+    if (error || !data) { setErr("Couldn't save the classification."); return; }
+    setSaved("Classification saved."); load();
+  };
+  const setStatus = async (s) => { await supabase.rpc("set_incident_case_status", { p_token: token, p_case_id: caseId, p_status: s }); load(); };
+  const remove = async () => {
+    if (!window.confirm("Delete this case and all of its forms? This can't be undone.")) return;
+    await supabase.rpc("delete_incident_case", { p_token: token, p_case_id: caseId }); onBack(true);
+  };
+  const removeForm = async (f) => {
+    if (!window.confirm("Delete this form? This can't be undone.")) return;
+    await supabase.rpc("delete_incident_form", { p_token: token, p_form_id: f.id }); load();
+  };
+  const createMeeting = async () => {
+    setBusy(true); setErr("");
+    const topic = `Incident Investigation - ${detail.case_number}${detail.title ? " - " + detail.title : ""}`.slice(0, 160);
+    const { data } = await supabase.rpc("create_meeting", { p_token: token, p_type: "Meeting", p_topic: topic, p_date: todayISO(), p_time: nowTimeLabel(), p_location: [detail.area, detail.location_detail].filter(Boolean).join(" - "), p_run_by: user.name || "" });
+    if (data && data.id) {
+      await supabase.rpc("link_incident_meeting", { p_token: token, p_case_id: caseId, p_meeting_id: data.id });
+      if (detail.status === "open") await supabase.rpc("set_incident_case_status", { p_token: token, p_case_id: caseId, p_status: "investigating" });
+      await load();
+    } else setErr("Couldn't create the sign-in sheet.");
+    setBusy(false);
+  };
+
+  const lab = { color: STEEL, ...SR_MONO };
+  const bd = { borderColor: "#C9C6BC" };
+  const inp = "w-full mt-1 rounded-md border px-2.5 py-1.5 text-[13px] bg-white";
+  const Chk = ({ k, text, sub }) => (
+    <label className="flex items-start gap-2 text-[12px] py-0.5"><input type="checkbox" checked={!!cls[k]} onChange={(e) => setFlag(k, e.target.checked)} className="mt-0.5" /><span>{text}{sub && <span className="block text-[10px]" style={{ color: STEEL }}>{sub}</span>}</span></label>
+  );
+  const required = srRequiredForms(live, detail.forms);
+  const needStyle = { required: { bg: "#FDE7E4", fg: "#8A1C14" }, recommended: { bg: "#FFF3CD", fg: "#7A5B00" }, optional: { bg: "#E4E2DA", fg: "#4A483F" } };
+  const injuryCase = live.injury || live.incident_type === "MVA" || live.incident_type === "Injury / Illness";
+  const sifAlert = live.fatality || live.sif;
+
+  return (
+    <div className="px-4 pt-4 pb-10" style={{ background: "#F4F3EF", minHeight: "100%" }}>
+      <button onClick={() => onBack(false)} className="text-[11px] font-bold uppercase mb-3" style={lab}>← All safety reports</button>
+
+      <div className="bg-white rounded-md p-3 border mb-3" style={{ borderColor: "#E4E2DA" }}>
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <div className="text-[10px] font-bold" style={{ color: GOLD, ...SR_MONO }}>{detail.case_number}</div>
+            <div className="text-[16px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{detail.title || detail.incident_type || "Untitled event"}</div>
+            <div className="text-[11px] mt-0.5" style={{ color: STEEL }}>{[detail.incident_date ? fmtD(detail.incident_date) : "", detail.incident_time, detail.area, detail.incident_type].filter(Boolean).join(" · ")}</div>
+            <div className="text-[10px] mt-0.5" style={{ color: STEEL }}>Opened by {detail.created_by_name || "-"}</div>
+          </div>
+          <span className="text-[10px] font-bold uppercase px-2 py-1 rounded-sm flex-shrink-0 text-center" style={{ background: col.bg, color: col.fg, ...SR_MONO }}>{label}</span>
+        </div>
+        <div className="flex flex-wrap gap-2 mt-3">
+          {["open", "investigating", "closed"].map((s) => (
+            <button key={s} onClick={() => setStatus(s)} className="text-[10px] font-bold uppercase px-2.5 py-1.5 rounded-sm border" style={detail.status === s ? { background: INK, color: GOLD, borderColor: INK, ...SR_MONO } : { borderColor: "#C9C6BC", color: STEEL, ...SR_MONO }}>{s}</button>
+          ))}
+          {canDelete && <button onClick={remove} className="text-[10px] font-bold uppercase px-2.5 py-1.5 rounded-sm border ml-auto" style={{ borderColor: ALERT, color: ALERT, ...SR_MONO }}>Delete case</button>}
+        </div>
+      </div>
+
+      {sifAlert && (
+        <div className="rounded-md p-3 mb-3 text-[12px] leading-snug" style={{ background: "#FDE7E4", color: "#8A1C14", border: "1px solid #E9A8A1" }}>
+          <b>{live.fatality ? "Fatality" : "Serious injury (SIF)"}:</b> notify the Safety Department and management right away. OSHA must be told of a fatality within 8 hours, and of an in-patient hospitalization, amputation or loss of an eye within 24 hours. Confirm the requirements with your Safety Manager. The investigation report is required.
+        </div>
+      )}
+      {live.hipo && !sifAlert && (
+        <div className="rounded-md p-3 mb-3 text-[12px] leading-snug" style={{ background: "#FDEBDD", color: "#7A3306", border: "1px solid #EDB98E" }}>
+          <b>HiPo:</b> enter it in Cority, complete the Significant Incident Report / Executive Incident Report / Lesson Learned, and complete the investigation.
+        </div>
+      )}
+      {injuryCase && live.drug_screen !== "Yes" && (
+        <div className="rounded-md p-3 mb-3 text-[12px] leading-snug" style={{ background: "#FFF3CD", color: "#5A4300", border: "1px solid #EAD28A" }}>
+          <b>Post-accident drug test:</b> required for this type of event. The signed verification letter must go to the Safety Department. Set "Drug screen completed" below when it's done.
+        </div>
+      )}
+
+      {/* classification */}
+      <div className="bg-white rounded-md p-3 border mb-3" style={{ borderColor: "#E4E2DA" }}>
+        <div className="text-[11px] uppercase font-bold mb-2" style={lab}>Classification</div>
+        <label className="text-[10px] uppercase font-bold" style={lab}>Short title</label>
+        <input value={cls.title || ""} onChange={(e) => setCls({ ...cls, title: e.target.value })} placeholder="For example: Struck by TMA hit" className={inp} style={bd} />
+        <div className="grid grid-cols-2 gap-2 mt-2">
+          <div><label className="text-[10px] uppercase font-bold" style={lab}>Date</label><input type="date" value={cls.incident_date || ""} onChange={(e) => setCls({ ...cls, incident_date: e.target.value })} className={inp} style={bd} /></div>
+          <div><label className="text-[10px] uppercase font-bold" style={lab}>Time</label><input type="time" value={cls.incident_time || ""} onChange={(e) => setCls({ ...cls, incident_time: e.target.value })} className={inp} style={bd} /></div>
+          <div><label className="text-[10px] uppercase font-bold" style={lab}>Where</label>
+            <select value={cls.area || ""} onChange={(e) => setCls({ ...cls, area: e.target.value })} className={inp} style={bd}><option value="">Select…</option>{areas.map((a) => <option key={a} value={a}>{a}</option>)}{cls.area && !areas.includes(cls.area) && <option value={cls.area}>{cls.area}</option>}</select></div>
+          <div><label className="text-[10px] uppercase font-bold" style={lab}>Type of incident</label>
+            <select value={cls.incident_type || ""} onChange={(e) => { const v = e.target.value; setCls((c) => ({ ...c, incident_type: v, ...(v === "Near Miss" ? { near_miss: true } : {}) })); }} className={inp} style={bd}><option value="">Select…</option>{SR_TYPES.map((a) => <option key={a} value={a}>{a}</option>)}</select></div>
+        </div>
+
+        <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-4">
+          <div>
+            <div className="text-[10px] uppercase font-bold mb-1" style={lab}>Event</div>
+            <Chk k="near_miss" text="Near miss" sub="No injury, but it could have been." />
+            <Chk k="property_damage" text="Property damage" />
+            <Chk k="hipo" text="HiPo - High Potential incident" sub="Could have resulted in a serious injury or fatality." />
+            <Chk k="injury" text="Injury / illness involved" />
+          </div>
+          <div>
+            <div className="text-[10px] uppercase font-bold mb-1" style={lab}>Severity</div>
+            <Chk k="fatality" text="Fatality" />
+            <Chk k="sif" text="SIF - Serious injury or fatality" sub="Life-threatening or life-altering." />
+            <Chk k="first_aid" text="First aid only" />
+            <Chk k="medical_treatment" text="Medical treatment beyond first aid" />
+            <Chk k="recordable" text="Recordable (OSHA)" />
+            <Chk k="lost_time" text="Lost time (days away from work)" />
+            <Chk k="osha_reportable" text="OSHA reportable" sub="Fatality, in-patient hospitalization, amputation or loss of an eye." />
+          </div>
+        </div>
+        {(cls.lost_time || cls.recordable || cls.injury) && (
+          <div className="grid grid-cols-2 gap-2 mt-2">
+            <div><label className="text-[10px] uppercase font-bold" style={lab}>Lost workdays</label><input inputMode="numeric" value={cls.lost_days || ""} onChange={(e) => setNum("lost_days", e.target.value)} className={inp} style={bd} /></div>
+            <div><label className="text-[10px] uppercase font-bold" style={lab}>Restricted / transfer days</label><input inputMode="numeric" value={cls.restricted_days || ""} onChange={(e) => setNum("restricted_days", e.target.value)} className={inp} style={bd} /></div>
+          </div>
+        )}
+        {cls.hipo && (<div className="mt-2"><label className="text-[10px] uppercase font-bold" style={lab}>HiPo scenario</label><input value={cls.hipo_scenario || ""} onChange={(e) => setCls({ ...cls, hipo_scenario: e.target.value })} placeholder="For example: Traffic events requiring evasive action" className={inp} style={bd} /></div>)}
+        <div className="grid grid-cols-2 gap-2 mt-2">
+          <div><label className="text-[10px] uppercase font-bold" style={lab}>Drug screen completed</label>
+            <select value={cls.drug_screen || ""} onChange={(e) => setCls({ ...cls, drug_screen: e.target.value })} className={inp} style={bd}><option value="">Select…</option>{SR_L.drug.map((a) => <option key={a} value={a}>{a}</option>)}</select></div>
+          <div><label className="text-[10px] uppercase font-bold" style={lab}>Police report #</label><input value={cls.police_report || ""} onChange={(e) => setCls({ ...cls, police_report: e.target.value })} className={inp} style={bd} /></div>
+        </div>
+        {err && <div className="text-[12px] mt-2" style={{ color: ALERT }}>{err}</div>}
+        {saved && <div className="text-[12px] mt-2" style={{ color: "#2F6B2A" }}>{saved}</div>}
+        <button disabled={saving} onClick={saveCls} className="w-full mt-3 text-[11px] font-bold uppercase py-2.5 rounded-sm disabled:opacity-50" style={{ background: GOLD, color: INK, ...SR_MONO }}>{saving ? "Saving…" : "Save classification"}</button>
+        <div className="text-[10px] mt-1.5" style={{ color: STEEL }}>Checking a box also checks what it implies (for example Fatality also marks SIF, Recordable and OSHA reportable). The forms needed below update as you classify. Save to keep it on the case.</div>
+      </div>
+
+      {/* forms */}
+      <div className="text-[11px] uppercase font-bold mb-2" style={lab}>Forms for this case</div>
+      <div className="space-y-2 mb-3">
+        {required.map((r) => {
+          const mine = (detail.forms || []).filter((f) => f.form_type === r.type);
+          const ns = needStyle[r.need];
+          return (
+            <div key={r.type} className="bg-white rounded-md p-3 border" style={{ borderColor: "#E4E2DA" }}>
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <div className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{SR_FORM_META[r.type].label}</div>
+                  <div className="text-[11px]" style={{ color: STEEL }}>{r.why}</div>
+                </div>
+                <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-sm flex-shrink-0" style={{ background: ns.bg, color: ns.fg, ...SR_MONO }}>{r.need}</span>
+              </div>
+              {mine.map((f) => (
+                <div key={f.id} className="flex items-center gap-2 mt-2 rounded-md border px-2.5 py-1.5" style={{ borderColor: "#E4E2DA" }}>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[12px] truncate">{f.subject || SR_FORM_META[f.form_type].short}</div>
+                    <div className="text-[10px]" style={{ color: f.status === "submitted" ? "#2F6B2A" : "#7A5B00" }}>{f.status === "submitted" ? `Submitted ${fmtDT(f.submitted_at)}` : `Draft · saved ${fmtDT(f.updated_at)}`}{f.created_by_name ? ` · ${f.created_by_name}` : ""}</div>
+                  </div>
+                  <button onClick={() => onOpenForm(detail, f, f.form_type, attendees)} className="text-[10px] font-bold uppercase px-2 py-1 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, ...SR_MONO }}>{f.status === "submitted" ? "View" : "Continue"}</button>
+                  {canDelete && <button onClick={() => removeForm(f)} className="p-1"><X size={14} color={STEEL} /></button>}
+                </div>
+              ))}
+              {(mine.length === 0 || SR_FORM_META[r.type].multiple) && (
+                <button onClick={() => onOpenForm(detail, null, r.type, attendees)} className="w-full mt-2 text-[11px] font-bold uppercase py-2 rounded-sm" style={mine.length ? { border: "1px solid #C9C6BC", color: STEEL, ...SR_MONO } : { background: GOLD, color: INK, ...SR_MONO }}>{mine.length ? "+ Add another" : "Start"}</button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* investigation meeting */}
+      <div className="bg-white rounded-md p-3 border" style={{ borderColor: "#E4E2DA" }}>
+        <div className="text-[11px] uppercase font-bold mb-1" style={lab}>Investigation meeting</div>
+        <div className="text-[11px] mb-2" style={{ color: STEEL }}>The investigation is completed and corrective actions are decided in a meeting. Use a sign-in sheet so the team is on record. Attendees appear on the Investigation Report.</div>
+        {detail.meeting_id ? (
+          <>
+            <div className="text-[12px] font-bold mb-1">{attendees.length} signed in</div>
+            {attendees.slice(0, 8).map((a) => <div key={a.id} className="text-[11px]" style={{ color: STEEL }}>{a.first_name} {a.last_name}{a.organization ? ` · ${a.organization}` : ""}</div>)}
+            {attendees.length > 8 && <div className="text-[11px]" style={{ color: STEEL }}>+ {attendees.length - 8} more</div>}
+            <button onClick={() => onOpenMeeting(detail.meeting_id)} className="w-full mt-2 text-[11px] font-bold uppercase py-2 rounded-sm" style={{ background: INK, color: "white", ...SR_MONO }}>Open the sign-in sheet</button>
+            <button onClick={load} className="w-full mt-2 text-[10px] font-bold uppercase py-1.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, ...SR_MONO }}>Refresh attendees</button>
+          </>
+        ) : (
+          <button disabled={busy} onClick={createMeeting} className="w-full text-[11px] font-bold uppercase py-2.5 rounded-sm disabled:opacity-50" style={{ background: GOLD, color: INK, ...SR_MONO }}>{busy ? "Creating…" : "Create sign-in sheet for the investigation"}</button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------- Safety Reports (inside Sign In Sheets) ----------
+function SafetyReportsPanel({ user, activeProjectId, onOpenMeeting }) {
+  const token = user.sessionToken;
+  const proj = useContext(ProjectContext);
+  const projectName = proj && proj.name;
+  const [cases, setCases] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [route, setRoute] = useState({ name: "list" });
+  const [filter, setFilter] = useState("All");
+  const [status, setStatus] = useState("All");
+  const [search, setSearch] = useState("");
+  const [showNew, setShowNew] = useState(false);
+  const [nw, setNw] = useState({ date: todayISO(), time: "", area: "", type: "", title: "" });
+  const [creating, setCreating] = useState(false);
+  const [err, setErr] = useState("");
+  const areas = SR_AREAS[activeProjectId] || ["On Site", "Off Site"];
+
+  const loadList = async () => {
+    setLoading(true);
+    const { data } = await supabase.rpc("list_incident_cases", { p_token: token });
+    setCases(Array.isArray(data) ? data : []);
+    setLoading(false);
+  };
+  useEffect(() => { loadList(); }, [token, activeProjectId]);
+
+  const create = async () => {
+    setCreating(true); setErr("");
+    const { data, error } = await supabase.rpc("create_incident_case", { p_token: token, p_data: {
+      incident_date: nw.date, incident_time: nw.time, area: nw.area, incident_type: nw.type, title: nw.title, near_miss: nw.type === "Near Miss",
+    } });
+    setCreating(false);
+    if (error || !data) { setErr("Couldn't start the report. Make sure the Safety Reports SQL has been run."); return; }
+    setShowNew(false); setNw({ date: todayISO(), time: "", area: "", type: "", title: "" });
+    loadList(); setRoute({ name: "case", id: data.id });
+  };
+
+  if (route.name === "form") {
+    return <SrFormView key={(route.form && route.form.id) || route.type} user={user} activeProjectId={activeProjectId} projectName={projectName} detail={route.detail} form={route.form} type={route.type} attendees={route.attendees}
+      onBack={() => setRoute({ name: "case", id: route.detail.id })} onChanged={loadList} />;
+  }
+  if (route.name === "case") {
+    return <SrCaseView key={route.id} user={user} activeProjectId={activeProjectId} projectName={projectName} caseId={route.id}
+      onBack={() => { setRoute({ name: "list" }); loadList(); }}
+      onOpenForm={(detail, form, type, attendees) => setRoute({ name: "form", detail, form, type, attendees })}
+      onOpenMeeting={onOpenMeeting} />;
+  }
+
+  const year = new Date().getFullYear();
+  const ytd = cases.filter((c) => c.incident_date && String(c.incident_date).slice(0, 4) === String(year));
+  const stat = [
+    ["Open", cases.filter((c) => c.status !== "closed").length],
+    ["SIF / Fatal", ytd.filter((c) => c.sif || c.fatality).length],
+    ["HiPo", ytd.filter((c) => c.hipo).length],
+    ["Recordable", ytd.filter((c) => c.recordable).length],
+    ["Lost days", ytd.reduce((s, c) => s + (c.lost_days || 0), 0)],
+    ["Near miss", ytd.filter((c) => c.near_miss).length],
+  ];
+  const matches = (c) => {
+    if (status !== "All" && c.status !== status.toLowerCase()) return false;
+    if (filter === "SIF" && !(c.sif || c.fatality)) return false;
+    if (filter === "HiPo" && !c.hipo) return false;
+    if (filter === "Recordable" && !c.recordable) return false;
+    if (filter === "Lost time" && !c.lost_time) return false;
+    if (filter === "Near miss" && !c.near_miss) return false;
+    if (search.trim() && !`${c.case_number} ${c.title} ${c.area} ${c.incident_type} ${c.company_involved}`.toLowerCase().includes(search.trim().toLowerCase())) return false;
+    return true;
+  };
+  const shown = cases.filter(matches);
+  const lab = { color: STEEL, ...SR_MONO };
+  const inp = "w-full mt-1 rounded-md border px-2.5 py-1.5 text-[13px] bg-white";
+  const bd = { borderColor: "#C9C6BC" };
+  const chip = (active) => ({ background: active ? GOLD : "white", color: active ? INK : STEEL, borderColor: active ? GOLD : "#C9C6BC", ...SR_MONO });
+  return (
+    <div className="px-4 pt-4 pb-10" style={{ background: "#F4F3EF", minHeight: "100%" }}>
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-[12px]" style={{ color: STEEL }}>Report and manage incidents, classify them and complete the follow-up forms. Visible to GC and Ferrovial staff only.</div>
+        <button onClick={() => setShowNew(true)} className="text-[10px] font-bold uppercase px-2.5 py-1.5 rounded-sm flex-shrink-0 ml-2" style={{ background: GOLD, color: INK, ...SR_MONO }}>+ New</button>
+      </div>
+
+      {showNew && (
+        <div className="bg-white rounded-md p-3 border mb-3" style={{ borderColor: "#E4E2DA" }}>
+          <div className="text-[11px] uppercase font-bold mb-2" style={lab}>New safety report</div>
+          <div className="grid grid-cols-2 gap-2">
+            <div><label className="text-[10px] uppercase font-bold" style={lab}>Date</label><input type="date" value={nw.date} onChange={(e) => setNw({ ...nw, date: e.target.value })} className={inp} style={bd} /></div>
+            <div><label className="text-[10px] uppercase font-bold" style={lab}>Time</label><input type="time" value={nw.time} onChange={(e) => setNw({ ...nw, time: e.target.value })} className={inp} style={bd} /></div>
+            <div><label className="text-[10px] uppercase font-bold" style={lab}>Where</label><select value={nw.area} onChange={(e) => setNw({ ...nw, area: e.target.value })} className={inp} style={bd}><option value="">Select…</option>{areas.map((a) => <option key={a} value={a}>{a}</option>)}</select></div>
+            <div><label className="text-[10px] uppercase font-bold" style={lab}>Type of incident</label><select value={nw.type} onChange={(e) => setNw({ ...nw, type: e.target.value })} className={inp} style={bd}><option value="">Select…</option>{SR_TYPES.map((a) => <option key={a} value={a}>{a}</option>)}</select></div>
+          </div>
+          <label className="text-[10px] uppercase font-bold block mt-2" style={lab}>Short title</label>
+          <input value={nw.title} onChange={(e) => setNw({ ...nw, title: e.target.value })} placeholder="For example: Struck by TMA hit" className={inp} style={bd} />
+          {err && <div className="text-[12px] mt-2" style={{ color: ALERT }}>{err}</div>}
+          <div className="flex gap-2 mt-3">
+            <button disabled={creating || !nw.date || !nw.type} onClick={create} className="flex-1 text-[11px] font-bold uppercase py-2.5 rounded-sm disabled:opacity-40" style={{ background: GOLD, color: INK, ...SR_MONO }}>{creating ? "Starting…" : "Start report"}</button>
+            <button onClick={() => setShowNew(false)} className="flex-1 text-[11px] font-bold uppercase py-2.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, ...SR_MONO }}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-3 gap-2 mb-1">
+        {stat.map(([k, v]) => (
+          <div key={k} className="bg-white rounded-md border p-2 text-center" style={{ borderColor: "#E4E2DA" }}>
+            <div className="text-[20px] leading-none" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{v}</div>
+            <div className="text-[9px] uppercase mt-1" style={lab}>{k}</div>
+          </div>
+        ))}
+      </div>
+      <div className="text-[10px] mb-3" style={{ color: STEEL }}>{year} year to date (Open is all open cases).</div>
+
+      <div className="flex gap-1.5 mb-2 flex-wrap">
+        {["All", "SIF", "HiPo", "Recordable", "Lost time", "Near miss"].map((f) => (
+          <button key={f} onClick={() => setFilter(f)} className="px-2.5 py-1.5 text-[10px] font-bold uppercase rounded-sm border" style={chip(filter === f)}>{f}</button>
+        ))}
+      </div>
+      <div className="flex gap-1.5 mb-2">
+        {["All", "Open", "Investigating", "Closed"].map((f) => (
+          <button key={f} onClick={() => setStatus(f)} className="flex-1 py-1.5 text-[10px] font-bold uppercase rounded-sm border" style={chip(status === f)}>{f}</button>
+        ))}
+      </div>
+      <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search case #, title, location or company" className="w-full mb-3 rounded-md border px-2.5 py-1.5 text-[13px]" style={bd} />
+      {loading && <div className="text-[12px]" style={{ color: STEEL }}>Loading…</div>}
+      <div className="space-y-2">
+        {shown.map((c) => {
+          const label = srClassLabel(c); const col = srClassColor(label);
+          return (
+            <button key={c.id} onClick={() => setRoute({ name: "case", id: c.id })} className="w-full text-left bg-white rounded-md p-3 border flex items-center gap-2" style={{ borderColor: "#E4E2DA" }}>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[10px] font-bold" style={{ color: GOLD, ...SR_MONO }}>{c.case_number}</span>
+                  <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-sm" style={{ background: col.bg, color: col.fg, ...SR_MONO }}>{label}</span>
+                  <span className="text-[9px] uppercase" style={lab}>{c.status}</span>
+                </div>
+                <div className="text-[14px] truncate" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{c.title || c.incident_type || "Untitled event"}</div>
+                <div className="text-[11px]" style={{ color: STEEL }}>{[c.incident_date ? fmtD(c.incident_date) : "", c.area, c.incident_type].filter(Boolean).join(" · ")}</div>
+              </div>
+              <div className="text-center flex-shrink-0">
+                <div className="text-[16px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{c.submitted_count}/{c.form_count}</div>
+                <div className="text-[9px] uppercase" style={{ color: STEEL }}>forms</div>
+              </div>
+              <ChevronRight size={16} color={STEEL} />
+            </button>
+          );
+        })}
+        {!loading && shown.length === 0 && <div className="text-[12px] text-center py-8" style={{ color: STEEL }}>{cases.length ? "No reports match these filters." : "No safety reports yet. Tap + New to start one."}</div>}
+      </div>
+    </div>
+  );
+}
+
 function MeetingsScreen({ user, activeProjectId }) {
+  const [tab, setTab] = useState("sheets");
+  const [openMeetingId, setOpenMeetingId] = useState(null);
+  if (!user || !user.canViewMeetings) {
+    return <div className="px-4 pt-10 text-center text-[12px]" style={{ color: STEEL }}>Sign In Sheets and Safety Reports are only available to Ferrovial and general contractor staff on this project.</div>;
+  }
+  const tabBtn = (k, label) => (
+    <button onClick={() => { setTab(k); if (k === "sheets") setOpenMeetingId(null); }} className="flex-1 py-2.5 text-[11px] font-bold uppercase" style={{ background: tab === k ? INK : "white", color: tab === k ? GOLD : STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{label}</button>
+  );
+  return (
+    <div style={{ background: "#F4F3EF", minHeight: "100%" }}>
+      <div className="px-4 pt-4"><div className="flex rounded-md overflow-hidden border" style={{ borderColor: "#C9C6BC" }}>{tabBtn("sheets", "Sign-In Sheets")}{tabBtn("reports", "Safety Reports")}</div></div>
+      {tab === "sheets"
+        ? <MeetingsSheetsPanel key={openMeetingId || "list"} user={user} activeProjectId={activeProjectId} initialOpenId={openMeetingId} />
+        : <SafetyReportsPanel user={user} activeProjectId={activeProjectId} onOpenMeeting={(id) => { setOpenMeetingId(id); setTab("sheets"); }} />}
+    </div>
+  );
+}
+
+function MeetingsSheetsPanel({ user, activeProjectId, initialOpenId }) {
   const token = user && user.sessionToken;
   const canEdit = !!(user && user.canViewMeetings); // create, edit, close, add attendees
   const canDelete = !!(user && (user.canAddPersonnel || user.isHubAdmin)); // delete sheets / remove people
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [openId, setOpenId] = useState(null);
+  const [openId, setOpenId] = useState(initialOpenId || null);
   const [detail, setDetail] = useState(null);
   const [showNew, setShowNew] = useState(false);
   const [editing, setEditing] = useState(false);
