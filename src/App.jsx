@@ -401,7 +401,7 @@ const QUARTERLY_MONTHLY_PROJECTS = ["nti-sylvania", "nti-golden-triangle"];
 // The six designation forms (Competent Person, Equipment Operator, Crane Operator,
 // A/D Director, Crane Qualified Person, Flagger) carry the Sylvania project logo.
 // Add "sh99-houston" here once the Houston versions of the templates are uploaded.
-const DESIGNATION_FORM_PROJECTS = ["nti-sylvania", "nti-golden-triangle"];
+const DESIGNATION_FORM_PROJECTS = ["nti-sylvania", "nti-golden-triangle", "sh99-houston", "nashville"];
 
 // Period choices carry no year - the submission date supplies the year.
 // ---- Date display: always MM/DD/YYYY (timestamps shown in Central time) ----
@@ -2560,7 +2560,7 @@ function renderFormTextBlock(b, key, ackChecked, setAckChecked, tokens) {
   );
 }
 
-function PreOrientationFormStep({ form, projectId, activeProjectId, scheduleId, defaultSubcontractor, stepLabel, onDone }) {
+function PreOrientationFormStep({ form, projectId, activeProjectId, scheduleId, defaultSubcontractor, stepLabel, onDone, prefillValues }) {
   const { notifyEmail } = useContext(ProjectContext);
   const [values, setValues] = useState(() => {
     const initial = (form.fields || []).map(() => "");
@@ -2962,11 +2962,12 @@ function OrientationScheduleScreen({ activeProjectId }) {
       designations.needs_flagger ? "Flagger Designation" : null,
     ].filter(Boolean);
 
-    const queue = [{ form: ORIENTATION_FORMS_DEFAULT.find((f) => f.title === "Drug Screen Affidavit" && (!f.projects || f.projects.includes(activeProjectId))), personIndex: null }];
+    const queue = [];
+    const drugForm = ORIENTATION_FORMS_DEFAULT.find((f) => f.title === "Drug Screen Affidavit" && (!f.projects || f.projects.includes(resolvedProjectId)));
+    if (drugForm) queue.push({ form: drugForm, personIndex: null });
     perPersonTitles.forEach((title) => {
-      const formDef = ORIENTATION_FORMS_DEFAULT.find((f) => f.title === title && (!f.projects || f.projects.includes(activeProjectId)));
+      const formDef = ORIENTATION_FORMS_DEFAULT.find((f) => f.title === title && (!f.projects || f.projects.includes(resolvedProjectId)));
       if (!formDef) return;
-      if (formDef.projects && !formDef.projects.includes(activeProjectId)) return;
       for (let p = 1; p <= n; p++) {
         queue.push({ form: formDef, personIndex: n > 1 ? p : null });
       }
@@ -6837,6 +6838,7 @@ const ORIENTATION_FORMS_DEFAULT = [
         signatureLabels: ["EMPLOYEE ACKNOWLEDGEMENT OF THIS DESIGNATION", "AUTHORIZED CONTRACTOR REPRESENTATIVE"],
         description: "Designates an employee as a Qualified Person for crane-related duties (Rigger, Signal Person, or Maintenance and Repair Employee) on-site, based on their degree, certification, or demonstrated knowledge, training, and experience.",
         pdfLink: cfg.links ? cfg.links["Crane-Specific Qualified Person Designation"] : B + cfg.file + "-crane-specific-qualified-person-designation.pdf",
+        requiresProof: true, proofLabel: "Qualification Documents (certificates, evaluations, training records)", proofRequired: false,
         fields: [...repEmp, "Option 1 - Name of Third Party", "Option 1 - Name of Qualified Evaluator", "Option 2 - Name of Qualified Evaluator (CONTRACTOR)"],
         trailingFieldLabels: ["Option 1 - Name of Third Party", "Option 1 - Name of Qualified Evaluator", "Option 2 - Name of Qualified Evaluator (CONTRACTOR)"],
         textBlocks: [
