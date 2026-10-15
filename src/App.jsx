@@ -6728,6 +6728,7 @@ const ORIENTATION_FORMS_DEFAULT = [
         genericPdfLongFields: ["Employee Names Passing Drug Screen (one per line)"],
         bigTextFields: ["Employee Names Passing Drug Screen (one per line)"],
         prefillNameFields: ["Contact Name"],
+        unlockedNameFields: ["Contact Name"],
         textBlocks: [
           { at: "top", plain: true, text: "RE: Project: " + cfg.drugProj + " – Drug Screen - Safety/Environment Orientation" },
           { at: "top", plain: true, text: "This letter is to confirm that the following {company} employees have successfully passed their drug screen within the past 30 days." },
@@ -6742,7 +6743,7 @@ const ORIENTATION_FORMS_DEFAULT = [
         requiresProof: true, proofLabel: "Training / Certification Documents", proofRequired: false,
         fields: ["Authorized Representative Name", "Employee Name"],
         textBlocks: [
-          { at: "top", plain: true, text: "(TO BE COMPLETED AND SUBMITTED AT ORIENTATION)    PROJECT: " + cfg.projCP },
+          { at: "top", plain: true, text: "PROJECT: " + cfg.projCP },
           { at: "top", plain: true, text: "As an authorized representative of the above named “SUBCONTRACTOR”, I hereby appoint the above mentioned “EMPLOYEE” as a “COMPETENT PERSON” in the areas I have indicated below." },
           { at: "top", plain: true, text: "To clarify, the Occupational Safety and Health Administration (OSHA) defines a “COMPETENT PERSON” as “one who is capable of identifying existing and predictable hazards in the surroundings or working conditions which are unsanitary, hazardous, or dangerous to employees, AND who has authorization to take prompt corrective measures to eliminate them”. This can be fulfilled through training, qualification, experience, or a combination of them. Copies of the training documents are required to be attached and forwarded with this document to the " + cfg.compEmail + " or in person at the time of orientation." },
           { at: "end", ackCheck: "I acknowledge and agree to the statement above.", plain: true, text: "I understand that if at any point in the future this “EMPLOYEE” loses this designation, is terminated or is removed from the “PROJECT”, I will notify " + cfg.dept1 + "." },
@@ -9249,7 +9250,7 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
       const next = { ...v };
       nameLabels.forEach((l) => {
         const i = (form.fields || []).indexOf(l);
-        if (i !== -1 && (nameLocked || !next[i] || next[i] === prevNameRef.current)) next[i] = standardValues.name;
+        if (i !== -1 && ((nameLocked && !(form.unlockedNameFields || []).includes(l)) || !next[i] || next[i] === prevNameRef.current)) next[i] = standardValues.name;
       });
       coLabels.forEach((l) => {
         const i = (form.fields || []).indexOf(l);
@@ -9296,7 +9297,7 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
 
   // The Name (and any field that mirrors it) comes from the logged-in account and cannot be edited
   const nameLocked = !!(user && user.name);
-  const lockedNameLabels = nameLocked ? (form.prefillNameFields || []) : [];
+  const lockedNameLabels = nameLocked ? (form.prefillNameFields || []).filter((l) => !(form.unlockedNameFields || []).includes(l)) : [];
   const setStd = (key, val) => { if (key === "name" && nameLocked) return; setStandardValues((v) => ({ ...v, [key]: val })); };
   const setStepField = (stepIdx, fieldIdx, val) => {
     setStepValues((v) => ({ ...v, [stepIdx]: { ...(v[stepIdx] || {}), [fieldIdx]: val } }));
