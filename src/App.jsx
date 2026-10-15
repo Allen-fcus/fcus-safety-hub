@@ -2075,7 +2075,7 @@ function LaborLawScreen({ user, go, activeProjectId }) {
               <button onClick={() => setViewing(null)}><X size={18} color={STEEL} /></button>
             </div>
             {viewing.doc_link ? (
-              <iframe src={viewing.doc_link} className="flex-1 w-full" style={{ border: "none" }} title={viewing.title} />
+              <PdfFrame link={viewing.doc_link} title={viewing.title} />
             ) : (
               <div className="flex-1 flex items-center justify-center" style={{ color: STEEL }}>No file uploaded yet.</div>
             )}
@@ -9227,6 +9227,19 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
   const signature2CanvasRef = useRef(null);
   const personGroups = form.personSignatures || [];
   const [ackChecked, setAckChecked] = useState(false);
+  useEffect(() => {
+    if (!form.computedFields) return;
+    setValues((v) => {
+      const n = { ...v }; let changed = false;
+      Object.entries(form.computedFields).forEach(([lab, srcs]) => {
+        const idx = (form.fields || []).indexOf(lab);
+        const sum = srcs.reduce((a, sl) => a + (parseFloat(v[(form.fields || []).indexOf(sl)]) || 0), 0);
+        const str = String(Math.round(sum * 100) / 100);
+        if (n[idx] !== str) { n[idx] = str; changed = true; }
+      });
+      return changed ? n : v;
+    });
+  }, [values]);
   const contactDefs = form.contactGroups || [];
   const [contactMap, setContactMap] = useState({});
   const contactRowsFor = (gi) => contactMap[gi] || Array.from({ length: contactDefs[gi].startRows || 1 }, () => ({ name: "", phone: "", email: "" }));
@@ -9957,6 +9970,21 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
           {(form.fields || []).map((f, i) => {
             if ((form.trailingFieldLabels || []).includes(f)) return null;
             if (personGroups.some((g) => g.field === f)) return null;
+            if (form.computedFields && form.computedFields[f]) return (
+              <div key={i}>
+                <label className="text-[11px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{f}</label>
+                <div className="mt-1 rounded-md border px-3 py-2 text-[18px] font-bold" style={{ borderColor: GOLD, background: "#FFFBEA", color: INK, fontFamily: "IBM Plex Mono, monospace" }}>{values[i] || "0"}</div>
+                <div className="text-[10px] mt-1" style={{ color: STEEL }}>Calculated automatically: {form.computedFields[f].join(" + ")}</div>
+              </div>
+            );
+            if ((form.numberFields || []).includes(f)) return (
+              <div key={i}>
+                <label className="text-[11px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{f}</label>
+                <input type="text" inputMode="decimal" value={values[i] || ""} placeholder="0"
+                  onChange={(e) => { const c = e.target.value.replace(/[^0-9.]/g, "").replace(/(\..*)\./g, "$1"); setValues((v) => ({ ...v, [i]: c })); }}
+                  className="w-full mt-1 rounded-md border px-2.5 py-1.5 text-[14px]" style={{ borderColor: "#C9C6BC" }} />
+              </div>
+            );
             return (
               <div key={i}>
                 {tr && f === tr.numberField && (
@@ -13216,6 +13244,28 @@ const PRECONSTRUCTION_FILLABLE_FORMS = {
     // Man Hour report template later.
     projects: ["nti-sylvania", "nti-golden-triangle"],
     fields: ["Month", "Number of Male Employees", "Number of Female Employees", "Male Hours Worked", "Female Hours Worked"],
+    projectOverrides: {
+      // FCW24: redesigned fillable (generic PDF) with automatic totals
+      nashville: {
+        projects: ["nashville"],
+        pdfLink: "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/fcw24-man-hour-report.pdf",
+        pdfFillTemplate: "generic-form-pdf",
+        genericPdfNeutral: true,
+        allFieldsRequired: true,
+        submitEmail: "agarcia@ferrovial.us,mmaldonado@ferrovial.us",
+        signatureLabels: ["Approved By - Signature"],
+        fields: ["Month", "Number of Male Employees", "Number of Female Employees", "Total Employees", "Male Hours Worked", "Female Hours Worked", "Total Hours Worked", "Approved By"],
+        chipFields: { Month: { options: QM_MONTHS } },
+        numberFields: ["Number of Male Employees", "Number of Female Employees", "Male Hours Worked", "Female Hours Worked"],
+        computedFields: { "Total Employees": ["Number of Male Employees", "Number of Female Employees"], "Total Hours Worked": ["Male Hours Worked", "Female Hours Worked"] },
+        prefillNameFields: ["Approved By"],
+        textBlocks: [
+          { at: "top", emphasis: true, text: "FCW 24 - Monthly Man Hour Report" },
+          { at: "top", plain: true, text: "Ferrovial Construction-Webber 24 JV" },
+          { at: "end", emphasis: true, text: "*** Please submit report to ntisafety@ferrovial.us no later than the 5th of every month ***" },
+        ],
+      },
+    },
   },
 };
 
@@ -13326,7 +13376,7 @@ function PreConstructionScreen({ user, go, activeProjectId }) {
               <div className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{viewing.title}</div>
               <button onClick={() => setViewing(null)}><X size={18} color={STEEL} /></button>
             </div>
-            <iframe src={viewing.doc_link} className="flex-1 w-full" style={{ border: "none" }} title={viewing.title} />
+            <PdfFrame link={viewing.doc_link} title={viewing.title} />
           </div>
         </div>
       )}
@@ -13745,7 +13795,7 @@ function WeeklyReportScreen({ user, go, activeProjectId }) {
               <button onClick={() => setViewing(null)}><X size={18} color={STEEL} /></button>
             </div>
             {viewing.doc_link ? (
-              <iframe src={viewing.doc_link} className="flex-1 w-full" style={{ border: "none" }} title={viewing.title} />
+              <PdfFrame link={viewing.doc_link} title={viewing.title} />
             ) : (
               <div className="flex-1 flex items-center justify-center" style={{ color: STEEL }}>No file uploaded yet.</div>
             )}
@@ -14217,7 +14267,7 @@ function AppleWalletPreviewModal({ user, onClose }) {
             <div className="p-4">
               <div className="flex items-center justify-between mb-4">
                 <ProjectLogo projectId={proj.id} maxHeight={30} fallback={<div className="text-white text-[12px]">{proj.name}</div>} />
-                <div style={{ ...lab, textAlign: "right" }}>Crew Badge<div style={{ color: GOLD, fontSize: 14, fontFamily: "Oswald, sans-serif", textTransform: "none", letterSpacing: 0 }}>{user.badge}</div></div>
+                <div style={{ ...lab, textAlign: "right" }}>{badgeTitleFor(proj.id)}<div style={{ color: GOLD, fontSize: 14, fontFamily: "Oswald, sans-serif", textTransform: "none", letterSpacing: 0 }}>{user.badge}</div></div>
               </div>
               <div className="flex items-center gap-3 mb-3">
                 {user.photoUrl
@@ -14246,7 +14296,7 @@ function AppleWalletPreviewModal({ user, onClose }) {
                   <span className="text-[11px] flex-shrink-0" style={{ color: q.status === "expired" ? "#FF8A80" : q.status === "expiring" ? GOLD : "#9AD29A" }}>{q.expires_at ? `Exp ${String(q.expires_at).slice(0, 10)}` : q.status}</span>
                 </div>
               ))}
-              <div className="text-[10px] mt-4" style={{ color: "#8A8678" }}>Crew Badge issued through the FCUS Safety Hub. Scan the QR code on the front to open this badge online.</div>
+              <div className="text-[10px] mt-4" style={{ color: "#8A8678" }}>{badgeTitleFor(proj.id)} issued through the FCUS Safety Hub. Scan the QR code on the front to open this badge online.</div>
             </div>
           )}
         </div>
@@ -14257,6 +14307,175 @@ function AppleWalletPreviewModal({ user, onClose }) {
           This is a preview of how your badge will look in Apple Wallet. The real "Add" button turns on as soon as Apple approves our developer account.
         </div>
       </div>
+    </div>
+  );
+}
+
+// Badge name per project: "NTI Badge", "FCW99 Badge", "FCW24 Badge"
+function badgeTitleFor(slug) {
+  if (slug === "nti-sylvania" || slug === "nti-golden-triangle") return "NTI Badge";
+  if (slug === "sh99-houston") return "FCW99 Badge";
+  if (slug === "nashville") return "FCW24 Badge";
+  return "Badge";
+}
+
+// ---- Downloadable badge (front + back images and a 2-page PDF) ----
+async function renderBadgeCanvases({ user, projectName, slug, groups }) {
+  const W = 900, H = 1400;
+  try { if (document.fonts && document.fonts.ready) await document.fonts.ready; } catch (e) { /* ignore */ }
+  const HEAD = "Oswald, 'Arial Narrow', Arial, sans-serif", MONO = "'IBM Plex Mono', 'Courier New', monospace", BODY = "Arial, Helvetica, sans-serif";
+  const loadImg = (src) => new Promise((res) => { const im = new Image(); im.crossOrigin = "anonymous"; im.onload = () => res(im); im.onerror = () => res(null); im.src = src; });
+  const qrImg = async (url) => { try { return await loadImg(await QRCode.toDataURL(url, { width: 600, margin: 1 })); } catch (e) { return null; } };
+  const mk = () => { const c = document.createElement("canvas"); c.width = W; c.height = H; return c; };
+  const rr = (ctx, x, y, w, h, r) => { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); };
+  const wrap = (ctx, text, maxW) => {
+    const out = []; let cur = "";
+    String(text || "").split(/\s+/).forEach((w) => { const t = cur ? cur + " " + w : w; if (ctx.measureText(t).width <= maxW || !cur) cur = t; else { out.push(cur); cur = w; } });
+    if (cur) out.push(cur);
+    return out;
+  };
+  const hazard = (ctx, y, h) => {
+    ctx.save(); ctx.beginPath(); ctx.rect(0, y, W, h); ctx.clip();
+    ctx.fillStyle = "#FAC705"; ctx.fillRect(0, y, W, h);
+    ctx.fillStyle = "#1a1a1a";
+    for (let x = -h; x < W + h; x += h * 1.6) { ctx.beginPath(); ctx.moveTo(x, y + h); ctx.lineTo(x + h * 0.8, y + h); ctx.lineTo(x + h * 1.8, y); ctx.lineTo(x + h, y); ctx.closePath(); ctx.fill(); }
+    ctx.restore();
+  };
+  const header = (ctx, sub, logo) => {
+    ctx.fillStyle = "#1a1a1a"; ctx.fillRect(0, 0, W, 170);
+    let tx = 50;
+    if (logo) { const sc = Math.min(300 / logo.width, 100 / logo.height); ctx.drawImage(logo, 50, 35 + (100 - logo.height * sc) / 2, logo.width * sc, logo.height * sc); tx = 380; }
+    ctx.fillStyle = "#FAC705"; ctx.font = `700 28px ${MONO}`; ctx.textAlign = tx === 50 ? "left" : "left";
+    ctx.fillText(String(projectName || "").toUpperCase().slice(0, 34), tx, 78);
+    ctx.fillStyle = "#fff"; ctx.font = `600 46px ${HEAD}`; ctx.fillText(sub, tx, 130);
+    hazard(ctx, 170, 22);
+  };
+  const footer = (ctx, text) => {
+    ctx.fillStyle = "#1a1a1a"; ctx.fillRect(0, H - 70, W, 70);
+    ctx.fillStyle = "#B7B3A6"; ctx.font = `400 22px ${BODY}`; ctx.textAlign = "center"; ctx.fillText(text, W / 2, H - 27); ctx.textAlign = "left";
+  };
+  const logoSrc = PROJECT_LOGOS[slug] && PROJECT_LOGOS[slug].src;
+  const logo = logoSrc ? await loadImg(logoSrc) : null;
+  const verifyUrl = badgeVerifyLink(slug, user.verifyToken);
+  const siteUrl = `${window.location.origin}${window.location.pathname}?project=${slug}`;
+  const [vQr, sQr] = await Promise.all([qrImg(verifyUrl), qrImg(siteUrl)]);
+  let photo = null;
+  if (user.photoUrl) {
+    try { const b = await (await fetch(user.photoUrl)).blob(); photo = await loadImg(URL.createObjectURL(b)); } catch (e) { photo = null; }
+  }
+
+  // ---------- FRONT ----------
+  const front = mk(); let c = front.getContext("2d");
+  c.fillStyle = "#fff"; c.fillRect(0, 0, W, H);
+  header(c, badgeTitleFor(slug).toUpperCase(), logo);
+  const cx = W / 2, cy = 372, pr = 130;
+  c.save(); c.beginPath(); c.arc(cx, cy, pr, 0, Math.PI * 2); c.clip();
+  if (photo) { const s = Math.max(pr * 2 / photo.width, pr * 2 / photo.height); c.drawImage(photo, cx - photo.width * s / 2, cy - photo.height * s / 2, photo.width * s, photo.height * s); }
+  else { c.fillStyle = "#FAC705"; c.fillRect(cx - pr, cy - pr, pr * 2, pr * 2); c.fillStyle = "#1a1a1a"; c.font = `600 120px ${HEAD}`; c.textAlign = "center"; c.fillText(String(user.name || "").split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase(), cx, cy + 42); c.textAlign = "left"; }
+  c.restore();
+  c.lineWidth = 8; c.strokeStyle = "#FAC705"; c.beginPath(); c.arc(cx, cy, pr + 4, 0, Math.PI * 2); c.stroke();
+  c.textAlign = "center"; c.fillStyle = "#1a1a1a"; c.font = `700 62px ${HEAD}`;
+  let y = 570; wrap(c, user.name, W - 100).slice(0, 2).forEach((ln) => { c.fillText(ln, cx, y); y += 66; });
+  c.fillStyle = "#5C6670"; c.font = `400 34px ${BODY}`; if (user.role) { c.fillText(user.role, cx, y); y += 46; }
+  if (user.employer) { c.fillStyle = "#1a1a1a"; c.font = `700 36px ${BODY}`; wrap(c, user.employer, W - 100).slice(0, 1).forEach((ln) => { c.fillText(ln, cx, y); y += 46; }); }
+  c.textAlign = "left";
+  y += 6;
+  const boxes = [["BADGE", user.badge], ["ID", user.empId], ["ORIENTATION", user.orientationDate]].filter((b) => b[1]);
+  const bw = (W - 100 - (boxes.length - 1) * 16) / Math.max(boxes.length, 1);
+  boxes.forEach((b, i) => {
+    const bx = 50 + i * (bw + 16);
+    c.fillStyle = "#F4F3EF"; rr(c, bx, y, bw, 96, 12); c.fill();
+    c.fillStyle = "#5C6670"; c.font = `700 20px ${MONO}`; c.fillText(b[0], bx + 16, y + 32);
+    c.fillStyle = "#1a1a1a"; c.font = `700 32px ${BODY}`; c.fillText(String(b[1]).slice(0, 14), bx + 16, y + 74);
+  });
+  y += 146;
+  const quals = (user.quals || []).slice(0, 3);
+  if (quals.length) {
+    c.fillStyle = "#5C6670"; c.font = `700 22px ${MONO}`; c.fillText("DESIGNATIONS", 50, y); y += 14;
+    quals.forEach((q) => {
+      const col = q.status === "expired" ? "#C62828" : q.status === "expiring" ? "#B7791F" : "#2E7D32";
+      c.fillStyle = col; rr(c, 50, y + 8, 14, 40, 6); c.fill();
+      c.fillStyle = "#1a1a1a"; c.font = `700 26px ${BODY}`; c.fillText(String(q.label).slice(0, 25), 78, y + 34);
+      if (q.expires_at) { c.fillStyle = "#5C6670"; c.font = `400 20px ${BODY}`; c.textAlign = "right"; c.fillText("Exp " + String(q.expires_at).slice(0, 10), W - 290, y + 34); c.textAlign = "left"; }
+      y += 52;
+    });
+    if ((user.quals || []).length > 3) { c.fillStyle = "#5C6670"; c.font = `400 22px ${BODY}`; c.fillText(`+ ${(user.quals || []).length - 3} more - see back`, 78, y + 16); }
+  }
+  if (vQr) { const qs = 220; c.fillStyle = "#fff"; c.drawImage(vQr, W - 50 - qs, H - 70 - qs - 24, qs, qs); c.fillStyle = "#1a1a1a"; c.font = `700 26px ${HEAD}`; c.fillText("SCAN TO VERIFY", 50, H - 70 - 110); c.fillStyle = "#5C6670"; c.font = `400 22px ${BODY}`; c.fillText("Opens this badge, designations", 50, H - 70 - 76); c.fillText("and certifications online.", 50, H - 70 - 48); }
+  footer(c, "Issued through the FCUS Safety Hub");
+
+  // ---------- BACK ----------
+  const back = mk(); c = back.getContext("2d");
+  c.fillStyle = "#fff"; c.fillRect(0, 0, W, H);
+  header(c, "SAFETY INFO", logo);
+  y = 250;
+  c.fillStyle = "#C62828"; c.font = `700 24px ${MONO}`; c.fillText("EMERGENCY CONTACTS", 50, y); y += 14;
+  const gl = (groups || []).slice(0, 5);
+  if (!gl.length) { c.fillStyle = "#5C6670"; c.font = `400 24px ${BODY}`; c.fillText("See the Safety Hub for current emergency contacts.", 50, y + 34); y += 50; }
+  gl.forEach((g) => {
+    c.fillStyle = "#5C6670"; c.font = `700 20px ${MONO}`; c.fillText(String(g.department).toUpperCase().slice(0, 40), 50, y + 30); y += 36;
+    g.people.slice(0, 3).forEach((p) => {
+      c.fillStyle = "#1a1a1a"; c.font = `400 26px ${BODY}`; c.fillText(String(p.name || "-").slice(0, 26), 50, y + 28);
+      c.font = `700 26px ${BODY}`; c.textAlign = "right"; c.fillText(p.phone || "pending", W - 50, y + 28); c.textAlign = "left"; y += 36;
+    });
+    c.strokeStyle = "#E4E2DA"; c.lineWidth = 2; c.beginPath(); c.moveTo(50, y + 6); c.lineTo(W - 50, y + 6); c.stroke(); y += 10;
+  });
+  y += 24;
+  const all = (user.quals || []);
+  if (all.length > 3 && y < 900) {
+    c.fillStyle = "#5C6670"; c.font = `700 22px ${MONO}`; c.fillText("ADDITIONAL DESIGNATIONS", 50, y); y += 10;
+    all.slice(3, 9).forEach((q) => { c.fillStyle = "#1a1a1a"; c.font = `700 24px ${BODY}`; c.fillText(String(q.label).slice(0, 34), 50, y + 32); if (q.expires_at) { c.fillStyle = "#5C6670"; c.font = `400 20px ${BODY}`; c.textAlign = "right"; c.fillText("Exp " + String(q.expires_at).slice(0, 10), W - 50, y + 32); c.textAlign = "left"; } y += 40; });
+  }
+  if (sQr) {
+    const qs = 300, qy = H - 70 - qs - 150;
+    c.fillStyle = "#F4F3EF"; rr(c, 50, qy - 20, W - 100, qs + 190, 18); c.fill();
+    c.drawImage(sQr, 80, qy, qs, qs);
+    c.fillStyle = "#1a1a1a"; c.font = `700 34px ${HEAD}`; c.fillText("PROJECT SAFETY HUB", 80 + qs + 30, qy + 70);
+    c.fillStyle = "#5C6670"; c.font = `400 24px ${BODY}`;
+    let ty = qy + 112; wrap(c, "Scan to open the " + (projectName || "project") + " site: documents, forms, training and orientation.", W - 100 - qs - 90).forEach((ln) => { c.fillText(ln, 80 + qs + 30, ty); ty += 32; });
+    c.fillStyle = "#1a1a1a"; c.font = `400 20px ${MONO}`;
+    wrap(c, siteUrl.replace(/^https?:\/\//, ""), W - 160).slice(0, 2).forEach((ln, i) => c.fillText(ln, 80, qy + qs + 40 + i * 28));
+  }
+  footer(c, "Scan the QR on the front to verify this badge");
+  return { front, back };
+}
+
+async function downloadBadgeFiles(kind, { user, projectName, slug, groups }) {
+  const { front, back } = await renderBadgeCanvases({ user, projectName, slug, groups });
+  const safe = String(user.name || "badge").replace(/[^A-Za-z0-9]+/g, "_");
+  const save = (blob, name) => { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(() => URL.revokeObjectURL(a.href), 4000); };
+  const toBlob = (cv) => new Promise((r) => cv.toBlob(r, "image/png"));
+  if (kind === "front") { save(await toBlob(front), `${safe}_Badge_Front.png`); return; }
+  if (kind === "back") { save(await toBlob(back), `${safe}_Badge_Back.png`); return; }
+  const doc = await PDFDocument.create();
+  for (const cv of [front, back]) {
+    const img = await doc.embedPng(await (await toBlob(cv)).arrayBuffer());
+    const pg = doc.addPage([288, 448]);
+    pg.drawImage(img, { x: 0, y: 0, width: 288, height: 448 });
+  }
+  save(new Blob([await doc.save()], { type: "application/pdf" }), `${safe}_Badge.pdf`);
+}
+
+function BadgeDownloadButtons({ user, projectName, slug }) {
+  const groups = useProjectEmergencyContacts(slug);
+  const [busy, setBusy] = useState("");
+  const [err, setErr] = useState("");
+  const run = async (kind) => {
+    setBusy(kind); setErr("");
+    try { await downloadBadgeFiles(kind, { user, projectName, slug, groups }); } catch (e) { setErr("Could not create the badge file: " + (e.message || e)); }
+    setBusy("");
+  };
+  const btn = { fontFamily: "IBM Plex Mono, monospace" };
+  return (
+    <div className="w-full mt-2">
+      <button onClick={() => run("pdf")} disabled={!!busy} className="w-full flex items-center justify-center gap-2 rounded-sm py-2.5 text-[12px] font-bold disabled:opacity-50" style={{ background: GOLD, color: INK, fontFamily: "Oswald, sans-serif" }}>
+        <Download size={15} /> {busy === "pdf" ? "Creating…" : "Download Badge (PDF - front & back)"}
+      </button>
+      <div className="flex gap-2 mt-1.5">
+        <button onClick={() => run("front")} disabled={!!busy} className="flex-1 py-1.5 rounded-sm border text-[10px] font-bold uppercase disabled:opacity-50" style={{ ...btn, borderColor: "#C9C6BC", color: STEEL }}>{busy === "front" ? "…" : "Front (PNG)"}</button>
+        <button onClick={() => run("back")} disabled={!!busy} className="flex-1 py-1.5 rounded-sm border text-[10px] font-bold uppercase disabled:opacity-50" style={{ ...btn, borderColor: "#C9C6BC", color: STEEL }}>{busy === "back" ? "…" : "Back (PNG)"}</button>
+      </div>
+      {err && <div className="text-[10px] mt-1 text-center" style={{ color: ALERT }}>{err}</div>}
     </div>
   );
 }
@@ -14309,7 +14528,7 @@ function BadgeModal({ user, onClose, onLogout }) {
         <div style={{ background: INK }} className="p-4 flex items-center justify-between flex-shrink-0">
           <div>
             <div className="text-[9px] uppercase font-bold" style={{ color: AMBER, fontFamily: "IBM Plex Mono, monospace" }}>{projectName}</div>
-            <div className="text-white text-[12px]" style={{ fontFamily: "Oswald, sans-serif" }}>Digital Crew Badge</div>
+            <div className="text-white text-[12px]" style={{ fontFamily: "Oswald, sans-serif" }}>Digital {badgeTitleFor(projectIdForBadge)}</div>
           </div>
           <button onClick={onClose}><X size={18} color="white" /></button>
         </div>
@@ -14427,6 +14646,7 @@ function BadgeModal({ user, onClose, onLogout }) {
               >
                 <Wallet size={15} /> Add to Apple Wallet
               </button>
+              <BadgeDownloadButtons user={user} projectName={projectName} slug={projectIdForBadge} />
               {walletError && <div className="text-[10px] mt-1.5 text-center px-2 whitespace-pre-wrap break-words" style={{ color: ALERT }}>{walletError}</div>}
             </>
           )}
