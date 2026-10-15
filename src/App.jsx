@@ -2496,6 +2496,70 @@ const SCHEDULE_DESIGNATIONS = [
   { key: "needs_flagger", label: "Flagger" },
 ];
 
+function renderFormTextBlock(b, key, ackChecked, setAckChecked, tokens) {
+  const tk = (t) => String(t == null ? "" : t).replace(/\{company\}/g, (tokens && tokens.company) || "Company Name").replace(/\{phone\}/g, (tokens && tokens.phone) || "(000) 000-0000");
+  const inner = (
+    <>
+      {b.heading && <div className="text-[12px] font-bold mb-1" style={{ color: INK }}>{b.heading}</div>}
+      {b.text && <div className="text-[12px] leading-snug" style={{ color: "#333", fontWeight: b.emphasis ? 600 : 400 }}>{tk(b.text)}</div>}
+      {b.items && (
+        <ul className="mt-1 space-y-1 text-[12px] leading-snug" style={{ color: "#333", listStyle: "none", paddingLeft: 0 }}>
+          {flattenBlockItems(b.items).map((it, ii) => (
+            <li key={ii} className="flex gap-1.5" style={{ marginLeft: it.lvl ? 18 : 0 }}>
+              <span style={{ color: STEEL, minWidth: 8 }}>{/^([0-9]+|[a-z]|[IVX]+)\.\s/.test(it.t.trim()) ? "" : it.lvl ? "\u2013" : "\u2022"}</span><span>{it.t}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {b.rows && (
+        <div className="mt-1.5 rounded-md border overflow-hidden" style={{ borderColor: "#E4E2DA" }}>
+          {b.rows.map((r, ri) => (
+            <div key={ri} className="flex text-[11px] px-2 py-1" style={{ borderTop: ri ? "1px solid #E4E2DA" : "none" }}>
+              <div style={{ width: "30%" }}>{r[0]}</div><div style={{ width: "22%", fontWeight: 700 }}>{r[1]}</div><div style={{ width: "48%", color: STEEL }}>{r[2]}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      {b.qr && (
+        <a href={b.qr.url} target="_blank" rel="noreferrer" className="mt-2 block text-center text-[11px] font-bold uppercase py-2 rounded-sm" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>{b.qr.label}</a>
+      )}
+      {b.ackCheck && (
+        <label className="mt-2 flex items-start gap-2 rounded-md border-2 p-2 cursor-pointer" style={{ borderColor: ackChecked ? GOLD : "#C9C6BC", background: ackChecked ? "#FFFBEA" : "white" }}>
+          <input type="checkbox" checked={ackChecked} onChange={(e) => setAckChecked(e.target.checked)} style={{ width: 20, height: 20, marginTop: 1, accentColor: "#1a1a1a" }} />
+          <span className="text-[12px] font-bold" style={{ color: INK }}>{b.ackCheck}</span>
+        </label>
+      )}
+      {b.sigLines && (
+        <div className="mt-1 space-y-3">
+          {Array.from({ length: b.sigLines.count }, (_, n) => (
+            <div key={n} className="flex gap-2 text-[10px]" style={{ color: STEEL }}>
+              <div style={{ flex: 3, borderTop: "1px solid #999", paddingTop: 2 }}>Print</div>
+              <div style={{ flex: 3, borderTop: "1px solid #999", paddingTop: 2 }}>Signature</div>
+              <div style={{ flex: 2, borderTop: "1px solid #999", paddingTop: 2 }}>Date</div>
+            </div>
+          ))}
+          <div className="text-[10px]" style={{ color: STEEL }}>Signed on paper / by NTI at the safety orientation - not completed in the app.</div>
+        </div>
+      )}
+    </>
+  );
+  const boxStyle = { borderColor: "#E4E2DA", background: "#FCFCFA" };
+  if (b.title && (b.items || b.collapsible)) {
+    return (
+      <details key={key} open className="rounded-md border p-2.5" style={boxStyle}>
+        <summary className="text-[11px] uppercase font-bold cursor-pointer" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{b.title}</summary>
+        <div className="mt-1.5">{inner}</div>
+      </details>
+    );
+  }
+  return (
+    <div key={key} className="rounded-md border p-2.5" style={boxStyle}>
+      {b.title && <div className="text-[11px] uppercase font-bold mb-1" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{b.title}</div>}
+      {inner}
+    </div>
+  );
+}
+
 function PreOrientationFormStep({ form, projectId, activeProjectId, scheduleId, defaultSubcontractor, stepLabel, onDone }) {
   const { notifyEmail } = useContext(ProjectContext);
   const [values, setValues] = useState(() => {
@@ -2524,10 +2588,19 @@ function PreOrientationFormStep({ form, projectId, activeProjectId, scheduleId, 
   const [submitting, setSubmitting] = useState(false);
   const [pdfError, setPdfError] = useState("");
   const [error, setError] = useState("");
-  const todayStr = fmtD();
+  const [ackChecked, setAckChecked] = useState(false);
+  const { name: projNameCtx } = useContext(ProjectContext) || {};
+  const todayStr = fmtD(new Date());
 
   const setStatus = (gi, i, val) => setStatusValues((sv) => ({ ...sv, [gi]: { ...(sv[gi] || {}), [i]: val } }));
-  const setChoice = (gi, i) => setChoiceValues((cv) => ({ ...cv, [gi]: i }));
+  const setChoice = (gi, i) => setChoiceValues((cv) => {
+    const g = (form.choiceGroups || [])[gi];
+    if (g && g.multi) {
+      const cur = Array.isArray(cv[gi]) ? cv[gi] : [];
+      return { ...cv, [gi]: cur.includes(i) ? cur.filter((x) => x !== i) : [...cur, i].sort((x, y) => x - y) };
+    }
+    return { ...cv, [gi]: i };
+  });
   const getField = (label) => {
     const idx = (form.fields || []).indexOf(label);
     return idx === -1 ? "" : values[idx] || "";
@@ -2539,7 +2612,9 @@ function PreOrientationFormStep({ form, projectId, activeProjectId, scheduleId, 
     const lines = [`Subcontractor: ${defaultSubcontractor}`];
     (form.fields || []).forEach((label, i) => { if (values[i]) lines.push(`${label}: ${values[i]}`); });
     (form.choiceGroups || []).forEach((group, gi) => {
-      if (choiceValues[gi] !== undefined) lines.push(`${group.label}: ${group.items[choiceValues[gi]]}`);
+      const cv = choiceValues[gi];
+      if (Array.isArray(cv)) { if (cv.length) lines.push(`${group.label}: ${cv.map((k) => group.items[k]).join(", ")}`); }
+      else if (cv !== undefined) lines.push(`${group.label}: ${group.items[cv]}`);
     });
     (form.statusGroups || []).forEach((group, gi) => {
       group.items.forEach((item, i) => {
@@ -2589,6 +2664,23 @@ function PreOrientationFormStep({ form, projectId, activeProjectId, scheduleId, 
         });
         const blob = new Blob([filledBytes], { type: "application/pdf" });
         const path = `schedule-${scheduleId}-${Date.now()}-drug-screen.pdf`;
+        const { error: uploadError } = await supabase.storage.from("documents").upload(path, blob);
+        if (!uploadError) {
+          const { data: urlData } = supabase.storage.from("documents").getPublicUrl(path);
+          filledPdfUrl = urlData && urlData.publicUrl ? urlData.publicUrl : null;
+        }
+      } else if (form.pdfFillTemplate === "generic-form-pdf") {
+        const filledBytes = await buildGenericFormPdf({
+          form, slug: activeProjectId, projectName: projNameCtx || "", standardValues: { subcontractor: defaultSubcontractor, date: todayStr, name: employeeName || defaultSubcontractor },
+          fieldValues: values, choiceValues, statusValues: effectiveStatusValues, longFields: form.genericPdfLongFields, submittedAt: fmtSubmittedAt(new Date()),
+          photos: [], statusRefs: [], mediaCount: 0, linkRef: "", groupSigs: [], acknowledged: ackChecked, contactGroups: [],
+          signatures: [
+            { label: (form.signatureLabels && form.signatureLabels[0]) || "Signature", dataUrl: signatureCanvasRef.current ? signatureCanvasRef.current.toDataURL("image/png") : null },
+            ...(form.requiresTwoSignatures ? [{ label: (form.signatureLabels && form.signatureLabels[1]) || "Signature 2", dataUrl: signature2CanvasRef.current ? signature2CanvasRef.current.toDataURL("image/png") : null }] : []),
+          ],
+        });
+        const blob = new Blob([filledBytes], { type: "application/pdf" });
+        const path = `schedule-${scheduleId}-${Date.now()}-${String(form.title).replace(/[^a-zA-Z0-9]+/g, "-").toLowerCase()}.pdf`;
         const { error: uploadError } = await supabase.storage.from("documents").upload(path, blob);
         if (!uploadError) {
           const { data: urlData } = supabase.storage.from("documents").getPublicUrl(path);
@@ -2659,13 +2751,17 @@ function PreOrientationFormStep({ form, projectId, activeProjectId, scheduleId, 
 
   const canSubmit = !sigEmpty && !(form.requiresTwoSignatures && sig2Empty) && !submitting
     && !(form.requiresProof && form.proofRequired !== false && proofFiles.length === 0)
-    && !(form.requiresLogo && !logoFile);
+    && !(form.requiresLogo && !logoFile)
+    && !((form.textBlocks || []).some((b) => b.ackCheck) && !ackChecked);
+
+  const blocksAt = (at) => (form.textBlocks || []).filter((b) => (b.at || "before") === at).map((b, bi) => <div key={at + bi} className="mb-3">{renderFormTextBlock(b, "pb" + at + bi, ackChecked, setAckChecked, { company: defaultSubcontractor, phone: values[(form.fields || []).indexOf("Contact Phone")] })}</div>);
 
   return (
     <div className="bg-white rounded-md p-3 border" style={{ borderColor: "#E4E2DA" }}>
       <div className="text-[10px] uppercase font-bold mb-1" style={{ color: GOLD, fontFamily: "IBM Plex Mono, monospace" }}>{stepLabel}</div>
       <div className="text-[15px] mb-3" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{form.title}</div>
       <AboutForm form={form} />
+      {blocksAt("top")}
 
       {(form.fields || []).map((label, i) => {
         if ((form.trailingFieldLabels || []).includes(label)) return null;
@@ -2684,6 +2780,8 @@ function PreOrientationFormStep({ form, projectId, activeProjectId, scheduleId, 
         );
       })}
 
+      {blocksAt("before")}
+      {blocksAt("after")}
       {(form.choiceGroups || []).map((group, gi) => (
         <div key={gi} className="mb-3">
           <ChoiceGroup group={group} value={choiceValues[gi]} onChange={(i) => setChoice(gi, i)} />
@@ -2712,6 +2810,8 @@ function PreOrientationFormStep({ form, projectId, activeProjectId, scheduleId, 
           </div>
         );
       })}
+
+      {blocksAt("end")}
 
       {form.requiresLogo && (
         <div className="mb-3">
@@ -6581,196 +6681,25 @@ const FORMS_DEFAULT = [
 // the Orientation tab (not Forms & Templates), since they're only
 // relevant at the time someone goes through orientation.
 const ORIENTATION_FORMS_DEFAULT = [
-  {
-    title: "Drug Screen Affidavit",
-    projects: ["nti-sylvania", "nti-golden-triangle"],
-    description: "All individuals attending orientation are required to provide a valid Drug Screening Affidavit. The drug screen must have been completed within the last 30 days. A copy of the affidavit must be submitted to our team prior to attending orientation or bring at the time of orientation. Individuals who fail to provide an acceptable Drug Screening Affidavit before the class will not be permitted to attend orientation until the requirement is met.",
-    submitEmail: "ntisafety@ferrovial.us",
-    pdfLink: "https://drive.google.com/file/d/1VJD4Los8KrtSySBJhpETnOgYXgkxZi3d/preview",
-    pdfFillTemplate: "drug-screen-affidavit",
-    requiresLogo: true,
-    allFieldsRequired: true,
-    fields: [
-      "Company Address",
-      "Company City, State, ZIP",
-      "Recipient Name",
-      "Employee Names Passing Drug Screen (one per line)",
-      "Contact Name",
-      "Contact Phone",
-    ],
-  },
-  {
-    title: "Competent Person Designation",
-    projects: DESIGNATION_FORM_PROJECTS,
-    description: "This form designates an employee as a Competent Person for specific project safety activities. For this project, the designated employee must have OSHA 10 or OSHA 30 training. The subcontractor must identify the applicable areas, submit supporting training certifications, and obtain signatures from both the employee and an authorized representative. The form must be submitted before or during orientation and updated if the designation changes.",
-    submitEmail: "ntisafety@ferrovial.us",
-    pdfLink: "https://drive.google.com/file/d/10fduYw-32S9Hsleimwd7SV0YF1d2mGfs/preview",
-    pdfFillTemplate: "competent-person-designation",
-    requiresProof: true,
-    proofLabel: "Training Certification",
-    proofRequired: false,
-    proofRequiredIfChoiceMade: 0,
-    requiresTwoSignatures: true,
-    signatureLabels: ["Employee Signature", "Authorized Representative Signature"],
-    fields: [
-      "Employee Name",
-      "Authorized Representative Name",
-    ],
-    choiceGroups: [
-      { label: "Competent Person Fulfilled By", items: ["Training (Certification)", "Experience (Resume)", "Qualification (Diploma)"] },
-    ],
-    statusGroups: [
-      {
-        label: "Competent Person In The Following Areas",
-        options: ["Yes", "N/A"],
-        items: [
-          "Excavation", "Confined Space", "Ladder Inspection", "Traffic Control (Cert.)", "Scaffolds",
-          "Rigging Inspection (Cert.)", "Respiratory Protection", "Asbestos Abatement (Cert.)", "Fall Protection (Cert.)",
-          "Fire Extinguisher", "Flagging Work Zones (Cert.)", "Silica (Cert.)", "Aerial Lift (Cert.)", "Assured Grounding",
-          "OSHA 10 / OSHA 30 (Cert.)",
-        ],
-      },
-    ],
-  },
-  {
-    title: "Equipment Operator Designation",
-    projects: DESIGNATION_FORM_PROJECTS,
-    description: "All employees who will operate heavy equipment on-site are required to submit a completed Equipment Operator Designation Form prior to performing any equipment-related work. This form documents the employee's authorization to operate designated equipment. A current certification or license must be submitted along with this form for Skytrac, Forklift, Aerial Lift/Boom Lift, and Crane. Failure to provide the required documentation will result in the employee being restricted from operating equipment on-site until all requirements are met.",
-    submitEmail: "ntisafety@ferrovial.us",
-    pdfLink: "https://drive.google.com/file/d/1Kz6Cnt7HGyijnG1nmbA8dDuMkL0E85ao/preview",
-    pdfFillTemplate: "equipment-operator-designation",
-    requiresProof: true,
-    proofLabel: "Equipment Certifications",
-    proofRequired: false,
-    proofRequiredIfStatusYes: { groupIndex: 0, itemIndices: [0, 3, 6, 30] },
-    requiresTwoSignatures: true,
-    signatureLabels: ["Operator Signature", "Authorized Representative Signature"],
-    fields: ["Authorized Representative Name", "Employee Name", "Other Equipment (if applicable)"],
-    trailingFieldLabels: ["Other Equipment (if applicable)"],
-    statusGroups: [
-      {
-        label: "Qualified / Certified to Operate",
-        options: ["Yes", "N/A"],
-        note: "Aerial Man Lift, Forklift, Boom Lift, and Crane require a current certification or license to be uploaded above.",
-        items: [
-          "Aerial Man Lift", "Trackhoe", "Backhoe", "Forklift", "Skidsteer", "Excavator", "Boom Lift", "Mini Excavator",
-          "Skytrac", "Off Road Truck", "Water Truck", "Dozer", "Compactor", "Front End Loader", "Trencher",
-          "Sheep Foot Roller", "Motor Grader", "Scraper", "Scissor Lift", "Dump Truck", "Bore Machine", "Rock Hauler",
-          "Milling Machine", "Broom / Sweeper", "Shuttle Buggy", "Asphalt Paver", "Power Broom", "Lime Mixer",
-          "TMA", "Boat", "Crane", "Drill Rig",
-        ],
-      },
-    ],
-  },
-  {
-    title: "Crane Operator Designation",
-    projects: DESIGNATION_FORM_PROJECTS,
-    description: "All employees who will operate a crane on-site are required to submit a completed Crane Operator Designation Form prior to performing any crane-related work. In addition, a current crane operator certification must be submitted with the designation form. Certifications must be issued by an accredited third-party organization. Accepted certifications include the National Commission for the Certification of Crane Operators (NCCCO) and Crane Institute Certification (CIC). Employees who fail to provide the required designation form and supporting certification documentation will not be authorized to operate a crane on-site until all requirements have been met.",
-    submitEmail: "ntisafety@ferrovial.us",
-    pdfLink: "https://drive.google.com/file/d/1rjPvqSBAxQ1yy6Lp97v1K9aXPjCfVpZr/preview",
-    pdfFillTemplate: "crane-operator-designation",
-    requiresProof: true,
-    proofLabel: "Crane Operator Certification",
-    proofRequired: true,
-    allFieldsRequired: true,
-    requiresTwoSignatures: true,
-    signatureLabels: ["Operator Signature", "Authorized Representative Signature"],
-    fields: ["Authorized Representative Name", "Employee Name", "Name of Accredited Crane Organization (if applicable)"],
-    choiceGroups: [
-      { label: "Certification Option", items: ["Option 1: Certified by Accredited Organization (1926.1427(b))", "Interim Option: Phase-in (1926.1427(k))"] },
-    ],
-  },
-  {
-    title: "Assembly/Disassembly (A/D) Director Designation",
-    projects: DESIGNATION_FORM_PROJECTS,
-    description: "Designates an employee as the qualified Assembly/Disassembly Director responsible for overseeing crane assembly and disassembly operations on-site, as required before any A/D work begins.",
-    submitEmail: "ntisafety@ferrovial.us",
-    pdfLink: "https://drive.google.com/file/d/1KYz4Z8b8VeOvokEJ7FDMpB56LviSOZ-C/preview",
-    pdfFillTemplate: "crane-ad-director-designation",
-    requiresProof: true,
-    proofLabel: "Supporting Documentation",
-    proofRequired: false,
-    noteBelowProof: "This form needs to be completed along with a Competent Person Designation form as well.",
-    requiresTwoSignatures: true,
-    signatureLabels: ["Employee Signature", "Authorized Representative Signature"],
-    fields: ["Employee Name", "Authorized Representative Name"],
-    noteBelowFirstField: "An A/D Director is one who meets the criteria for both a Competent Person and a Qualified Person and is responsible for directing or performing crane assembly/disassembly (A/D) operations. The individual must meet the requirements of 29 CFR 1926.1404.",
-  },
-  {
-    title: "Crane-Specific Qualified Person Designation",
-    projects: DESIGNATION_FORM_PROJECTS,
-    description: "Designates an employee as a Qualified Person for crane-related duties (Rigger, Signal Person, or Maintenance and Repair Employee) on-site, based on their degree, certification, or demonstrated knowledge, training, and experience.",
-    submitEmail: "ntisafety@ferrovial.us",
-    pdfLink: "https://drive.google.com/file/d/1WwZVwYw8dsj2ncbnM5tXlCK4MqIzcPRm/preview",
-    pdfFillTemplate: "crane-qualified-person-designation",
-    requiresProof: true,
-    proofLabel: "Supporting Documentation",
-    proofRequired: false,
-    requiresTwoSignatures: true,
-    signatureLabels: ["Employee Signature", "Authorized Representative Signature"],
-    fields: [
-      "Authorized Representative Name",
-      "Employee Name",
-      "Name of Third Party (if applicable)",
-      "Name of Third Party Qualified Evaluator (if applicable)",
-      "Name of Contractor Qualified Evaluator (if applicable)",
-    ],
-    // These three sit right after the checklist below (rather than above
-    // it), so they visually land near the Signal Person / Option 1 /
-    // Option 2 items they actually relate to.
-    trailingFieldLabels: [
-      "Name of Third Party (if applicable)",
-      "Name of Third Party Qualified Evaluator (if applicable)",
-      "Name of Contractor Qualified Evaluator (if applicable)",
-    ],
-    statusGroups: [
-      {
-        label: "Position(s) of Responsibility Qualified For",
-        options: ["Yes", "N/A"],
-        items: [
-          "Rigger", "Signal Person (§ 1926.1428)",
-          "Option 1 – Qualification by Third Party Qualified Evaluator",
-          "Option 2 – Qualification by Contractor Qualified Evaluator",
-          "Maintenance and Repair Employee (§ 1926.1429)",
-        ],
-      },
-    ],
-  },
-  {
-    title: "Flagger Designation",
-    projects: DESIGNATION_FORM_PROJECTS,
-    description: "Designates an employee as a certified flagger authorized to direct traffic on this project. Certification must be issued by a TX DOT-approved organization or a certified flagging instructor.",
-    submitEmail: "ntisafety@ferrovial.us",
-    pdfLink: "https://drive.google.com/file/d/12bJ5Beb7Yv5iMdZAsfYCSjJwH5JLIZSt/preview",
-    pdfFillTemplate: "flagger-designation",
-    requiresProof: true,
-    proofLabel: "Flagger Certification",
-    proofRequired: false,
-    requiresTwoSignatures: true,
-    signatureLabels: ["Employee Signature", "Authorized Representative Signature"],
-    fields: [
-      "Authorized Representative Name",
-      "Employee Name",
-      "Other Organization Name (if applicable)",
-      "Flagging Instructor Name (if applicable)",
-      "Instructor's Certifying Organization (if applicable)",
-    ],
-    // Renders right after the choice group below, so it lands visually
-    // next to the "Other Approved Organization" option it belongs to.
-    trailingFieldLabels: ["Other Organization Name (if applicable)"],
-    choiceGroups: [
-      { label: "Certification Organization", items: ["Texas Engineering Extension Service", "American Traffic Safety Services Association", "National Safety Council", "Other Approved Organization"] },
-    ],
-  },
   // ---------------- SH99 (FCW99) and FCW24 orientation forms — redesigned fillable (generic-form-pdf) ----------------
   // Every sentence of the original FCW99 form is rendered as a text block so it shows in both the fillable and the final PDF.
   ...[
-    { slug: "sh99-houston", file: "sh99", email: "sh99safety@ferrovial.us", projShort: "FCW99", projSp: "FCW 99", gc: "Ferrovial Construction-Webber 99 JV", compEmail: "SH99safety@ferrovial.us", dept1: "SH99 Safety Department", deptEq: "SH 99 Safety Department", deptCrane: "FCW 99 Safety Department", manual: "Ferrovial Construction-Webber 99 JV", drugProj: "Ferrovial Construction-Webber JV 99" },
-    { slug: "nashville", file: "fcw24", email: "agarcia@ferrovial.us,mmaldonado@ferrovial.us", projShort: "FCW 24", projSp: "FCW 24", gc: "Ferrovial Construction-Webber 24 JV", compEmail: "agarcia@ferrovial.us and mmaldonado@ferrovial.us", dept1: "FCW24 Safety Department", deptEq: "FCW 24 Safety Department", deptCrane: "FCW 24 Safety Department", manual: "Ferrovial Construction-Webber 24JV", drugProj: "Ferrovial Construction-Webber 24 JV" },
+    { projects: ["sh99-houston"], file: "sh99", email: "sh99safety@ferrovial.us", projShort: "FCW99", projSp: "FCW 99", gc: "Ferrovial Construction-Webber 99 JV", compEmail: "SH99safety@ferrovial.us", dept1: "SH99 Safety Department", deptEq: "SH 99 Safety Department", deptCrane: "FCW 99 Safety Department", manual: "Ferrovial Construction-Webber 99 JV", drugProj: "Ferrovial Construction-Webber JV 99" },
+    { projects: ["nashville"], file: "fcw24", email: "agarcia@ferrovial.us,mmaldonado@ferrovial.us", projShort: "FCW 24", projSp: "FCW 24", gc: "Ferrovial Construction-Webber 24 JV", compEmail: "agarcia@ferrovial.us and mmaldonado@ferrovial.us", dept1: "FCW24 Safety Department", deptEq: "FCW 24 Safety Department", deptCrane: "FCW 24 Safety Department", manual: "Ferrovial Construction-Webber 24JV", drugProj: "Ferrovial Construction-Webber 24 JV" },
+    { projects: ["nti-sylvania", "nti-golden-triangle"], file: "nti", email: "ntisafety@ferrovial.us", projShort: "NTE Sylvania", projSp: "NTI-CI Sylvania", gc: "North Tarrant Infrastructure, LLC", compEmail: "ntisafety@ferrovial.us", dept1: "NTI Safety Department", deptEq: "NTI Safety Department", deptCrane: "NTI Safety Department", manual: "North Tarrant Infrastructure", drugProj: "North Tarrant Infrastructure, LLC, Sylvania",
+      links: {
+        "Drug Screen Affidavit": "https://drive.google.com/file/d/1VJD4Los8KrtSySBJhpETnOgYXgkxZi3d/preview",
+        "Competent Person Designation": "https://drive.google.com/file/d/10fduYw-32S9Hsleimwd7SV0YF1d2mGfs/preview",
+        "Equipment Operator Designation": "https://drive.google.com/file/d/1Kz6Cnt7HGyijnG1nmbA8dDuMkL0E85ao/preview",
+        "Crane Operator Designation": "https://drive.google.com/file/d/1rjPvqSBAxQ1yy6Lp97v1K9aXPjCfVpZr/preview",
+        "Assembly/Disassembly (A/D) Director Designation": "https://drive.google.com/file/d/1KYz4Z8b8VeOvokEJ7FDMpB56LviSOZ-C/preview",
+        "Crane-Specific Qualified Person Designation": "https://drive.google.com/file/d/1WwZVwYw8dsj2ncbnM5tXlCK4MqIzcPRm/preview",
+        "Flagger Designation": "https://drive.google.com/file/d/12bJ5Beb7Yv5iMdZAsfYCSjJwH5JLIZSt/preview",
+      } },
   ].flatMap((cfg) => {
     const B = "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/";
     const common = {
-      projects: [cfg.slug],
+      projects: cfg.projects,
       genericPdfShowAllChoices: true,
       submitEmail: cfg.email,
       pdfFillTemplate: "generic-form-pdf",
@@ -6791,7 +6720,7 @@ const ORIENTATION_FORMS_DEFAULT = [
         ...common,
         title: "Drug Screen Affidavit",
         description: "All individuals attending orientation are required to provide a valid Drug Screening Affidavit. The drug screen must have been completed within the last 30 days. A copy of the affidavit must be submitted to our team prior to attending orientation or bring at the time of orientation. Individuals who fail to provide an acceptable Drug Screening Affidavit before the class will not be permitted to attend orientation until the requirement is met.",
-        pdfLink: B + cfg.file + "-drug-screen-affidavit-template.pdf",
+        pdfLink: cfg.links ? cfg.links["Drug Screen Affidavit"] : B + cfg.file + "-drug-screen-affidavit-template.pdf",
         requiresTwoSignatures: false,
         signatureLabels: ["Authorized Representative Signature"],
         allFieldsRequired: true,
@@ -6801,14 +6730,15 @@ const ORIENTATION_FORMS_DEFAULT = [
         prefillNameFields: ["Contact Name"],
         textBlocks: [
           { at: "top", plain: true, text: "RE: Project: " + cfg.drugProj + " – Drug Screen - Safety/Environment Orientation" },
-          { at: "top", plain: true, text: "This letter is to confirm that the following employees of the company named above have successfully passed their drug screen within the past 30 days. List names below." },
-          { at: "end", plain: true, text: "Please feel free to contact me at the phone number above if more information is needed. Sincerely," },
+          { at: "top", plain: true, text: "This letter is to confirm that the following {company} employees have successfully passed their drug screen within the past 30 days." },
+          { at: "end", plain: true, text: "Please feel free to contact me at {phone} if more information is needed. Sincerely," },
         ],
       },      {
         ...common,
         title: "Competent Person Designation",
+        signatureLabels: ["“EMPLOYEE” ACKNOWLEDGEMENT OF THIS DESIGNATION", "AUTHORIZED REPRESENTATIVE MAKING DESIGNATION"],
         description: "This form designates an employee as a Competent Person for specific project safety activities. For this project, the designated employee must have OSHA 10 or OSHA 30 training. The subcontractor must identify the applicable areas, submit supporting training certifications, and obtain signatures from both the employee and an authorized representative. The form must be submitted before or during orientation and updated if the designation changes.",
-        pdfLink: B + cfg.file + "-competent-person-designation.pdf",
+        pdfLink: cfg.links ? cfg.links["Competent Person Designation"] : B + cfg.file + "-competent-person-designation.pdf",
         requiresProof: true, proofLabel: "Training / Certification Documents", proofRequired: false,
         fields: ["Authorized Representative Name", "Employee Name"],
         textBlocks: [
@@ -6819,8 +6749,8 @@ const ORIENTATION_FORMS_DEFAULT = [
           submitAt("*** TO BE SUBMITTED PRIOR OR AT THE TIME OF ORIENTATION ***"),
         ],
         choiceGroups: [
-          { label: "Competent Person Fulfilled By (check one)", items: ["Training (Cert.)", "Experience (Resume)", "Qualification (Diploma)"] },
-          { label: "Competent Person in the Following Areas (select only those that apply)", multi: true, items: [
+          { label: "COMPETENT PERSON FULFILLED BY: (check one)", items: ["Training (Cert.)", "Experience (Resume)", "Qualification (Diploma)"] },
+          { label: "COMPETENT PERSON IN THE FOLLOWING AREAS - Please circle only those that apply (tap to select)", multi: true, items: [
             "A. EXCAVATION", "B. CONFINED SPACE", "C. LADDER INSPECTION", "D. TRAFFIC CONTROL (Cert.)", "E. SCAFFOLDS",
             "F. RIGGING INSPECTION (Cert.)", "G. RESPIRATORY PROTECTION", "H. ASBESTOS ABATEMENT (Cert.)", "I. FALL PROTECTION (Cert.)", "J. FIRE EXTINGUISHER",
             "K. FLAGGING WORK ZONES (Cert.)", "L. SILICA (Cert.)", "M. AERIAL LIFT (Cert.)", "N. ASSURED GROUNDING", "O. OSHA 10 / OSHA 30 (Cert)",
@@ -6830,8 +6760,9 @@ const ORIENTATION_FORMS_DEFAULT = [
       {
         ...common,
         title: "Equipment Operator Designation",
+        signatureLabels: ["“EMPLOYEE” ACKNOWLEDGEMENT OF THIS DESIGNATION", "AUTHORIZED “CONTRACTOR” REPRESENTATIVE"],
         description: "All employees who will operate heavy equipment on-site are required to submit a completed Equipment Operator Designation Form prior to performing any equipment-related work. This form documents the employee's authorization to operate designated equipment. A current certification or license must be submitted along with this form for Skytrac, Forklift, Aerial Lift/Boom Lift, and Crane. Failure to provide the required documentation will result in the employee being restricted from operating equipment on-site until all requirements are met.",
-        pdfLink: B + cfg.file + "-equipment-operator-designation.pdf",
+        pdfLink: cfg.links ? cfg.links["Equipment Operator Designation"] : B + cfg.file + "-equipment-operator-designation.pdf",
         requiresProof: true, proofLabel: "Operator Certification", proofRequired: false,
         fields: [...repEmp, "Other Equipment (if applicable)"],
         trailingFieldLabels: ["Other Equipment (if applicable)"],
@@ -6845,7 +6776,7 @@ const ORIENTATION_FORMS_DEFAULT = [
           submitAt("*** TO BE SUBMITTED PRIOR OR AT THE TIME OF ORIENTATION ***"),
         ],
         choiceGroups: [
-          { label: "Please select only those that apply for this project", multi: true, items: [
+          { label: "Please circle only those that apply for this project (tap to select)", multi: true, items: [
             "1. AERIAL MAN LIFT (Req. Cert)", "2. TRACKHOE", "3. BACKHOE", "4. FORKLIFT (Req. Cert)", "5. SKIDSTEER", "6. EXCAVATOR",
             "7. BOOM LIFT (Req. Cert)", "8. MINI EXCAVATOR", "9. SKYTRAC (Req. Cert)", "10. OFF ROAD TRUCK", "11. WATER TRUCK", "12. DOZER",
             "13. COMPACTOR", "14. FRONT END LOADER", "15. TRENCHER", "16. SHEEP FOOT ROLLER", "17. MOTOR GRADER", "18. SCRAPER",
@@ -6858,8 +6789,9 @@ const ORIENTATION_FORMS_DEFAULT = [
       {
         ...common,
         title: "Crane Operator Designation",
+        signatureLabels: ["“EMPLOYEE” ACKNOWLEDGEMENT OF THIS DESIGNATION", "AUTHORIZED “CONTRACTOR” REPRESENTATIVE"],
         description: "All employees who will operate a crane on-site are required to submit a completed Crane Operator Designation Form prior to performing any crane-related work. In addition, a current crane operator certification must be submitted with the designation form. Certifications must be issued by an accredited third-party organization. Accepted certifications include the National Commission for the Certification of Crane Operators (NCCCO) and Crane Institute Certification (CIC). Employees who fail to provide the required designation form and supporting certification documentation will not be authorized to operate a crane on-site until all requirements have been met.",
-        pdfLink: B + cfg.file + "-crane-operator-designation.pdf",
+        pdfLink: cfg.links ? cfg.links["Crane Operator Designation"] : B + cfg.file + "-crane-operator-designation.pdf",
         requiresProof: true, proofLabel: "Crane Operator Certification", proofRequired: false,
         fields: [...repEmp, "Name of Accredited Organization"],
         trailingFieldLabels: ["Name of Accredited Organization"],
@@ -6868,18 +6800,19 @@ const ORIENTATION_FORMS_DEFAULT = [
           appoint("an “OPERATOR” of a crane", "listed"),
           { at: "top", plain: true, text: "The " + cfg.manual + " Safety Manual requires certification for Crane Operators" },
           { at: "top", plain: true, text: "A certified “OPERATOR” is one who has completed a formal training program through an accredited operator testing organization and who has passed tests in both knowledge and skill for a particular type and capacity of equipment." },
-          { at: "end", title: "ACKNOWLEDGEMENT", ackCheck: "I acknowledge and agree to the statement above.", plain: true, text: "I, the Authorized “CONTRACTOR” Representative, understand that if at any point in the future this “EMPLOYEE” loses this certification, is terminated or is removed from the “PROJECT”, I will provide a written notification to the " + cfg.deptCrane + " within 2 business days." },
+          { at: "end", title: "ACKNOWLEGEMENT", ackCheck: "I acknowledge and agree to the statement above.", plain: true, text: "I, the Authorized “CONTRACTOR” Representative, understand that if at any point in the future this “EMPLOYEE” loses this certification, is terminated or is removed from the “PROJECT”, I will provide a written notification to the " + cfg.deptCrane + " within 2 business days." },
           submitAt(),
         ],
         choiceGroups: [
-          { label: "Crane Operator Certification", items: ["Interim Option: Phase-in (1926.1427 (k))", "Option 1: Certified by an Accredited Crane Operator Testing Organization (1926.1427(b))"] },
+          { label: "Crane Operator Certification", items: ["Interim Option: Phase-in (1926.1427 (k))", "Option 1: - Certified by an Accredited Crane Operator Testing Organization (1926.1427(b))"] },
         ],
       },
       {
         ...common,
         title: "Assembly/Disassembly (A/D) Director Designation",
+        signatureLabels: ["“EMPLOYEE” ACKNOWLEDGEMENT OF THIS DESIGNATION", "AUTHORIZED “CONTRACTOR” REPRESENTATIVE"],
         description: "Designates an employee as the qualified Assembly/Disassembly Director responsible for overseeing crane assembly and disassembly operations on-site, as required before any A/D work begins.",
-        pdfLink: B + cfg.file + "-crane-ad-director-designation.pdf",
+        pdfLink: cfg.links ? cfg.links["Assembly/Disassembly (A/D) Director Designation"] : B + cfg.file + "-crane-ad-director-designation.pdf",
         fields: repEmp,
         textBlocks: [
           header(true),
@@ -6895,8 +6828,9 @@ const ORIENTATION_FORMS_DEFAULT = [
       {
         ...common,
         title: "Crane-Specific Qualified Person Designation",
+        signatureLabels: ["EMPLOYEE ACKNOWLEDGEMENT OF THIS DESIGNATION", "AUTHORIZED CONTRACTOR REPRESENTATIVE"],
         description: "Designates an employee as a Qualified Person for crane-related duties (Rigger, Signal Person, or Maintenance and Repair Employee) on-site, based on their degree, certification, or demonstrated knowledge, training, and experience.",
-        pdfLink: B + cfg.file + "-crane-specific-qualified-person-designation.pdf",
+        pdfLink: cfg.links ? cfg.links["Crane-Specific Qualified Person Designation"] : B + cfg.file + "-crane-specific-qualified-person-designation.pdf",
         fields: [...repEmp, "Option 1 - Name of Third Party", "Option 1 - Name of Qualified Evaluator", "Option 2 - Name of Qualified Evaluator (CONTRACTOR)"],
         trailingFieldLabels: ["Option 1 - Name of Third Party", "Option 1 - Name of Qualified Evaluator", "Option 2 - Name of Qualified Evaluator (CONTRACTOR)"],
         textBlocks: [
@@ -6914,8 +6848,9 @@ const ORIENTATION_FORMS_DEFAULT = [
       {
         ...common,
         title: "Flagger Designation",
+        signatureLabels: ["“EMPLOYEE” ACKNOWLEDGEMENT OF THIS DESIGNATION", "AUTHORIZED “CONTRACTOR” REPRESENTATIVE"],
         description: "Designates an employee as a certified flagger authorized to direct traffic on this project. Certification must be issued by a TX DOT-approved organization or a certified flagging instructor.",
-        pdfLink: B + cfg.file + "-flagger-designation.pdf",
+        pdfLink: cfg.links ? cfg.links["Flagger Designation"] : B + cfg.file + "-flagger-designation.pdf",
         requiresProof: true, proofLabel: "Flagger Certification", proofRequired: false,
         fields: [...repEmp, "Other Approved Organization Name (if applicable)", "Instructor's Name (if applicable)", "Certifying Organization (if applicable)", "Date of Instructor's Certification (if applicable)"],
         trailingFieldLabels: ["Other Approved Organization Name (if applicable)"],
@@ -8312,6 +8247,8 @@ async function buildGenericFormPdf({ form, slug, projectName, standardValues, fi
     } catch (e) { /* QR optional */ }
   }
   // free-text blocks from the source document (statements, notes, tables, footers)
+  const tokPhone = fieldValues[(form.fields || []).indexOf("Contact Phone")] || "(000) 000-0000";
+  const tk = (t) => String(t == null ? "" : t).replace(/\{company\}/g, (standardValues && standardValues.subcontractor) || "Company Name").replace(/\{phone\}/g, tokPhone);
   const drawBlocks = (at) => (form.textBlocks || []).filter((b) => (b.at || "before") === at).forEach((b) => {
     if (b.title) {
       need(b.sigLines ? 30 + b.sigLines.count * 40 : 70);
@@ -8326,7 +8263,7 @@ async function buildGenericFormPdf({ form, slug, projectName, standardValues, fi
     }
     if (b.text) {
       const fnt = b.emphasis || (b.title && !b.rows && !b.items && !b.plain) ? sansB : sans;
-      const lines = wrap(b.text, fnt, 9.5, CW - 8);
+      const lines = wrap(tk(b.text), fnt, 9.5, CW - 8);
       lines.forEach((ln) => { need(14); page.drawText(ln, { x: M + 4, y: y - 10, size: 9.5, font: fnt, color: ink }); y -= 12.5; });
       y -= 6;
     }
@@ -9203,7 +9140,7 @@ function composePickText(p) {
 function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, onFollowUp }) {
   const { notifyEmail, id: activeProjectId, name: projName } = useContext(ProjectContext);
   const subcontractorOptions = useSubcontractors(activeProjectId);
-  const todayStr = fmtD();
+  const todayStr = fmtD(new Date());
   const [standardValues, setStandardValues] = useState({
     name: user?.name || "",
     subcontractor: user?.employer || "",
@@ -9285,68 +9222,7 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
     title: g.pdfTitle || g.heading.toUpperCase(),
     people: namedFor(gi).map((r) => { const ref = getCrewRef(`${gi}:${r.id}`); return { name: r.name.trim(), dataUrl: ref.current ? ref.current.toDataURL("image/png") : null }; }),
   }));
-  const renderTextBlock = (b, key) => {
-    const inner = (
-      <>
-        {b.heading && <div className="text-[12px] font-bold mb-1" style={{ color: INK }}>{b.heading}</div>}
-        {b.text && <div className="text-[12px] leading-snug" style={{ color: "#333", fontWeight: b.emphasis ? 600 : 400 }}>{b.text}</div>}
-        {b.items && (
-          <ul className="mt-1 space-y-1 text-[12px] leading-snug" style={{ color: "#333", listStyle: "none", paddingLeft: 0 }}>
-            {flattenBlockItems(b.items).map((it, ii) => (
-              <li key={ii} className="flex gap-1.5" style={{ marginLeft: it.lvl ? 18 : 0 }}>
-                <span style={{ color: STEEL, minWidth: 8 }}>{/^([0-9]+|[a-z]|[IVX]+)\.\s/.test(it.t.trim()) ? "" : it.lvl ? "\u2013" : "\u2022"}</span><span>{it.t}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-        {b.rows && (
-          <div className="mt-1.5 rounded-md border overflow-hidden" style={{ borderColor: "#E4E2DA" }}>
-            {b.rows.map((r, ri) => (
-              <div key={ri} className="flex text-[11px] px-2 py-1" style={{ borderTop: ri ? "1px solid #E4E2DA" : "none" }}>
-                <div style={{ width: "30%" }}>{r[0]}</div><div style={{ width: "22%", fontWeight: 700 }}>{r[1]}</div><div style={{ width: "48%", color: STEEL }}>{r[2]}</div>
-              </div>
-            ))}
-          </div>
-        )}
-        {b.qr && (
-          <a href={b.qr.url} target="_blank" rel="noreferrer" className="mt-2 block text-center text-[11px] font-bold uppercase py-2 rounded-sm" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>{b.qr.label}</a>
-        )}
-        {b.ackCheck && (
-          <label className="mt-2 flex items-start gap-2 rounded-md border-2 p-2 cursor-pointer" style={{ borderColor: ackChecked ? GOLD : "#C9C6BC", background: ackChecked ? "#FFFBEA" : "white" }}>
-            <input type="checkbox" checked={ackChecked} onChange={(e) => setAckChecked(e.target.checked)} style={{ width: 20, height: 20, marginTop: 1, accentColor: "#1a1a1a" }} />
-            <span className="text-[12px] font-bold" style={{ color: INK }}>{b.ackCheck}</span>
-          </label>
-        )}
-        {b.sigLines && (
-          <div className="mt-1 space-y-3">
-            {Array.from({ length: b.sigLines.count }, (_, n) => (
-              <div key={n} className="flex gap-2 text-[10px]" style={{ color: STEEL }}>
-                <div style={{ flex: 3, borderTop: "1px solid #999", paddingTop: 2 }}>Print</div>
-                <div style={{ flex: 3, borderTop: "1px solid #999", paddingTop: 2 }}>Signature</div>
-                <div style={{ flex: 2, borderTop: "1px solid #999", paddingTop: 2 }}>Date</div>
-              </div>
-            ))}
-            <div className="text-[10px]" style={{ color: STEEL }}>Signed on paper / by NTI at the safety orientation - not completed in the app.</div>
-          </div>
-        )}
-      </>
-    );
-    const boxStyle = { borderColor: "#E4E2DA", background: "#FCFCFA" };
-    if (b.title && (b.items || b.collapsible)) {
-      return (
-        <details key={key} open className="rounded-md border p-2.5" style={boxStyle}>
-          <summary className="text-[11px] uppercase font-bold cursor-pointer" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{b.title}</summary>
-          <div className="mt-1.5">{inner}</div>
-        </details>
-      );
-    }
-    return (
-      <div key={key} className="rounded-md border p-2.5" style={boxStyle}>
-        {b.title && <div className="text-[11px] uppercase font-bold mb-1" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{b.title}</div>}
-        {inner}
-      </div>
-    );
-  };
+  const renderTextBlock = (b, key) => renderFormTextBlock(b, key, ackChecked, setAckChecked, { company: standardValues.subcontractor, phone: values[(form.fields || []).indexOf("Contact Phone")] });
   const [pdfGenerating, setPdfGenerating] = useState(false);
   const [pdfGenerated, setPdfGenerated] = useState(false);
   const [pdfError, setPdfError] = useState("");
@@ -10423,7 +10299,7 @@ function UtilityPermitRenewals({ user, projectName, onClose }) {
   const [loading, setLoading] = useState(false);
   const [activeId, setActiveId] = useState(null);
   const [num, setNum] = useState("");
-  const [date, setDate] = useState(fmtD());
+  const [date, setDate] = useState(fmtD(new Date()));
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const form = resolveFormForProject(FORMS_DEFAULT.find((f) => f.title === "Utility Locate Permit"), modalProjectId);
@@ -10546,7 +10422,7 @@ function UtilityPermitRenewals({ user, projectName, onClose }) {
                   </div>
                 ) : (
                   <div className="flex gap-2 mt-2">
-                    <button onClick={() => { setActiveId(p.id); setNum(""); setDate(fmtD()); setMsg(""); }} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>Add {upLabel}</button>
+                    <button onClick={() => { setActiveId(p.id); setNum(""); setDate(fmtD(new Date())); setMsg(""); }} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>Add {upLabel}</button>
                     {p.filled_pdf_url && <button onClick={() => window.open(p.filled_pdf_url, "_blank")} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>View PDF</button>}
                   </div>
                 )}
