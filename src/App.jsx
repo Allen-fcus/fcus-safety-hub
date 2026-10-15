@@ -13337,6 +13337,12 @@ const FCW24_SAFETY_SUMMARY_BLOCKS = [
   { at: "end", text: "Those that fail to comply with these safety requirements are subject to permanent removal from the project. The worst consequence would be that you or others suffer an injury or worse cause a fatality because of failure to comply with safety requirements.", emphasis: true },
 ];
 
+// View/download-only documents with a fixed file per project (no fillable form).
+const PRECONSTRUCTION_STATIC_DOCS = {
+  "Work Plan Template": {
+    "nti-sylvania": "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/nti-work-plan-template.pdf",
+  },
+};
 const PRECONSTRUCTION_DOC_TITLES = ["Summary of Safety Requirements", "Emergency Contacts List", "Safety Questionnaire", "Man Hour Work Submittal", "Work Plan Template"];
 
 // Fixed, fill-and-sign templates — same pattern as any other form in
@@ -13793,7 +13799,7 @@ function PreConstructionScreen({ user, go, activeProjectId }) {
           }
 
           // Work Plan Template — each project uploads its own copy via Manage.
-          const doc = docByTitle(title);
+          const doc = (title === "Work Plan Template" && PRECONSTRUCTION_STATIC_DOCS[title] && PRECONSTRUCTION_STATIC_DOCS[title][activeProjectId]) ? { title, doc_link: PRECONSTRUCTION_STATIC_DOCS[title][activeProjectId] } : docByTitle(title);
           return (
             <div key={title} className="bg-white rounded-md p-3 border" style={{ borderColor: "#E4E2DA" }}>
               <div className="text-[14px] mb-2" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 500 }}>{title}</div>
