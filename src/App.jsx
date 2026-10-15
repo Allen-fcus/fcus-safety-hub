@@ -2800,6 +2800,9 @@ function PreOrientationFormStep({ form, projectId, activeProjectId, scheduleId, 
           <div key={`trailing-${i}`} className="mb-3">
             <label className="text-[10px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{label}</label>
             <FieldHint label={label} />
+            {form.chipFields && form.chipFields[label] ? (
+              <ChipSelect options={form.chipFields[label].options} multi={!!form.chipFields[label].multi} value={values[i] || ""} onChange={(val) => setValues((v) => v.map((x, idx) => (idx === i ? val : x)))} />
+            ) : (
             <textarea
               rows={1}
               value={values[i]}
@@ -2807,6 +2810,7 @@ function PreOrientationFormStep({ form, projectId, activeProjectId, scheduleId, 
               className="w-full mt-1 rounded-md border px-2.5 py-1.5 text-[13px]"
               style={{ borderColor: "#C9C6BC" }}
             />
+            )}
           </div>
         );
       })}
@@ -6796,6 +6800,7 @@ const ORIENTATION_FORMS_DEFAULT = [
         requiresProof: true, proofLabel: "Crane Operator Certification", proofRequired: false,
         fields: [...repEmp, "Name of Accredited Organization"],
         trailingFieldLabels: ["Name of Accredited Organization"],
+        chipFields: { "Name of Accredited Organization": { options: ["NCCCO", "CIC"] } },
         textBlocks: [
           header(true),
           appoint("an “OPERATOR” of a crane", "listed"),
@@ -10094,7 +10099,9 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
               <div key={`trailing-${i}`}>
                 <label className="text-[11px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{f}</label>
                 <FieldHint label={f} />
-                {(form.timeFields || []).includes(f) ? renderTimeInput(i) : (form.dateFields || []).includes(f) ? renderDateInput(i) : form.photoFields && form.photoFields[f] ? renderPhotoPicker(f) : (
+                {(form.timeFields || []).includes(f) ? renderTimeInput(i) : (form.dateFields || []).includes(f) ? renderDateInput(i) : form.photoFields && form.photoFields[f] ? renderPhotoPicker(f) : form.chipFields && form.chipFields[f] ? (
+                  <ChipSelect options={form.chipFields[f].options} multi={!!form.chipFields[f].multi} value={values[i] || ""} onChange={(val) => setValues((v) => ({ ...v, [i]: val }))} />
+                ) : (
                 <textarea
                   rows={(form.bigTextFields || []).includes(f) ? 5 : (f.length > 30 ? 2 : 1)}
                   placeholder={(form.bigTextHints || {})[f] || ((form.bigTextFields || []).includes(f) ? "Type here. Write \"None\" if there is nothing to add." : undefined)}
