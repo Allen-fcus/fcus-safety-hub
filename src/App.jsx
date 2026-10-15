@@ -4056,12 +4056,22 @@ async function downloadFromLink(link, fallbackName) {
   }
 }
 
+// Work plans on the NTI Sylvania project are kept separate by project location.
+const WORK_PLAN_LOCATION_PROJECTS = ["nti-sylvania"];
+const WORK_PLAN_LOCATIONS = [
+  { key: "sylvania", label: "NTI Sylvania" },
+  { key: "golden-triangle", label: "NTI Golden Triangle" },
+];
+const workPlanLocationLabel = (key) => (WORK_PLAN_LOCATIONS.find((l) => l.key === key) || WORK_PLAN_LOCATIONS[0]).label;
+
 function WorkPlansScreen({ user, go }) {
   const { t } = useTranslation();
   const [viewing, setViewing] = useState(null);
   const [flatPlans, setFlatPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [downloaded, setDownloaded] = useState({});
+  const wpProject = useContext(ProjectContext);
+  const byLocation = !!(wpProject && WORK_PLAN_LOCATION_PROJECTS.includes(wpProject.id));
 
   useEffect(() => {
     let cancelled = false;
@@ -4078,6 +4088,7 @@ function WorkPlansScreen({ user, go }) {
               title: row.title || "Untitled",
               pages: row.pages || "—",
               link: row.view_link || "",
+              location: row.location || "sylvania",
             }))
       );
       setLoading(false);
@@ -4091,12 +4102,15 @@ function WorkPlansScreen({ user, go }) {
     if (p.link) downloadFromLink(p.link, p.title);
   };
 
-  const grouped = {};
-  flatPlans.forEach((p) => {
-    if (!grouped[p.subcontractor]) grouped[p.subcontractor] = [];
-    grouped[p.subcontractor].push(p);
-  });
-  const subcontractors = Object.keys(grouped).sort((a, b) => a.localeCompare(b));
+  const buildGroups = (plans) => {
+    const g = {};
+    plans.forEach((p) => { (g[p.subcontractor] = g[p.subcontractor] || []).push(p); });
+    return g;
+  };
+  const sections = byLocation
+    ? WORK_PLAN_LOCATIONS.map((l) => ({ key: l.key, label: l.label, grouped: buildGroups(flatPlans.filter((p) => p.location === l.key)) })).filter((sec) => Object.keys(sec.grouped).length > 0)
+    : [{ key: "all", label: "", grouped: buildGroups(flatPlans) }];
+  const subcontractors = sections.flatMap((sec) => Object.keys(sec.grouped));
 
   return (
     <div className="px-4 pt-4 pb-8" style={{ background: "#F4F3EF", minHeight: "100%" }}>
@@ -4111,12 +4125,17 @@ function WorkPlansScreen({ user, go }) {
         )}
       </div>
       {loading && <div className="text-[12px] mb-2" style={{ color: STEEL }}>{t("loading")}</div>}
-      {subcontractors.map((name) => (
-        <div key={name} className="mb-4">
+      {sections.map((sec) => (
+        <div key={sec.key} className="mb-2">
+          {sec.label && (
+            <div className="text-[12px] uppercase font-bold mb-2 px-2 py-1.5 rounded-sm inline-block" style={{ background: INK, color: GOLD, fontFamily: "IBM Plex Mono, monospace" }}>{sec.label}</div>
+          )}
+          {Object.keys(sec.grouped).sort((x, y) => x.localeCompare(y)).map((name) => (
+        <div key={sec.key + name} className="mb-4">
           <div className="text-[11px] uppercase font-bold mb-2" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{name}</div>
           <div className="space-y-2">
-            {grouped[name].map((p, i) => {
-              const key = `${name}-${i}`;
+            {sec.grouped[name].map((p, i) => {
+              const key = `${sec.key}-${name}-${i}`;
               return (
                 <div key={key} className="bg-white rounded-md p-3 border" style={{ borderColor: "#E4E2DA" }}>
                   <div className="mb-2">
@@ -4135,6 +4154,8 @@ function WorkPlansScreen({ user, go }) {
               );
             })}
           </div>
+        </div>
+      ))}
         </div>
       ))}
       {subcontractors.length === 0 && (
@@ -13098,6 +13119,8 @@ function ManageOrientationScreen({ user }) {
 function WorkPlanEditor({ plan, user, onDone }) {
   const { id: activeProjectId } = useContext(ProjectContext);
   const subcontractorOptions = useSubcontractors(activeProjectId);
+  const needsLocation = WORK_PLAN_LOCATION_PROJECTS.includes(activeProjectId);
+  const [location, setLocation] = useState(plan ? (plan.location || (needsLocation ? "sylvania" : "")) : "");
   const [subcontractor, setSubcontractor] = useState(plan ? plan.subcontractor : "");
   const [title, setTitle] = useState(plan ? plan.title : "");
   const [pages, setPages] = useState(plan ? String(plan.pages) : "");
@@ -13119,6 +13142,7 @@ function WorkPlanEditor({ plan, user, onDone }) {
 
   const submit = async () => {
     if (!subcontractor.trim() || !title.trim()) { setError("Subcontractor and title are required."); return; }
+    if (needsLocation && !location) { setError("Choose the project location (Sylvania or Golden Triangle)."); return; }
     setSaving(true);
     setError("");
 
@@ -13140,11 +13164,11 @@ function WorkPlanEditor({ plan, user, onDone }) {
     const { data, error: rpcError } = plan
       ? await supabase.rpc("update_work_plan", {
           p_token: user.sessionToken, p_plan_id: plan.id,
-          p_subcontractor: subcontractor.trim(), p_title: title.trim(), p_pages: parseInt(pages) || null, p_view_link: finalLink,
+          p_subcontractor: subcontractor.trim(), p_title: title.trim(), p_pages: parseInt(pages) || null, p_view_link: finalLink, p_location: needsLocation ? location : null,
         })
       : await supabase.rpc("add_work_plan", {
           p_token: user.sessionToken,
-          p_subcontractor: subcontractor.trim(), p_title: title.trim(), p_pages: parseInt(pages) || null, p_view_link: finalLink,
+          p_subcontractor: subcontractor.trim(), p_title: title.trim(), p_pages: parseInt(pages) || null, p_view_link: finalLink, p_location: needsLocation ? location : null,
         });
     setSaving(false);
     if (rpcError || !data) { setError("Something went wrong. Try again."); return; }
@@ -13153,6 +13177,19 @@ function WorkPlanEditor({ plan, user, onDone }) {
 
   return (
     <div className="bg-white rounded-md p-3 border mb-3" style={{ borderColor: "#E4E2DA" }}>
+      {needsLocation && (
+        <>
+          <label className="text-[10px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Project Location</label>
+          <div className="flex gap-2 mt-1 mb-3">
+            {WORK_PLAN_LOCATIONS.map((l) => (
+              <button key={l.key} type="button" onClick={() => setLocation(l.key)} className="flex-1 text-[12px] font-bold uppercase py-2 rounded-md border"
+                style={location === l.key ? { background: INK, color: GOLD, borderColor: INK, fontFamily: "IBM Plex Mono, monospace" } : { background: "#fff", color: STEEL, borderColor: "#C9C6BC", fontFamily: "IBM Plex Mono, monospace" }}>
+                {l.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
       <label className="text-[10px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Subcontractor</label>
       <select value={subcontractor} onChange={(e) => setSubcontractor(e.target.value)} className="w-full mt-1 mb-2 rounded-md border px-2.5 py-1.5 text-[13px] bg-white" style={{ borderColor: "#C9C6BC" }}>
         <option value="">Select…</option>
@@ -14034,6 +14071,8 @@ function ManagePreConstructionScreen({ user, activeProjectId }) {
 }
 
 function ManageWorkPlansScreen({ user }) {
+  const mwpProject = useContext(ProjectContext);
+  const manageByLocation = !!(mwpProject && WORK_PLAN_LOCATION_PROJECTS.includes(mwpProject.id));
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
@@ -14056,7 +14095,7 @@ function ManageWorkPlansScreen({ user }) {
   return (
     <div className="px-4 pt-4 pb-8" style={{ background: "#F4F3EF", minHeight: "100%" }}>
       <div className="text-[12px] mb-3" style={{ color: STEEL }}>
-        Plans here show up in Work Plans, grouped by subcontractor, for everyone on this project.
+        Plans here show up in Work Plans, grouped by subcontractor{manageByLocation ? " and separated by project location (Sylvania / Golden Triangle)" : ""}, for everyone on this project.
       </div>
 
       {!showNew && !editingId && (
@@ -14074,6 +14113,7 @@ function ManageWorkPlansScreen({ user }) {
           <WorkPlanEditor key={p.id} plan={p} user={user} onDone={() => { setEditingId(null); load(); }} />
         ) : (
           <div key={p.id} className="bg-white rounded-md p-3 border mb-2" style={{ borderColor: "#E4E2DA" }}>
+            {manageByLocation && <div className="text-[9px] uppercase font-bold inline-block px-1.5 py-0.5 rounded-sm mb-1" style={{ background: INK, color: GOLD, fontFamily: "IBM Plex Mono, monospace" }}>{workPlanLocationLabel(p.location || "sylvania")}</div>}
             <div className="text-[10px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{p.subcontractor}</div>
             <div className="text-[13px] mt-0.5" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{p.title}</div>
             <div className="text-[11px] mt-0.5" style={{ color: STEEL }}>{p.pages || "—"} pages{!p.view_link ? " · No link set" : ""}</div>
