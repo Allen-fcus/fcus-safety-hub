@@ -11899,6 +11899,17 @@ function RosterRow({ person, user, onChanged }) {
   };
 
   const [saveError, setSaveError] = useState("");
+  const [personDocs, setPersonDocs] = useState([]);
+  const loadPersonDocs = async () => {
+    const { data } = await supabase.rpc("list_personnel_documents", { p_token: user.sessionToken, p_person_id: person.id });
+    setPersonDocs(Array.isArray(data) ? data : []);
+  };
+  useEffect(() => { if (editing) loadPersonDocs(); }, [editing, person.id]);
+  const removePersonDoc = async (docId) => {
+    const res = await supabase.rpc("remove_personnel_document", { p_token: user.sessionToken, p_document_id: docId });
+    reportRpcFailure("Remove file", res);
+    loadPersonDocs();
+  };
   const [editQualId, setEditQualId] = useState(null);
   const [editIssued, setEditIssued] = useState("");
   const [editExpires, setEditExpires] = useState("");
@@ -12194,6 +12205,21 @@ function RosterRow({ person, user, onChanged }) {
             <div className="text-[10px] mt-1.5" style={{ color: STEEL }}>
               OSHA 10, OSHA 30, and Driving Awareness auto-calculate their expiration date once you enter the issued date — you can still adjust it by hand. Leave both blank for designations that never expire.
             </div>
+          </div>
+
+          <div className="text-[10px] uppercase font-bold mt-1 mb-1.5" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Files</div>
+          <div className="space-y-1.5 mb-3">
+            {personDocs.length === 0 && <div className="text-[11px]" style={{ color: STEEL }}>No files yet. Approved designation forms and their supporting documents are filed here.</div>}
+            {personDocs.map((d) => (
+              <div key={d.id} className="flex items-center justify-between bg-white rounded-sm px-2.5 py-1.5 border" style={{ borderColor: "#E4E2DA" }}>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[12px] truncate">{d.title}</div>
+                  <div className="text-[10px]" style={{ color: STEEL }}>{d.kind === "proof" ? "Supporting document" : "Signed form"} · added {fmtD(d.added_at)}</div>
+                </div>
+                <button onClick={() => window.open(d.url, "_blank")} className="flex-shrink-0 ml-2 text-[9px] font-bold uppercase px-2 py-1 rounded-sm" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>View</button>
+                <button onClick={() => removePersonDoc(d.id)} className="flex-shrink-0 ml-2"><X size={14} color={STEEL} /></button>
+              </div>
+            ))}
           </div>
 
           {saveError && <div className="text-[11px] mb-2" style={{ color: ALERT }}>{saveError}</div>}
