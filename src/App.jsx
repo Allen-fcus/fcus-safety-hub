@@ -510,7 +510,7 @@ function QuarterlyMonthlyScreen({ user, go }) {
 
       {viewingPdf && (
         <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/80 px-4">
-          <div className="bg-white rounded-md w-full max-w-sm md:max-w-5xl md:w-[92vw] h-[80%] md:h-[92vh] md:max-h-[92vh] overflow-hidden max-h-[85%] flex flex-col">
+          <div className="bg-white rounded-md w-full max-w-sm md:max-w-[98vw] md:w-[96vw] h-[80%] md:h-[95vh] md:max-h-[95vh] overflow-hidden max-h-[85%] flex flex-col">
             <div className="flex items-center justify-between p-3 border-b flex-shrink-0" style={{ borderColor: "#E4E2DA" }}>
               <div className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{viewingPdf.title}</div>
               <button onClick={() => setViewingPdf(null)}><X size={18} color={STEEL} /></button>
@@ -2079,7 +2079,7 @@ function LaborLawScreen({ user, go, activeProjectId }) {
 
       {viewing && (
         <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/80 px-4">
-          <div className="bg-white rounded-md w-full max-w-sm md:max-w-5xl md:w-[92vw] h-[80%] md:h-[92vh] overflow-hidden flex flex-col">
+          <div className="bg-white rounded-md w-full max-w-sm md:max-w-[98vw] md:w-[96vw] h-[80%] md:h-[95vh] overflow-hidden flex flex-col">
             <div className="flex items-center justify-between p-3 border-b flex-shrink-0" style={{ borderColor: "#E4E2DA" }}>
               <div className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{viewing.title} — {viewing.language}</div>
               <button onClick={() => setViewing(null)}><X size={18} color={STEEL} /></button>
@@ -4143,7 +4143,7 @@ function WorkPlansScreen({ user, go }) {
 
       {viewing && (
         <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/80 px-4">
-          <div className="bg-white rounded-md w-full max-w-sm md:max-w-5xl md:w-[92vw] h-[80%] md:h-[92vh] md:max-h-[92vh] overflow-hidden max-h-[85%] flex flex-col">
+          <div className="bg-white rounded-md w-full max-w-sm md:max-w-[98vw] md:w-[96vw] h-[80%] md:h-[95vh] md:max-h-[95vh] overflow-hidden max-h-[85%] flex flex-col">
             <div className="flex items-center justify-between p-3 border-b" style={{ borderColor: "#E4E2DA" }}>
               <div>
                 <div className="text-[10px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{viewing.subcontractor}</div>
@@ -4182,7 +4182,7 @@ const TALKS_DEFAULT = [
   { title: "PPE for General Construction", len: "4:48", date: "Aug 3", videoLink: "" },
   { title: "Heat Stress & Hydration", len: "5:33", date: "Jul 27", videoLink: "" },
 ];
-function ToolboxWeekCard({ week, expanded, onToggle, user }) {
+function ToolboxWeekCard({ week, expanded, onToggle, user, latest }) {
   const { t } = useTranslation();
   const [viewingDoc, setViewingDoc] = useState(null);
   const [docAckedIds, setDocAckedIds] = useState({});
@@ -4210,6 +4210,7 @@ function ToolboxWeekCard({ week, expanded, onToggle, user }) {
     <div className="bg-white rounded-md border mb-3 overflow-hidden" style={{ borderColor: expanded ? GOLD : "#E4E2DA", borderLeftWidth: expanded ? 3 : 1 }}>
       <button onClick={onToggle} className="w-full flex items-center justify-between p-3 text-left">
         <div>
+          {latest && <div className="text-[9px] uppercase font-bold inline-block px-1.5 py-0.5 rounded-sm mb-1" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>Latest</div>}
           <div className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{week.week_label}</div>
           <div className="text-[11px] mt-0.5" style={{ color: STEEL }}>{week.talks.length} document{week.talks.length !== 1 ? "s" : ""}</div>
         </div>
@@ -4241,11 +4242,9 @@ function ToolboxWeekCard({ week, expanded, onToggle, user }) {
 
       {viewingDoc && (
         <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/80 px-4">
-          <div className="bg-white rounded-md w-full max-w-sm overflow-hidden flex flex-col" style={{ maxHeight: "85vh" }}>
+          <div className="bg-white rounded-md w-full max-w-sm md:max-w-[98vw] md:w-[96vw] overflow-hidden flex flex-col" style={{ height: viewingDoc.doc_link ? "92vh" : undefined, maxHeight: "95vh" }}>
             {viewingDoc.doc_link ? (
-              <div className="flex-1" style={{ minHeight: 300 }}>
-                <iframe src={viewingDoc.doc_link} className="w-full h-full" style={{ border: "none", minHeight: 300 }} title={viewingDoc.title} />
-              </div>
+              <PdfFrame link={viewingDoc.doc_link} title={viewingDoc.title} />
             ) : viewingDoc.video_link ? (
               <div className="aspect-video">
                 <iframe src={viewingDoc.video_link} className="w-full h-full" style={{ border: "none" }} title={viewingDoc.title} allowFullScreen />
@@ -4298,6 +4297,7 @@ function ToolboxScreen({ user, go, activeProjectId }) {
   const [weeks, setWeeks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState(null);
+  const [showOlder, setShowOlder] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -4349,15 +4349,33 @@ function ToolboxScreen({ user, go, activeProjectId }) {
         )}
       </div>
       {loading && <div className="text-[12px]" style={{ color: STEEL }}>{t("loading")}</div>}
-      {weeks.map((w) => (
+      {weeks.slice(0, 1).map((w) => (
         <ToolboxWeekCard
           key={w.id}
           week={w}
           user={user}
+          latest
           expanded={expandedId === w.id}
           onToggle={() => setExpandedId(expandedId === w.id ? null : w.id)}
         />
       ))}
+      {weeks.length > 1 && (
+        <>
+          <button onClick={() => setShowOlder((v) => !v)} className="w-full flex items-center justify-between text-[11px] font-bold uppercase px-3 py-2.5 rounded-md border mb-3" style={{ borderColor: "#C9C6BC", color: STEEL, background: "#FAF9F5", fontFamily: "IBM Plex Mono, monospace" }}>
+            <span>Previous weeks ({weeks.length - 1})</span>
+            <ChevronRight size={14} style={{ transform: showOlder ? "rotate(90deg)" : "none", transition: "transform .15s" }} />
+          </button>
+          {showOlder && weeks.slice(1).map((w) => (
+            <ToolboxWeekCard
+              key={w.id}
+              week={w}
+              user={user}
+              expanded={expandedId === w.id}
+              onToggle={() => setExpandedId(expandedId === w.id ? null : w.id)}
+            />
+          ))}
+        </>
+      )}
       {!loading && weeks.length === 0 && (
         <div className="text-[12px] text-center py-6" style={{ color: STEEL }}>{t("noTalksYet")}</div>
       )}
@@ -11025,7 +11043,7 @@ function FormsScreen({ user, go, activeProjectId }) {
       )}
       {viewingPdf && (
         <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/80 px-4">
-          <div className="bg-white rounded-md w-full max-w-sm md:max-w-5xl md:w-[92vw] h-[80%] md:h-[92vh] md:max-h-[92vh] overflow-hidden max-h-[85%] flex flex-col">
+          <div className="bg-white rounded-md w-full max-w-sm md:max-w-[98vw] md:w-[96vw] h-[80%] md:h-[95vh] md:max-h-[95vh] overflow-hidden max-h-[85%] flex flex-col">
             <div className="flex items-center justify-between p-3 border-b" style={{ borderColor: "#E4E2DA" }}>
               <div className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{viewingPdf.title}</div>
               <button onClick={() => setViewingPdf(null)}><X size={18} color={STEEL} /></button>
@@ -12835,7 +12853,7 @@ function OrientationScreen({ user, go, activeProjectId }) {
 
       {viewingPdf && (
         <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/80 px-4">
-          <div className="bg-white rounded-md w-full max-w-sm md:max-w-5xl md:w-[92vw] h-[80%] md:h-[92vh] md:max-h-[92vh] overflow-hidden max-h-[85%] flex flex-col">
+          <div className="bg-white rounded-md w-full max-w-sm md:max-w-[98vw] md:w-[96vw] h-[80%] md:h-[95vh] md:max-h-[95vh] overflow-hidden max-h-[85%] flex flex-col">
             <div className="flex items-center justify-between p-3 border-b flex-shrink-0" style={{ borderColor: "#E4E2DA" }}>
               <div className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{viewingPdf.title}</div>
               <button onClick={() => setViewingPdf(null)}><X size={18} color={STEEL} /></button>
@@ -13894,7 +13912,7 @@ function PreConstructionScreen({ user, go, activeProjectId }) {
 
       {viewing && (
         <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/80 px-4">
-          <div className="bg-white rounded-md w-full max-w-sm md:max-w-5xl md:w-[92vw] h-[80%] md:h-[92vh] md:max-h-[92vh] overflow-hidden max-h-[85%] flex flex-col">
+          <div className="bg-white rounded-md w-full max-w-sm md:max-w-[98vw] md:w-[96vw] h-[80%] md:h-[95vh] md:max-h-[95vh] overflow-hidden max-h-[85%] flex flex-col">
             <div className="flex items-center justify-between p-3 border-b flex-shrink-0" style={{ borderColor: "#E4E2DA" }}>
               <div className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{viewing.title}</div>
               <button onClick={() => setViewing(null)}><X size={18} color={STEEL} /></button>
@@ -14337,7 +14355,7 @@ function WeeklyReportScreen({ user, go, activeProjectId }) {
 
       {viewing && (
         <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/80 px-4">
-          <div className="bg-white rounded-md w-full max-w-sm md:max-w-5xl md:w-[92vw] h-[80%] md:h-[92vh] md:max-h-[92vh] overflow-hidden max-h-[85%] flex flex-col">
+          <div className="bg-white rounded-md w-full max-w-sm md:max-w-[98vw] md:w-[96vw] h-[80%] md:h-[95vh] md:max-h-[95vh] overflow-hidden max-h-[85%] flex flex-col">
             <div className="flex items-center justify-between p-3 border-b flex-shrink-0" style={{ borderColor: "#E4E2DA" }}>
               <div className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{viewing.title}</div>
               <button onClick={() => setViewing(null)}><X size={18} color={STEEL} /></button>
