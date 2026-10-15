@@ -2497,7 +2497,7 @@ const SCHEDULE_DESIGNATIONS = [
 ];
 
 function renderFormTextBlock(b, key, ackChecked, setAckChecked, tokens) {
-  const tk = (t) => String(t == null ? "" : t).replace(/\{company\}/g, (tokens && tokens.company) || "Company Name").replace(/\{phone\}/g, (tokens && tokens.phone) || "(000) 000-0000");
+  const tk = (t) => String(t == null ? "" : t).replace(/\{company\}/g, (() => { const c = (tokens && tokens.company) || ""; return /\bNTI\b|north tarrant/i.test(c) ? "" : (c || "Company Name"); })()).replace(/ {2,}/g, " ").replace(/\{phone\}/g, (tokens && tokens.phone) || "(000) 000-0000");
   const inner = (
     <>
       {b.heading && <div className="text-[12px] font-bold mb-1" style={{ color: INK }}>{b.heading}</div>}
@@ -8248,7 +8248,7 @@ async function buildGenericFormPdf({ form, slug, projectName, standardValues, fi
   }
   // free-text blocks from the source document (statements, notes, tables, footers)
   const tokPhone = fieldValues[(form.fields || []).indexOf("Contact Phone")] || "(000) 000-0000";
-  const tk = (t) => String(t == null ? "" : t).replace(/\{company\}/g, (standardValues && standardValues.subcontractor) || "Company Name").replace(/\{phone\}/g, tokPhone);
+  const tk = (t) => String(t == null ? "" : t).replace(/\{company\}/g, (() => { const c = (standardValues && standardValues.subcontractor) || ""; return /\bNTI\b|north tarrant/i.test(c) ? "" : (c || "Company Name"); })()).replace(/ {2,}/g, " ").replace(/\{phone\}/g, tokPhone);
   const drawBlocks = (at) => (form.textBlocks || []).filter((b) => (b.at || "before") === at).forEach((b) => {
     if (b.title) {
       need(b.sigLines ? 30 + b.sigLines.count * 40 : 70);
