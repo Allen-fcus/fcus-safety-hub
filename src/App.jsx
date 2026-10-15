@@ -3924,6 +3924,7 @@ const WORK_PLANS_FLAT_DEFAULT = [
 function PdfFrame({ link, title }) {
   const [state, setState] = useState("checking");
   const [src, setSrc] = useState("");
+  const [pdfBuf, setPdfBuf] = useState(null);
   useEffect(() => {
     let alive = true, objUrl = "";
     setState("checking"); setSrc("");
@@ -3933,6 +3934,8 @@ function PdfFrame({ link, title }) {
     fetch(link).then(async (r) => {
       if (!r.ok) { if (alive) setState("missing"); return; }
       const buf = await r.arrayBuffer();
+      // Phones can't show a PDF inside an iframe (they just offer "Open"), so draw the pages ourselves.
+      if (pdfNeedsCanvasViewer()) { if (alive) { setPdfBuf(buf); setState("canvas"); } return; }
       objUrl = URL.createObjectURL(new Blob([buf], { type: "application/pdf" }));
       if (alive) { setSrc(objUrl + "#view=FitH"); setState("ok"); }
     }).catch(() => { if (alive) { setSrc(inlineViewUrl(link)); setState("ok"); } });
@@ -3947,10 +3950,79 @@ function PdfFrame({ link, title }) {
       <div className="text-[11px]" style={{ color: STEEL }}>An admin needs to upload it to the documents storage bucket with exactly this name.</div>
     </div>
   );
+  if (state === "canvas") return (
+    <div className="flex-1 flex flex-col min-h-0">
+      <PdfCanvasViewer data={pdfBuf} onFail={() => { const u = URL.createObjectURL(new Blob([pdfBuf], { type: "application/pdf" })); setSrc(u + "#view=FitH"); setState("ok"); }} />
+      <a href={link} target="_blank" rel="noreferrer" className="text-center text-[11px] font-bold uppercase py-2 border-t" style={{ borderColor: "#E4E2DA", color: INK, fontFamily: "IBM Plex Mono, monospace", background: "#FAF9F5" }}>Open in new tab / Download</a>
+    </div>
+  );
   return (
     <div className="flex-1 flex flex-col min-h-0">
       <iframe src={src} className="flex-1 w-full" style={{ border: "none" }} title={title} />
       <a href={link} target="_blank" rel="noreferrer" className="text-center text-[11px] font-bold uppercase py-2 border-t" style={{ borderColor: "#E4E2DA", color: INK, fontFamily: "IBM Plex Mono, monospace", background: "#FAF9F5" }}>Not showing? Open in new tab</a>
+    </div>
+  );
+}
+function pdfNeedsCanvasViewer() {
+  try {
+    const ua = navigator.userAgent || "";
+    return /Android|iPhone|iPad|iPod/i.test(ua) || (navigator.maxTouchPoints > 1 && /Mac/i.test(navigator.platform || ""));
+  } catch (e) { return false; }
+}
+let pdfJsPromise = null;
+function loadPdfJs() {
+  if (!pdfJsPromise) {
+    const base = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/legacy/build/";
+    pdfJsPromise = import(/* @vite-ignore */ base + "pdf.min.mjs").then(async (lib) => {
+      try {
+        const txt = await (await fetch(base + "pdf.worker.min.mjs")).text();
+        lib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(new Blob([txt], { type: "text/javascript" }));
+      } catch (e) { lib.GlobalWorkerOptions.workerSrc = base + "pdf.worker.min.mjs"; }
+      return lib;
+    });
+    pdfJsPromise.catch(() => { pdfJsPromise = null; });
+  }
+  return pdfJsPromise;
+}
+// Draws every page of a PDF to canvases so it is readable on phones (scrolls; pinch to zoom).
+function PdfCanvasViewer({ data, onFail }) {
+  const hostRef = useRef(null);
+  const [status, setStatus] = useState("loading");
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const lib = await loadPdfJs();
+        const pdf = await lib.getDocument({ data: new Uint8Array(data.slice(0)) }).promise;
+        const host = hostRef.current;
+        if (!host || !alive) return;
+        host.innerHTML = "";
+        const cssW = Math.max(240, host.clientWidth - 8);
+        const dpr = Math.min(window.devicePixelRatio || 1, 3);
+        for (let n = 1; n <= pdf.numPages; n++) {
+          const page = await pdf.getPage(n);
+          if (!alive) return;
+          const base = page.getViewport({ scale: 1 });
+          const vp = page.getViewport({ scale: (cssW / base.width) * dpr });
+          const c = document.createElement("canvas");
+          c.width = Math.floor(vp.width); c.height = Math.floor(vp.height);
+          c.style.width = cssW + "px"; c.style.height = Math.floor(vp.height / dpr) + "px";
+          c.style.display = "block"; c.style.margin = "0 auto 8px"; c.style.background = "#fff"; c.style.boxShadow = "0 1px 3px rgba(0,0,0,.25)";
+          host.appendChild(c);
+          await page.render({ canvasContext: c.getContext("2d"), viewport: vp }).promise;
+          if (n === 1 && alive) setStatus("ok");
+        }
+        if (alive) setStatus("ok");
+      } catch (e) {
+        if (alive) { setStatus("failed"); if (onFail) onFail(); }
+      }
+    })();
+    return () => { alive = false; };
+  }, [data]);
+  return (
+    <div className="flex-1 min-h-0 overflow-auto" style={{ background: "#E4E2DA", padding: "6px 4px", WebkitOverflowScrolling: "touch" }}>
+      {status === "loading" && <div className="text-center text-[12px] py-6" style={{ color: STEEL }}>Loading form...</div>}
+      <div ref={hostRef} />
     </div>
   );
 }
