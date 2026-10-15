@@ -2435,7 +2435,7 @@ function OrientationSignInScreen({ activeProjectId }) {
             style={{ borderColor: GOLD, borderWidth: 2 }}
           >
             <option value="">Select…</option>
-            {Object.values(PROJECTS).filter((p) => p.id !== "safety-hub").map((p) => (
+            {Object.values(PROJECTS).filter((p) => p.id !== "safety-hub" && !p.inactive).map((p) => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
@@ -3099,7 +3099,7 @@ function OrientationScheduleScreen({ activeProjectId }) {
             style={{ borderColor: GOLD, borderWidth: 2 }}
           >
             <option value="">Select…</option>
-            {Object.values(PROJECTS).filter((p) => p.id !== "safety-hub").map((p) => (
+            {Object.values(PROJECTS).filter((p) => p.id !== "safety-hub" && !p.inactive).map((p) => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
@@ -12720,6 +12720,7 @@ const PROJECTS = {
   },
   "nti-golden-triangle": {
     id: "nti-golden-triangle",
+    inactive: true, // Deactivated for now. Remove this line to bring the project back.
     name: "NTI - CO - Golden Triangle - Fort Worth",
     notifyEmail: "ntisafety@ferrovial.us",
     sheetUrls: { ...EMPTY_SHEET_URLS },
@@ -12741,13 +12742,15 @@ const PROJECTS = {
   },
 };
 
+const isProjectActive = (slug) => !!PROJECTS[slug] && !PROJECTS[slug].inactive;
+
 // Used from the generic "Safety Hub" landing environment: search every
 // project's personnel for a badge match, so logging in there automatically
 // places someone in their assigned project.
 function findEmployeeAcrossProjects(query) {
   const q = query.trim().toLowerCase();
   for (const proj of Object.values(PROJECTS)) {
-    if (proj.id === "safety-hub") continue;
+    if (proj.id === "safety-hub" || proj.inactive) continue;
     const match = (proj.fallbacks.personnel || []).find(
       (e) => e.name.toLowerCase() === q || e.empId.toLowerCase() === q || e.badge.toLowerCase() === q
     );
@@ -14148,7 +14151,7 @@ function ProjectSwitcherModal({ activeProjectId, onSelect, onClose, keepsLogin }
         </div>
         <HazardRule height={4} />
         <div className="p-3 space-y-2">
-          {Object.values(PROJECTS).map((p) => {
+          {Object.values(PROJECTS).filter((p) => !p.inactive).map((p) => {
             const active = p.id === activeProjectId;
             return (
               <button
@@ -15737,7 +15740,7 @@ function getInitialProjectFromUrl() {
       p = decodeURIComponent(p).trim();
       // Case-insensitive match against known project slugs — some QR
       // scanner apps subtly alter casing/whitespace when reading a code.
-      const match = Object.keys(PROJECTS).find((slug) => slug.toLowerCase() === p.toLowerCase());
+      const match = Object.keys(PROJECTS).find((slug) => isProjectActive(slug) && slug.toLowerCase() === p.toLowerCase());
       if (match) {
         try { localStorage.setItem("safetyhub_last_project", match); } catch (e) { /* ignore */ }
         return match;
@@ -15748,7 +15751,7 @@ function getInitialProjectFromUrl() {
     // so a slightly-off scan doesn't dead-end into "project not found."
     try {
       const last = localStorage.getItem("safetyhub_last_project");
-      if (last && PROJECTS[last]) return last;
+      if (last && isProjectActive(last)) return last;
     } catch (e) { /* ignore */ }
     return "safety-hub";
   } catch (e) {
@@ -15798,6 +15801,12 @@ export default function SafetyHubPrototype() {
       }
 
       const matchedSlug = projectSlugForId(data.project_id);
+      if (matchedSlug && !isProjectActive(matchedSlug)) {
+        // Saved login belongs to a deactivated project: sign it out
+        try { localStorage.removeItem("safetyhub_session_token"); } catch (e) { /* ignore */ }
+        setSessionChecked(true);
+        return;
+      }
       // A QR code for a different project's public page must open THAT project, not the
       // project this device happens to be logged in to. Show it as a visitor; the saved
       // login is untouched and comes back on the next normal open.
@@ -15984,6 +15993,11 @@ export default function SafetyHubPrototype() {
   };
 
   const handleLogin = (u, matchedProjectId) => {
+    if (matchedProjectId && !isProjectActive(matchedProjectId)) {
+      try { localStorage.removeItem("safetyhub_session_token"); } catch (e) { /* ignore */ }
+      window.alert("This project is not currently active.");
+      return;
+    }
     if (matchedProjectId && matchedProjectId !== activeProjectId) {
       setActiveProjectId(matchedProjectId);
       try { localStorage.setItem("safetyhub_last_project", matchedProjectId); } catch (e) { /* ignore */ }
