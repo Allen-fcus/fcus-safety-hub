@@ -6712,7 +6712,7 @@ const ORIENTATION_FORMS_DEFAULT = [
   // ---------------- SH99 (FCW99) and FCW24 orientation forms — redesigned fillable (generic-form-pdf) ----------------
   // Every sentence of the original FCW99 form is rendered as a text block so it shows in both the fillable and the final PDF.
   ...[
-    { projects: ["sh99-houston"], file: "sh99", projCP: "FCW99", email: "sh99safety@ferrovial.us", projShort: "FCW99", projSp: "FCW 99", gc: "Ferrovial Construction-Webber 99 JV", compEmail: "SH99safety@ferrovial.us", dept1: "SH99 Safety Department", deptEq: "SH 99 Safety Department", deptCrane: "FCW 99 Safety Department", manual: "Ferrovial Construction-Webber 99 JV", drugProj: "Ferrovial Construction-Webber JV 99", craneHeader: "PROJECT: FCW 99     GENERAL CONTRACTOR: Ferrovial Construction-Webber 99JV" },
+    { projects: ["sh99-houston"], file: "sh99", projCP: "FCW99", email: "sh99safety@ferrovial.us", projShort: "FCW99", projSp: "FCW 99", gc: "Ferrovial Construction-Webber 99 JV", compEmail: "SH99safety@ferrovial.us", dept1: "SH99 Safety Department", deptEq: "SH 99 Safety Department", deptCrane: "FCW 99 Safety Department", manual: "Ferrovial Construction-Webber 99 JV", drugProj: "Ferrovial Construction-Webber JV 99", craneHeader: "PROJECT: FCW 99     GENERAL CONTRACTOR: Ferrovial Construction-Webber 99JV", linkOverrides: { "Competent Person Designation": "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/sh99-competent-person-designation-v2.pdf", "Crane Operator Designation": "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/sh99-crane-operator-designation-v2.pdf" } },
     { projects: ["nashville"], file: "fcw24", projCP: "FCW 24", email: "agarcia@ferrovial.us,mmaldonado@ferrovial.us", projShort: "FCW 24", projSp: "FCW 24", gc: "Ferrovial Construction-Webber 24 JV", compEmail: "agarcia@ferrovial.us and mmaldonado@ferrovial.us", dept1: "FCW24 Safety Department", deptEq: "FCW 24 Safety Department", deptCrane: "FCW 24 Safety Department", manual: "Ferrovial Construction-Webber 24JV", drugProj: "Ferrovial Construction-Webber 24 JV" },
     { projects: ["nti-sylvania", "nti-golden-triangle"], file: "nti", email: "ntisafety@ferrovial.us", projCP: "NTI", projShort: "NTI", projSp: "NTI", gc: "North Tarrant Infrastructure, LLC", compEmail: "ntisafety@ferrovial.us", dept1: "NTI Safety Department", deptEq: "NTI Safety Department", deptCrane: "NTI Safety Department", manual: "North Tarrant Infrastructure", drugProj: "North Tarrant Infrastructure, LLC",
       links: {
@@ -6767,7 +6767,7 @@ const ORIENTATION_FORMS_DEFAULT = [
         title: "Competent Person Designation",
         signatureLabels: ["“EMPLOYEE” ACKNOWLEDGEMENT OF THIS DESIGNATION", "AUTHORIZED REPRESENTATIVE MAKING DESIGNATION"],
         description: "This form designates an employee as a Competent Person for specific project safety activities. For this project, the designated employee must have OSHA 10 or OSHA 30 training. The subcontractor must identify the applicable areas, submit supporting training certifications, and obtain signatures from both the employee and an authorized representative. The form must be submitted before or during orientation and updated if the designation changes.",
-        pdfLink: cfg.links ? cfg.links["Competent Person Designation"] : B + cfg.file + "-competent-person-designation.pdf",
+        pdfLink: (cfg.linkOverrides && cfg.linkOverrides["Competent Person Designation"]) || (cfg.links ? cfg.links["Competent Person Designation"] : B + cfg.file + "-competent-person-designation.pdf"),
         requiresProof: true, proofLabel: "Training / Certification Documents", proofRequired: false,
         fields: ["Authorized Representative Name", "Employee Name"],
         textBlocks: [
@@ -6820,7 +6820,7 @@ const ORIENTATION_FORMS_DEFAULT = [
         title: "Crane Operator Designation",
         signatureLabels: ["“EMPLOYEE” ACKNOWLEDGEMENT OF THIS DESIGNATION", "AUTHORIZED “CONTRACTOR” REPRESENTATIVE"],
         description: "All employees who will operate a crane on-site are required to submit a completed Crane Operator Designation Form prior to performing any crane-related work. In addition, a current crane operator certification must be submitted with the designation form. Certifications must be issued by an accredited third-party organization. Accepted certifications include the National Commission for the Certification of Crane Operators (NCCCO) and Crane Institute Certification (CIC). Employees who fail to provide the required designation form and supporting certification documentation will not be authorized to operate a crane on-site until all requirements have been met.",
-        pdfLink: cfg.links ? cfg.links["Crane Operator Designation"] : B + cfg.file + "-crane-operator-designation.pdf",
+        pdfLink: (cfg.linkOverrides && cfg.linkOverrides["Crane Operator Designation"]) || (cfg.links ? cfg.links["Crane Operator Designation"] : B + cfg.file + "-crane-operator-designation.pdf"),
         requiresProof: true, proofLabel: "Crane Operator Certification", proofRequired: false,
         fields: [...repEmp, "Name of Accredited Organization"],
         trailingFieldLabels: ["Name of Accredited Organization"],
