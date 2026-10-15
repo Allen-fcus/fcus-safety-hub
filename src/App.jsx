@@ -6752,7 +6752,7 @@ const ORIENTATION_FORMS_DEFAULT = [
         choiceGroups: [
           { label: "COMPETENT PERSON FULFILLED BY: (check one)", items: ["Training (Cert.)", "Experience (Resume)", "Qualification (Diploma)"] },
           { label: "COMPETENT PERSON IN THE FOLLOWING AREAS - Please circle only those that apply (tap to select)", multi: true, items: [
-            "A. EXCAVATION", "B. CONFINED SPACE", "C. LADDER INSPECTION", "D. TRAFFIC CONTROL (Cert.)", "E. SCAFFOLDS",
+            "A. EXCAVATION", "B. CONFINED SPACE (Cert.)", "C. LADDER INSPECTION", "D. TRAFFIC CONTROL (Cert.)", "E. SCAFFOLDS",
             "F. RIGGING INSPECTION (Cert.)", "G. RESPIRATORY PROTECTION", "H. ASBESTOS ABATEMENT (Cert.)", "I. FALL PROTECTION (Cert.)", "J. FIRE EXTINGUISHER",
             "K. FLAGGING WORK ZONES (Cert.)", "L. SILICA (Cert.)", "M. AERIAL LIFT (Cert.)", "N. ASSURED GROUNDING", "O. OSHA 10 / OSHA 30 (Cert)",
           ] },
@@ -6768,11 +6768,11 @@ const ORIENTATION_FORMS_DEFAULT = [
         fields: [...repEmp, "Other Equipment (if applicable)"],
         trailingFieldLabels: ["Other Equipment (if applicable)"],
         textBlocks: [
-          { at: "top", plain: true, text: "(TO BE COMPLETED AND SUBMITTED AT ORIENTATION)    PROJECT: " + cfg.projSp },
+          { at: "top", plain: true, text: "PROJECT: " + cfg.projSp },
           appoint("an “OPERATOR”", "listed"),
           { at: "top", plain: true, text: "The Occupational Safety and Health Administration (OSHA) requires that an “OPERATOR” be qualified or certified, dependent upon the type of equipment to be operated." },
           { at: "top", plain: true, text: "A qualified “OPERATOR” is an individual who, by possession of a recognized degree, certificate, or professional standing, or who by extensive knowledge, training and experience, continually demonstrates the ability to successfully solve/resolve problems relating to the equipment, the work and the environment." },
-          { at: "top", plain: true, text: "A certified “OPERATOR” is one who has completed a formal training program through an accredited operator testing organization and who has passed tests in both knowledge and skill for a particular type and capacity of equipment. Certified operators must submit copy of their certifications prior to receive a badge for equipments 1, 4, 9 and 31." },
+          { at: "top", plain: true, text: "A certified “OPERATOR” is one who has completed a formal training program through an accredited operator testing organization and who has passed tests in both knowledge and skill for a particular type and capacity of equipment. Certified operators must submit copy of their certifications prior to receive a badge for the following equipment: Aerial Man Lift, Forklift, Skytrac and Crane." },
           { at: "end", ackCheck: "I acknowledge and agree to the statement above.", plain: true, text: "I, the Authorized “CONTRACTOR” Representative, understand that if at any point in the future this “EMPLOYEE” loses this designation, is terminated or is removed from the “PROJECT”, I will notify " + cfg.deptEq + "." },
           submitAt("*** TO BE SUBMITTED PRIOR OR AT THE TIME OF ORIENTATION ***"),
         ],
