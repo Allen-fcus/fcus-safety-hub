@@ -11899,6 +11899,20 @@ function RosterRow({ person, user, onChanged }) {
   };
 
   const [saveError, setSaveError] = useState("");
+  const [editQualId, setEditQualId] = useState(null);
+  const [editIssued, setEditIssued] = useState("");
+  const [editExpires, setEditExpires] = useState("");
+  const [savingQualDates, setSavingQualDates] = useState(false);
+  const toDateInput = (v) => (v ? String(v).slice(0, 10) : "");
+  const startEditQual = (q) => { setEditQualId(q.id); setEditIssued(toDateInput(q.issued_at)); setEditExpires(toDateInput(q.expires_at)); };
+  const saveQualDates = async () => {
+    setSavingQualDates(true);
+    const res = await supabase.rpc("update_qualification_dates", { p_token: user.sessionToken, p_qualification_id: editQualId, p_issued_at: editIssued || null, p_expires_at: editExpires || null });
+    setSavingQualDates(false);
+    if (!res.data) { reportRpcFailure("Save designation dates", { ...res, data: res.error ? res.data : false }); return; }
+    setEditQualId(null);
+    onChanged();
+  };
   const [newQualLabel, setNewQualLabel] = useState("");
   const [newQualIssued, setNewQualIssued] = useState("");
   const [newQualExpiry, setNewQualExpiry] = useState("");
@@ -12121,7 +12135,8 @@ function RosterRow({ person, user, onChanged }) {
           <div className="space-y-1.5 mb-2">
             {quals.length === 0 && <div className="text-[11px]" style={{ color: STEEL }}>None on file.</div>}
             {quals.map((q) => (
-              <div key={q.id} className="flex items-center justify-between bg-white rounded-sm px-2.5 py-1.5 border" style={{ borderColor: "#E4E2DA" }}>
+              <React.Fragment key={q.id}>
+              <div className="flex items-center justify-between bg-white rounded-sm px-2.5 py-1.5 border" style={{ borderColor: "#E4E2DA" }}>
                 <div className="flex-1 min-w-0">
                   <QualTag status={q.status}>{q.label}</QualTag>
                   <div className="text-[10px] mt-0.5" style={{ color: STEEL }}>
@@ -12131,8 +12146,28 @@ function RosterRow({ person, user, onChanged }) {
                     {!q.issued_at && !q.expires_at && "No dates on file"}
                   </div>
                 </div>
+                <button onClick={() => (editQualId === q.id ? setEditQualId(null) : startEditQual(q))} className="flex-shrink-0 ml-2 text-[9px] font-bold uppercase px-2 py-1 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{editQualId === q.id ? "Close" : "Edit dates"}</button>
                 <button onClick={() => removeQual(q.id)} className="flex-shrink-0 ml-2"><X size={14} color={STEEL} /></button>
               </div>
+              {editQualId === q.id && (
+                <div className="rounded-sm p-2 mb-1" style={{ background: "#FFFBEA", border: `1px solid ${GOLD}` }}>
+                  <div className="flex gap-2 mb-1.5">
+                    <div className="flex-1">
+                      <label className="text-[9px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Issued</label>
+                      <input type="date" value={editIssued} onChange={(e) => setEditIssued(e.target.value)} className="w-full rounded-md border px-2 py-1.5 text-[12px] bg-white" style={{ borderColor: "#C9C6BC" }} />
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-[9px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Expires</label>
+                      <input type="date" value={editExpires} onChange={(e) => setEditExpires(e.target.value)} className="w-full rounded-md border px-2 py-1.5 text-[12px] bg-white" style={{ borderColor: "#C9C6BC" }} />
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => { setEditIssued(""); setEditExpires(""); }} className="text-[10px] font-bold uppercase px-3 py-1.5 rounded-sm border bg-white" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Clear both</button>
+                    <button onClick={saveQualDates} disabled={savingQualDates} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm disabled:opacity-50" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>{savingQualDates ? "Saving…" : "Save dates"}</button>
+                  </div>
+                </div>
+              )}
+              </React.Fragment>
             ))}
           </div>
           <div className="bg-white rounded-md p-2 border mb-3" style={{ borderColor: "#E4E2DA" }}>
@@ -13325,6 +13360,10 @@ const PRECONSTRUCTION_FILLABLE_FORMS = {
     fields: ["Mailing Address"],
     genericPdfLongFields: ["Mailing Address"],
     signatureLabels: ["Submitted By - Signature"],
+    projectOverrides: {
+      "sh99-houston": { submitEmail: "sh99safety@ferrovial.us" },
+      nashville: { submitEmail: "agarcia@ferrovial.us,mmaldonado@ferrovial.us" },
+    },
     contactGroups: [
       { label: "Office Number", noName: true, required: true, startRows: 1, hint: "Main office phone and a general email." },
       { label: "Project Manager", noun: "Project Manager", required: true, startRows: 1, max: 4 },
@@ -13339,14 +13378,35 @@ const PRECONSTRUCTION_FILLABLE_FORMS = {
   },
   "Man Hour Work Submittal": {
     title: "Man Hour Work Submittal",
-    pdfLink: "https://drive.google.com/file/d/1NQpTiq7_8fMXE4dVdnp0x6YJzGi0JRK6/preview",
-    pdfFillTemplate: "man-hour-report",
+    // Default = NTI Sylvania. Every project has its own redesigned version below (same layout, project names).
+    pdfLink: "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/nti-sylvania-man-hour-report.pdf",
+    pdfFillTemplate: "generic-form-pdf",
+    genericPdfNeutral: true,
     requiresProof: false,
-    // Sylvania only for now — other projects will get their own
-    // Man Hour report template later.
+    allFieldsRequired: true,
     projects: ["nti-sylvania", "nti-golden-triangle"],
-    fields: ["Month", "Number of Male Employees", "Number of Female Employees", "Male Hours Worked", "Female Hours Worked"],
+    signatureLabels: ["Approved By - Signature"],
+    fields: ["Month", "Number of Male Employees", "Number of Female Employees", "Total Employees", "Male Hours Worked", "Female Hours Worked", "Total Hours Worked", "Approved By"],
+    chipFields: { Month: { options: QM_MONTHS } },
+    numberFields: ["Number of Male Employees", "Number of Female Employees", "Male Hours Worked", "Female Hours Worked"],
+    computedFields: { "Total Employees": ["Number of Male Employees", "Number of Female Employees"], "Total Hours Worked": ["Male Hours Worked", "Female Hours Worked"] },
+    prefillNameFields: ["Approved By"],
+    textBlocks: [
+      { at: "top", emphasis: true, text: "SYLVANIA - Monthly Man Hour Report" },
+      { at: "top", plain: true, text: "NTI-CI SYLVANIA" },
+      { at: "end", emphasis: true, text: "*** Please submit report to ntisafety@ferrovial.us no later than the 5th of every month ***" },
+    ],
     projectOverrides: {
+      "nti-golden-triangle": {
+        projects: ["nti-golden-triangle"],
+        pdfLink: "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/nti-golden-triangle-man-hour-report.pdf",
+        textBlocks: [
+          { at: "top", emphasis: true, text: "GOLDEN TRIANGLE - Monthly Man Hour Report" },
+          { at: "top", plain: true, text: "NTI-CO GOLDEN TRIANGLE" },
+          { at: "end", emphasis: true, text: "*** Please submit report to ntisafety@ferrovial.us no later than the 5th of every month ***" },
+        ],
+      },
+      "nti-sylvania": { projects: ["nti-sylvania"] },
       // FCW99: redesigned fillable (generic PDF) with Segment and automatic totals
       "sh99-houston": {
         projects: ["sh99-houston"],
