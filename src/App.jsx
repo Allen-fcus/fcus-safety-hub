@@ -11229,7 +11229,24 @@ const EMPLOYEES_DEFAULT = [
 // To add a new project: copy a block below, give it a unique key,
 // set the name, and leave sheetUrls blank until sheets are ready.
 // ============================================================
-function QualTag({ status, children }) {
+// Loads the signed PDFs that confirm each designation (personId null = the logged-in person's own badge)
+function useDesignationFiles(user, personId) {
+  const [files, setFiles] = useState({});
+  useEffect(() => {
+    let cancelled = false;
+    if (!user || !user.sessionToken) { setFiles({}); return; }
+    supabase.rpc("get_designation_files", { p_token: user.sessionToken, p_person_id: personId || null }).then(({ data }) => {
+      if (cancelled) return;
+      const m = {};
+      (Array.isArray(data) ? data : []).forEach((f) => { m["id:" + f.qualification_id] = f.url; m["label:" + String(f.label || "").toLowerCase()] = f.url; });
+      setFiles(m);
+    });
+    return () => { cancelled = true; };
+  }, [user && user.sessionToken, personId]);
+  return (q) => files["id:" + q.id] || files["label:" + String(q.label || "").toLowerCase()] || null;
+}
+
+function QualTag({ status, children, fileUrl }) {
   const map = {
     current: { bg: "#E9F6EC", color: "#1E7A34", label: "Current" },
     expiring: { bg: "#FFF4DC", color: "#93650A", label: "Expiring soon" },
@@ -11239,12 +11256,18 @@ function QualTag({ status, children }) {
   return (
     <div className="flex items-center justify-between rounded-sm px-2 py-1" style={{ background: s.bg }}>
       <span className="text-[11px]" style={{ color: INK, fontFamily: "Inter, sans-serif" }}>{children}</span>
-      <span className="text-[9px] uppercase font-bold ml-2 flex-shrink-0" style={{ color: s.color, fontFamily: "IBM Plex Mono, monospace" }}>{s.label}</span>
+      <span className="flex items-center gap-1.5 ml-2 flex-shrink-0">
+        {fileUrl && (
+          <button onClick={(e) => { e.stopPropagation(); window.open(fileUrl, "_blank"); }} className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded-sm" style={{ background: INK, color: GOLD, fontFamily: "IBM Plex Mono, monospace" }}>View PDF</button>
+        )}
+        <span className="text-[9px] uppercase font-bold" style={{ color: s.color, fontFamily: "IBM Plex Mono, monospace" }}>{s.label}</span>
+      </span>
     </div>
   );
 }
 
-function EmployeeDetail({ emp, onClose, photo }) {
+function EmployeeDetail({ emp, onClose, photo, user }) {
+  const fileFor = useDesignationFiles(user, emp.id);
   const initials = emp.name.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase();
   return (
     <div className="fixed inset-0 z-30 flex items-end sm:items-center justify-center bg-black/80 px-0 sm:px-4">
@@ -11286,7 +11309,7 @@ function EmployeeDetail({ emp, onClose, photo }) {
           ) : (
             <div className="space-y-1.5">
               {emp.quals.map((q, i) => (
-                <QualTag key={i} status={q.status}>{q.label}</QualTag>
+                <QualTag key={i} status={q.status} fileUrl={fileFor(q)}>{q.label}</QualTag>
               ))}
             </div>
           )}
@@ -11742,6 +11765,7 @@ function PersonnelScreen({ user, go }) {
       } else {
         setEmployees(
           data.map((e) => ({
+            id: e.id,
             name: e.name,
             empId: e.employee_id,
             badge: e.badge_number,
@@ -11856,7 +11880,7 @@ function PersonnelScreen({ user, go }) {
           <div className="text-[12px] text-center py-6" style={{ color: STEEL }}>No matches.</div>
         )}
       </div>
-      {selected && <EmployeeDetail emp={selected} onClose={() => setSelected(null)} photo={selected.photoUrl} />}
+      {selected && <EmployeeDetail emp={selected} onClose={() => setSelected(null)} photo={selected.photoUrl} user={user} />}
     </div>
   );
 }
@@ -11899,6 +11923,7 @@ function RosterRow({ person, user, onChanged }) {
   };
 
   const [saveError, setSaveError] = useState("");
+  const fileForQual = useDesignationFiles(editing ? user : null, person.id);
   const [personDocs, setPersonDocs] = useState([]);
   const loadPersonDocs = async () => {
     const { data } = await supabase.rpc("list_personnel_documents", { p_token: user.sessionToken, p_person_id: person.id });
@@ -12149,7 +12174,7 @@ function RosterRow({ person, user, onChanged }) {
               <React.Fragment key={q.id}>
               <div className="flex items-center justify-between bg-white rounded-sm px-2.5 py-1.5 border" style={{ borderColor: "#E4E2DA" }}>
                 <div className="flex-1 min-w-0">
-                  <QualTag status={q.status}>{q.label}</QualTag>
+                  <QualTag status={q.status} fileUrl={fileForQual(q)}>{q.label}</QualTag>
                   <div className="text-[10px] mt-0.5" style={{ color: STEEL }}>
                     {q.issued_at && <>Issued {fmtD(q.issued_at)}</>}
                     {q.issued_at && q.expires_at && " · "}
@@ -14692,6 +14717,7 @@ function BadgeDownloadButtons({ user, projectName, slug }) {
 }
 
 function BadgeModal({ user, onClose, onLogout }) {
+  const fileForQual = useDesignationFiles(user, null);
   const { name: projectName, id: projectIdForBadge } = useContext(ProjectContext);
   const badgeQr = useBadgeQr(badgeVerifyLink(projectIdForBadge, user.verifyToken));
   const initials = user.name.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase();
@@ -14784,7 +14810,7 @@ function BadgeModal({ user, onClose, onLogout }) {
               <div className="space-y-1.5">
                 {user.quals.map((q, i) => (
                   <div key={i}>
-                    <QualTag status={q.status}>{q.label}</QualTag>
+                    <QualTag status={q.status} fileUrl={fileForQual(q)}>{q.label}</QualTag>
                     {(q.issued_at || q.expires_at) && (
                       <div className="text-[9px] mt-0.5 px-1" style={{ color: "#9AA0A6" }}>
                         {q.issued_at && <>Issued {fmtD(q.issued_at)}</>}
