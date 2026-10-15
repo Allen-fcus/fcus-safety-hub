@@ -6686,15 +6686,15 @@ const ORIENTATION_FORMS_DEFAULT = [
   ...[
     { projects: ["sh99-houston"], file: "sh99", projCP: "FCW99", email: "sh99safety@ferrovial.us", projShort: "FCW99", projSp: "FCW 99", gc: "Ferrovial Construction-Webber 99 JV", compEmail: "SH99safety@ferrovial.us", dept1: "SH99 Safety Department", deptEq: "SH 99 Safety Department", deptCrane: "FCW 99 Safety Department", manual: "Ferrovial Construction-Webber 99 JV", drugProj: "Ferrovial Construction-Webber JV 99" },
     { projects: ["nashville"], file: "fcw24", projCP: "FCW 24", email: "agarcia@ferrovial.us,mmaldonado@ferrovial.us", projShort: "FCW 24", projSp: "FCW 24", gc: "Ferrovial Construction-Webber 24 JV", compEmail: "agarcia@ferrovial.us and mmaldonado@ferrovial.us", dept1: "FCW24 Safety Department", deptEq: "FCW 24 Safety Department", deptCrane: "FCW 24 Safety Department", manual: "Ferrovial Construction-Webber 24JV", drugProj: "Ferrovial Construction-Webber 24 JV" },
-    { projects: ["nti-sylvania", "nti-golden-triangle"], file: "nti", email: "ntisafety@ferrovial.us", projCP: "NTI", projShort: "NTE Sylvania", projSp: "NTI", gc: "North Tarrant Infrastructure, LLC", compEmail: "ntisafety@ferrovial.us", dept1: "NTI Safety Department", deptEq: "NTI Safety Department", deptCrane: "NTI Safety Department", manual: "North Tarrant Infrastructure", drugProj: "North Tarrant Infrastructure, LLC",
+    { projects: ["nti-sylvania", "nti-golden-triangle"], file: "nti", email: "ntisafety@ferrovial.us", projCP: "NTI", projShort: "NTI", projSp: "NTI", gc: "North Tarrant Infrastructure, LLC", compEmail: "ntisafety@ferrovial.us", dept1: "NTI Safety Department", deptEq: "NTI Safety Department", deptCrane: "NTI Safety Department", manual: "North Tarrant Infrastructure", drugProj: "North Tarrant Infrastructure, LLC",
       links: {
         "Drug Screen Affidavit": "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/nti-drug-screen-affidavit-template.pdf",
         "Competent Person Designation": "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/nti-competent-person-designation.pdf",
         "Equipment Operator Designation": "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/nti-equipment-operator-designation.pdf",
-        "Crane Operator Designation": "https://drive.google.com/file/d/1rjPvqSBAxQ1yy6Lp97v1K9aXPjCfVpZr/preview",
-        "Assembly/Disassembly (A/D) Director Designation": "https://drive.google.com/file/d/1KYz4Z8b8VeOvokEJ7FDMpB56LviSOZ-C/preview",
-        "Crane-Specific Qualified Person Designation": "https://drive.google.com/file/d/1WwZVwYw8dsj2ncbnM5tXlCK4MqIzcPRm/preview",
-        "Flagger Designation": "https://drive.google.com/file/d/12bJ5Beb7Yv5iMdZAsfYCSjJwH5JLIZSt/preview",
+        "Crane Operator Designation": "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/nti-crane-operator-designation.pdf",
+        "Assembly/Disassembly (A/D) Director Designation": "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/nti-crane-ad-director-designation.pdf",
+        "Crane-Specific Qualified Person Designation": "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/nti-crane-specific-qualified-person-designation.pdf",
+        "Flagger Designation": "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/nti-flagger-designation.pdf",
       } },
   ].flatMap((cfg) => {
     const B = "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/";
