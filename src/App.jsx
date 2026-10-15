@@ -6697,7 +6697,7 @@ const ORIENTATION_FORMS_DEFAULT = [
   // ---------------- SH99 (FCW99) and FCW24 orientation forms — redesigned fillable (generic-form-pdf) ----------------
   // Every sentence of the original FCW99 form is rendered as a text block so it shows in both the fillable and the final PDF.
   ...[
-    { projects: ["sh99-houston"], file: "sh99", projCP: "FCW99", email: "sh99safety@ferrovial.us", projShort: "FCW99", projSp: "FCW 99", gc: "Ferrovial Construction-Webber 99 JV", compEmail: "SH99safety@ferrovial.us", dept1: "SH99 Safety Department", deptEq: "SH 99 Safety Department", deptCrane: "FCW 99 Safety Department", manual: "Ferrovial Construction-Webber 99 JV", drugProj: "Ferrovial Construction-Webber JV 99" },
+    { projects: ["sh99-houston"], file: "sh99", projCP: "FCW99", email: "sh99safety@ferrovial.us", projShort: "FCW99", projSp: "FCW 99", gc: "Ferrovial Construction-Webber 99 JV", compEmail: "SH99safety@ferrovial.us", dept1: "SH99 Safety Department", deptEq: "SH 99 Safety Department", deptCrane: "FCW 99 Safety Department", manual: "Ferrovial Construction-Webber 99 JV", drugProj: "Ferrovial Construction-Webber JV 99", craneHeader: "PROJECT: FCW 99     GENERAL CONTRACTOR: Ferrovial Construction-Webber 99JV" },
     { projects: ["nashville"], file: "fcw24", projCP: "FCW 24", email: "agarcia@ferrovial.us,mmaldonado@ferrovial.us", projShort: "FCW 24", projSp: "FCW 24", gc: "Ferrovial Construction-Webber 24 JV", compEmail: "agarcia@ferrovial.us and mmaldonado@ferrovial.us", dept1: "FCW24 Safety Department", deptEq: "FCW 24 Safety Department", deptCrane: "FCW 24 Safety Department", manual: "Ferrovial Construction-Webber 24JV", drugProj: "Ferrovial Construction-Webber 24 JV" },
     { projects: ["nti-sylvania", "nti-golden-triangle"], file: "nti", email: "ntisafety@ferrovial.us", projCP: "NTI", projShort: "NTI", projSp: "NTI", gc: "North Tarrant Infrastructure, LLC", compEmail: "ntisafety@ferrovial.us", dept1: "NTI Safety Department", deptEq: "NTI Safety Department", deptCrane: "NTI Safety Department", manual: "North Tarrant Infrastructure", drugProj: "North Tarrant Infrastructure, LLC",
       links: {
@@ -6811,7 +6811,7 @@ const ORIENTATION_FORMS_DEFAULT = [
         trailingFieldLabels: ["Name of Accredited Organization"],
         chipFields: { "Name of Accredited Organization": { options: ["NCCCO", "CIC"] } },
         textBlocks: [
-          header(true),
+          cfg.craneHeader ? { at: "top", plain: true, text: cfg.craneHeader } : header(true),
           appoint("an “OPERATOR” of a crane", "listed"),
           { at: "top", plain: true, text: "The " + cfg.manual + " Safety Manual requires certification for Crane Operators" },
           { at: "top", plain: true, text: "A certified “OPERATOR” is one who has completed a formal training program through an accredited operator testing organization and who has passed tests in both knowledge and skill for a particular type and capacity of equipment." },
