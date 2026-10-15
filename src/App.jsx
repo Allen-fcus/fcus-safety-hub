@@ -13140,6 +13140,26 @@ const PRECONSTRUCTION_FILLABLE_FORMS = {
     projects: ["nti-sylvania", "nti-golden-triangle"],
     fields: ["Month", "Number of Male Employees", "Number of Female Employees", "Male Hours Worked", "Female Hours Worked"],
     projectOverrides: {
+      // FCW99: redesigned fillable (generic PDF) with Segment and automatic totals
+      "sh99-houston": {
+        projects: ["sh99-houston"],
+        pdfLink: "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/fcw99-man-hour-report.pdf",
+        pdfFillTemplate: "generic-form-pdf",
+        genericPdfNeutral: true,
+        allFieldsRequired: true,
+        submitEmail: "sh99safety@ferrovial.us",
+        signatureLabels: ["Approved By - Signature"],
+        fields: ["Month", "Segment", "Number of Male Employees", "Number of Female Employees", "Total Employees", "Male Hours Worked", "Female Hours Worked", "Total Hours Worked", "Approved By"],
+        chipFields: { Month: { options: QM_MONTHS } },
+        numberFields: ["Number of Male Employees", "Number of Female Employees", "Male Hours Worked", "Female Hours Worked"],
+        computedFields: { "Total Employees": ["Number of Male Employees", "Number of Female Employees"], "Total Hours Worked": ["Male Hours Worked", "Female Hours Worked"] },
+        prefillNameFields: ["Approved By"],
+        textBlocks: [
+          { at: "top", emphasis: true, text: "FCW 99 - Monthly Man Hour Report" },
+          { at: "top", plain: true, text: "Ferrovial Construction-Webber JV99" },
+          { at: "end", emphasis: true, text: "*** Please submit report to ntisafety@ferrovial.us no later than the 5th of every month ***" },
+        ],
+      },
       // FCW24: redesigned fillable (generic PDF) with automatic totals
       nashville: {
         projects: ["nashville"],
