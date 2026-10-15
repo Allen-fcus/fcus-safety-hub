@@ -2918,7 +2918,9 @@ function OrientationScheduleScreen({ activeProjectId }) {
   const [error, setError] = useState("");
   const [needsProjectPick, setNeedsProjectPick] = useState(false);
 
-  const toggleDesignation = (key) => setDesignations((d) => ({ ...d, [key]: !d[key] }));
+  // designations holds how many of the attending people need each designation (0 up to the headcount)
+  const headN = Math.max(1, parseInt(headcount, 10) || 1);
+  const bumpDesignation = (key, delta) => setDesignations((d) => ({ ...d, [key]: Math.max(0, Math.min(headN, (d[key] || 0) + delta)) }));
 
   const startSchedule = async () => {
     if (!day || !subcontractor.trim() || !headcount) { setError("Please fill in the day, subcontractor, and headcount."); return; }
@@ -2954,22 +2956,23 @@ function OrientationScheduleScreen({ activeProjectId }) {
     // designation form is filled out once per person attending, since
     // each is a specific individual's designation.
     const n = parseInt(headcount, 10) || 1;
+    const cnt = (k) => Math.min(n, designations[k] || 0);
     const perPersonTitles = [
-      designations.needs_competent_person ? "Competent Person Designation" : null,
-      designations.needs_equipment_operator ? "Equipment Operator Designation" : null,
-      designations.needs_crane_operator ? "Crane Operator Designation" : null,
-      designations.needs_ad_director ? "Assembly/Disassembly (A/D) Director Designation" : null,
-      designations.needs_flagger ? "Flagger Designation" : null,
-    ].filter(Boolean);
+      [cnt("needs_competent_person"), "Competent Person Designation"],
+      [cnt("needs_equipment_operator"), "Equipment Operator Designation"],
+      [cnt("needs_crane_operator"), "Crane Operator Designation"],
+      [cnt("needs_ad_director"), "Assembly/Disassembly (A/D) Director Designation"],
+      [cnt("needs_flagger"), "Flagger Designation"],
+    ].filter(([c]) => c > 0);
 
     const queue = [];
     const drugForm = ORIENTATION_FORMS_DEFAULT.find((f) => f.title === "Drug Screen Affidavit" && (!f.projects || f.projects.includes(resolvedProjectId)));
     if (drugForm) queue.push({ form: drugForm, personIndex: null });
-    perPersonTitles.forEach((title) => {
+    perPersonTitles.forEach(([count, title]) => {
       const formDef = ORIENTATION_FORMS_DEFAULT.find((f) => f.title === title && (!f.projects || f.projects.includes(resolvedProjectId)));
       if (!formDef) return;
-      for (let p = 1; p <= n; p++) {
-        queue.push({ form: formDef, personIndex: n > 1 ? p : null });
+      for (let p = 1; p <= count; p++) {
+        queue.push({ form: formDef, personIndex: count > 1 ? p : null, personTotal: count });
       }
     });
     setFormQueue(queue);
@@ -3000,7 +3003,7 @@ function OrientationScheduleScreen({ activeProjectId }) {
   if (step === "forms") {
     const currentItem = formQueue[formIndex];
     const currentForm = currentItem.form;
-    const personSuffix = currentItem.personIndex ? ` — Person ${currentItem.personIndex} of ${headcount}` : "";
+    const personSuffix = currentItem.personIndex ? ` — ${currentItem.personIndex} of ${currentItem.personTotal}` : "";
     return (
       <div className="px-4 pt-4 pb-8" style={{ background: "#F4F3EF", minHeight: "100%" }}>
         <div className="text-[11px] uppercase font-bold mb-3" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>
@@ -3060,21 +3063,26 @@ function OrientationScheduleScreen({ activeProjectId }) {
       {DESIGNATION_FORM_PROJECTS.includes(activeProjectId) && (
         <>
       <label className="text-[10px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>
-        Do you need to designate any of the following? (check all that apply)
+        Does anyone attending need a designation? Enter how many people need each one
       </label>
-      <div className="space-y-1.5 mt-1 mb-4">
-        {SCHEDULE_DESIGNATIONS.map((d) => (
-          <button
+      <div className="space-y-1.5 mt-1 mb-2">
+        {SCHEDULE_DESIGNATIONS.map((d) => {
+          const c = Math.min(headN, designations[d.key] || 0);
+          return (
+          <div
             key={d.key}
-            onClick={() => toggleDesignation(d.key)}
-            className="w-full flex items-center gap-2 rounded-sm px-2.5 py-2 border"
-            style={{ borderColor: designations[d.key] ? GOLD : "#E4E2DA", background: designations[d.key] ? "#FFF8E1" : "white" }}
+            className="w-full flex items-center gap-2 rounded-sm px-2.5 py-1.5 border"
+            style={{ borderColor: c > 0 ? GOLD : "#E4E2DA", background: c > 0 ? "#FFF8E1" : "white" }}
           >
-            {designations[d.key] ? <CheckCircle2 size={15} color={GOLD} /> : <Circle size={15} color={STEEL} />}
-            <span className="text-[13px]">{d.label}</span>
-          </button>
-        ))}
+            <span className="text-[13px] flex-1">{d.label}</span>
+            <button type="button" onClick={() => bumpDesignation(d.key, -1)} disabled={c === 0} className="w-8 h-8 rounded-md border text-[18px] font-bold disabled:opacity-30" style={{ borderColor: "#C9C6BC", color: INK }}>−</button>
+            <span className="w-6 text-center text-[15px] font-bold" style={{ fontFamily: "IBM Plex Mono, monospace" }}>{c}</span>
+            <button type="button" onClick={() => bumpDesignation(d.key, 1)} disabled={c >= headN} className="w-8 h-8 rounded-md border text-[18px] font-bold disabled:opacity-30" style={{ borderColor: GOLD, background: GOLD, color: INK }}>+</button>
+          </div>
+          );
+        })}
       </div>
+      <div className="text-[10px] mb-4" style={{ color: STEEL }}>Example: 5 people attending, 1 Competent Person and 1 Equipment Operator. You will fill out one Drug Screen Affidavit for the whole group, then one designation form for each person you add here.</div>
         </>
       )}
       <div className="text-[10px] mb-4" style={{ color: STEEL }}>Drug Screen Affidavit is always required and will be included automatically.</div>
