@@ -3131,8 +3131,13 @@ function ManageOrientationSchedulesScreen({ user }) {
 
   useEffect(() => { load(); }, [user?.sessionToken]);
 
+  const [confirmClearId, setConfirmClearId] = useState(null);
   const clearSchedule = async (id) => {
-    await supabase.rpc("delete_orientation_schedule", { p_token: user.sessionToken, p_schedule_id: id });
+    // first tap asks for confirmation; second tap actually clears
+    if (confirmClearId !== id) { setConfirmClearId(id); return; }
+    const res = await supabase.rpc("delete_orientation_schedule", { p_token: user.sessionToken, p_schedule_id: id });
+    reportRpcFailure("Clear orientation", res);
+    setConfirmClearId(null);
     load();
   };
 
@@ -3172,9 +3177,19 @@ function ManageOrientationSchedulesScreen({ user }) {
                 </div>
               ))}
             </div>
+            {confirmClearId === s.id ? (
+              <div className="mt-2 rounded-sm p-2" style={{ background: "#FCEFEF", border: `1px solid ${ALERT}` }}>
+                <div className="text-[11px] font-bold mb-1.5" style={{ color: ALERT }}>Are you sure you want to clear {s.subcontractor} ({s.session_day})? It will be removed from this list.</div>
+                <div className="flex gap-2">
+                  <button onClick={() => setConfirmClearId(null)} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, background: "white", fontFamily: "IBM Plex Mono, monospace" }}>Cancel</button>
+                  <button onClick={() => clearSchedule(s.id)} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm" style={{ background: ALERT, color: "white", fontFamily: "IBM Plex Mono, monospace" }}>Yes, confirm clear</button>
+                </div>
+              </div>
+            ) : (
             <button onClick={() => clearSchedule(s.id)} className="w-full mt-2 text-[10px] font-bold uppercase py-1.5 rounded-sm border" style={{ borderColor: ALERT, color: ALERT, fontFamily: "IBM Plex Mono, monospace" }}>
               Clear
             </button>
+            )}
           </div>
         );
       })}
