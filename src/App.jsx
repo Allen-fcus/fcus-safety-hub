@@ -8556,6 +8556,11 @@ async function buildGenericFormPdf({ form, slug, projectName, standardValues, fi
   const long = new Set(longFields || []);
   const photoMap = photos || {};
   const items = (form.fields || []).map((label, i) => ({ label, i })).filter((x) => !(form.genericPdfHideFields || []).includes(x.label)).map(({ label, i }) => ({ label, value: photoMap[label] ? `${photoMap[label].length} photo(s) attached - see below` : (fieldValues[i] || ""), full: long.has(label) || String(fieldValues[i] || "").length > 34 }));
+  if (form.genericPdfFieldOrder) {
+    const ord = form.genericPdfFieldOrder;
+    const rank = (x) => { const r = ord.indexOf(x.label); return r === -1 ? 1000 + x.i : r; };
+    items.sort((x, y) => rank(x) - rank(y));
+  }
   let k = 0;
   while (k < items.length) {
     const a = items[k];
@@ -13507,6 +13512,9 @@ const PRECONSTRUCTION_FILLABLE_FORMS = {
     projects: ["nti-sylvania", "nti-golden-triangle"],
     signatureLabels: ["Approved By - Signature"],
     fields: ["Month", "Number of Male Employees", "Number of Female Employees", "Total Employees", "Male Hours Worked", "Female Hours Worked", "Total Hours Worked", "Approved By"],
+    // PDF layout: employees (male, female, total) down the left side, hours (male, female, total) down the right
+    genericPdfFieldOrder: ["Month", "Number of Male Employees", "Male Hours Worked", "Number of Female Employees", "Female Hours Worked", "Total Employees", "Total Hours Worked", "Approved By"],
+    genericPdfLongFields: ["Month", "Approved By"],
     chipFields: { Month: { options: QM_MONTHS } },
     numberFields: ["Number of Male Employees", "Number of Female Employees", "Male Hours Worked", "Female Hours Worked"],
     computedFields: { "Total Employees": ["Number of Male Employees", "Number of Female Employees"], "Total Hours Worked": ["Male Hours Worked", "Female Hours Worked"] },
@@ -13537,6 +13545,8 @@ const PRECONSTRUCTION_FILLABLE_FORMS = {
         submitEmail: "sh99safety@ferrovial.us",
         signatureLabels: ["Approved By - Signature"],
         fields: ["Month", "Segment", "Number of Male Employees", "Number of Female Employees", "Total Employees", "Male Hours Worked", "Female Hours Worked", "Total Hours Worked", "Approved By"],
+        genericPdfFieldOrder: ["Month", "Segment", "Number of Male Employees", "Male Hours Worked", "Number of Female Employees", "Female Hours Worked", "Total Employees", "Total Hours Worked", "Approved By"],
+        genericPdfLongFields: ["Approved By"],
         chipFields: { Month: { options: QM_MONTHS } },
         numberFields: ["Number of Male Employees", "Number of Female Employees", "Male Hours Worked", "Female Hours Worked"],
         computedFields: { "Total Employees": ["Number of Male Employees", "Number of Female Employees"], "Total Hours Worked": ["Male Hours Worked", "Female Hours Worked"] },
@@ -13557,6 +13567,8 @@ const PRECONSTRUCTION_FILLABLE_FORMS = {
         submitEmail: "agarcia@ferrovial.us,mmaldonado@ferrovial.us",
         signatureLabels: ["Approved By - Signature"],
         fields: ["Month", "Number of Male Employees", "Number of Female Employees", "Total Employees", "Male Hours Worked", "Female Hours Worked", "Total Hours Worked", "Approved By"],
+        genericPdfFieldOrder: ["Month", "Number of Male Employees", "Male Hours Worked", "Number of Female Employees", "Female Hours Worked", "Total Employees", "Total Hours Worked", "Approved By"],
+        genericPdfLongFields: ["Month", "Approved By"],
         chipFields: { Month: { options: QM_MONTHS } },
         numberFields: ["Number of Male Employees", "Number of Female Employees", "Male Hours Worked", "Female Hours Worked"],
         computedFields: { "Total Employees": ["Number of Male Employees", "Number of Female Employees"], "Total Hours Worked": ["Male Hours Worked", "Female Hours Worked"] },
