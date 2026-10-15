@@ -13508,7 +13508,7 @@ const PRECONSTRUCTION_FILLABLE_FORMS = {
   "Man Hour Work Submittal": {
     title: "Man Hour Work Submittal",
     // Default = NTI Sylvania. Every project has its own redesigned version below (same layout, project names).
-    pdfLink: "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/nti-sylvania-man-hour-report.pdf",
+    pdfLink: "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/nti-sylvania-man-hour-report-v3.pdf",
     pdfFillTemplate: "generic-form-pdf",
     genericPdfNeutral: true,
     requiresProof: false,
@@ -13542,7 +13542,7 @@ const PRECONSTRUCTION_FILLABLE_FORMS = {
       // FCW99: redesigned fillable (generic PDF) with Segment and automatic totals
       "sh99-houston": {
         projects: ["sh99-houston"],
-        pdfLink: "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/fcw99-man-hour-report.pdf",
+        pdfLink: "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/fcw99-man-hour-report-v3.pdf",
         pdfFillTemplate: "generic-form-pdf",
         genericPdfNeutral: true,
         allFieldsRequired: true,
@@ -13564,7 +13564,7 @@ const PRECONSTRUCTION_FILLABLE_FORMS = {
       // FCW24: redesigned fillable (generic PDF) with automatic totals
       nashville: {
         projects: ["nashville"],
-        pdfLink: "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/fcw24-man-hour-report.pdf",
+        pdfLink: "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/fcw24-man-hour-report-v3.pdf",
         pdfFillTemplate: "generic-form-pdf",
         genericPdfNeutral: true,
         allFieldsRequired: true,
