@@ -875,7 +875,7 @@ function SiteWeatherCard({ projectId }) {
 }
 
 // Order of the tabs/menu on every project (items not listed keep their relative order before Truck Drivers).
-const NAV_ORDER = ["home", "orientation", "forms", "hsstandards", "safetyplan", "workplans", "preconstruction", "meetings", "reports", "toolbox", "quarterlymonthly", "training", "laborlaws", "trafficcontrol", "concern", "truckdriver", "emergency", "personnel"];
+const NAV_ORDER = ["home", "orientation", "forms", "hsstandards", "safetyplan", "workplans", "preconstruction", "safetyreports", "meetings", "reports", "toolbox", "quarterlymonthly", "training", "laborlaws", "trafficcontrol", "concern", "truckdriver", "emergency", "personnel"];
 const sortByNavOrder = (items) => {
   const rank = (k) => { const i = NAV_ORDER.indexOf(k); return i === -1 ? NAV_ORDER.indexOf("concern") : i; };
   return items.map((it, i) => ({ it, i })).sort((a, b) => rank(a.it.key) - rank(b.it.key) || a.i - b.i).map((x) => x.it);
@@ -900,7 +900,8 @@ function HomeScreen({ go, user, activeProjectId }) {
     { key: "emergency", label: t("emergencyContacts"), desc: t("emergencyDesc"), icon: Phone, count: t("alwaysAvailable") },
     ...(LABOR_LAWS_PROJECTS.includes(activeProjectId) ? [{ key: "laborlaws", label: t("laborLaws"), desc: t("laborLawsDesc"), icon: ShieldAlert, count: t("alwaysAvailable") }] : []),
     ...(TRAFFIC_CONTROL_PROJECTS.includes(activeProjectId) ? [{ key: "trafficcontrol", label: "Traffic Control", desc: "Clear Zone Criteria and other traffic control standards", icon: ShieldAlert, count: "1 document" }] : []),
-    ...(user && user.canViewMeetings ? [{ key: "meetings", label: "Sign In Sheets", desc: "Sign-in sheets with QR code, for GC and Ferrovial staff", icon: Users, count: "Sign-ins" }] : []),
+    ...(user && user.canViewMeetings ? [{ key: "safetyreports", label: "Safety Reports", desc: "Incident reports, statements, investigations and classification", icon: ShieldAlert, count: "Incidents" }] : []),
+    ...(user && user.canViewMeetings ? [{ key: "meetings", label: "Meetings", desc: "Sign-in sheets with QR code, for GC and Ferrovial staff", icon: Users, count: "Sign-ins" }] : []),
     { key: "concern", label: t("reportConcern"), desc: t("reportConcernDesc"), icon: MessageSquare, count: t("alwaysAvailable") },
   ];
   const orderedSections = sortByNavOrder(sections);
@@ -2774,23 +2775,18 @@ function SafetyReportsPanel({ user, activeProjectId, onOpenMeeting }) {
   );
 }
 
-function MeetingsScreen({ user, activeProjectId }) {
-  const [tab, setTab] = useState("sheets");
-  const [openMeetingId, setOpenMeetingId] = useState(null);
+function MeetingsScreen({ user, activeProjectId, initialOpenId }) {
   if (!user || !user.canViewMeetings) {
-    return <div className="px-4 pt-10 text-center text-[12px]" style={{ color: STEEL }}>Sign In Sheets and Safety Reports are only available to Ferrovial and general contractor staff on this project.</div>;
+    return <div className="px-4 pt-10 text-center text-[12px]" style={{ color: STEEL }}>Meetings are only available to Ferrovial and general contractor staff on this project.</div>;
   }
-  const tabBtn = (k, label) => (
-    <button onClick={() => { setTab(k); if (k === "sheets") setOpenMeetingId(null); }} className="flex-1 py-2.5 text-[11px] font-bold uppercase" style={{ background: tab === k ? INK : "white", color: tab === k ? GOLD : STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{label}</button>
-  );
-  return (
-    <div style={{ background: "#F4F3EF", minHeight: "100%" }}>
-      <div className="px-4 pt-4"><div className="flex rounded-md overflow-hidden border" style={{ borderColor: "#C9C6BC" }}>{tabBtn("sheets", "Sign-In Sheets")}{tabBtn("reports", "Safety Reports")}</div></div>
-      {tab === "sheets"
-        ? <MeetingsSheetsPanel key={openMeetingId || "list"} user={user} activeProjectId={activeProjectId} initialOpenId={openMeetingId} />
-        : <SafetyReportsPanel user={user} activeProjectId={activeProjectId} onOpenMeeting={(id) => { setOpenMeetingId(id); setTab("sheets"); }} />}
-    </div>
-  );
+  return <MeetingsSheetsPanel key={initialOpenId || "list"} user={user} activeProjectId={activeProjectId} initialOpenId={initialOpenId} />;
+}
+
+function SafetyReportsScreen({ user, activeProjectId, onOpenMeeting }) {
+  if (!user || !user.canViewMeetings) {
+    return <div className="px-4 pt-10 text-center text-[12px]" style={{ color: STEEL }}>Safety Reports are only available to Ferrovial and general contractor staff on this project.</div>;
+  }
+  return <SafetyReportsPanel user={user} activeProjectId={activeProjectId} onOpenMeeting={onOpenMeeting} />;
 }
 
 function MeetingsSheetsPanel({ user, activeProjectId, initialOpenId }) {
@@ -17241,7 +17237,7 @@ function TruckDriverVerifyScreen() {
 // reporting, and the Labor Law QR code that anyone can scan).
 const ALWAYS_PUBLIC_SCREENS = ["emergency", "concern", "laborlaws", "trafficcontrol", "meetingsignin", "orientationsignin", "hsstandards", "orientationschedule", "verifybadge", "truckdriver", "verifytruckdriver"];
 // Normally-gated screens for every project.
-const BASE_GATED_SCREENS = ["forms", "safetyplan", "toolbox", "workplans", "mysubmissions", "quarterlymysubmissions", "summarymysubmissions", "preconsubmissions", "preconstruction", "quarterlymonthly", "training", "meetings"];
+const BASE_GATED_SCREENS = ["forms", "safetyplan", "toolbox", "workplans", "mysubmissions", "quarterlymysubmissions", "summarymysubmissions", "preconsubmissions", "preconstruction", "quarterlymonthly", "training", "meetings", "safetyreports"];
 // Projects where EVERYTHING (except the always-public screens above)
 // requires a badge — including Home itself.
 const FULLY_GATED_PROJECTS = ["sh99-houston"];
@@ -17315,6 +17311,7 @@ export default function SafetyHubPrototype() {
   const [showBadge, setShowBadge] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const [pendingScreen, setPendingScreen] = useState(null);
+  const [openMeetingId, setOpenMeetingId] = useState(null);
 
   // On load, check for a saved session token and re-log the person in
   // automatically instead of making them enter their PIN every time.
@@ -17471,7 +17468,8 @@ export default function SafetyHubPrototype() {
     managetoolbox: "Manage Toolbox Talks",
     laborlaws: t("laborLaws"),
     trafficcontrol: "Traffic Control",
-    meetings: "Sign In Sheets",
+    meetings: "Meetings",
+    safetyreports: "Safety Reports",
     meetingsignin: "Meeting Sign-In",
     verifybadge: "Badge",
     managelaborlaw: "Manage Labor Law Postings",
@@ -17512,6 +17510,7 @@ export default function SafetyHubPrototype() {
       setShowLogin(true);
       return;
     }
+    setOpenMeetingId(null);
     setScreen(targetScreen);
   };
 
@@ -17562,7 +17561,8 @@ export default function SafetyHubPrototype() {
     { key: "emergency", icon: Phone, label: t("emergencyContacts") },
     ...(LABOR_LAWS_PROJECTS.includes(activeProjectId) ? [{ key: "laborlaws", icon: ShieldAlert, label: t("laborLaws") }] : []),
     ...(TRAFFIC_CONTROL_PROJECTS.includes(activeProjectId) ? [{ key: "trafficcontrol", icon: ShieldAlert, label: "Traffic Control" }] : []),
-    ...(user && user.canViewMeetings ? [{ key: "meetings", icon: Users, label: "Sign In Sheets" }] : []),
+    ...(user && user.canViewMeetings ? [{ key: "safetyreports", icon: ShieldAlert, label: "Safety Reports" }] : []),
+    ...(user && user.canViewMeetings ? [{ key: "meetings", icon: Users, label: "Meetings" }] : []),
   ];
   const orderedSidebarItems = sortByNavOrder(sidebarItems);
 
@@ -17684,7 +17684,8 @@ export default function SafetyHubPrototype() {
             {screen === "safetyplan" && <SafetyPlanScreen />}
             {screen === "toolbox" && <ToolboxScreen user={user} go={go} activeProjectId={activeProjectId} />}
             {screen === "managetoolbox" && <ManageToolboxScreen user={user} />}
-            {screen === "meetings" && <MeetingsScreen user={user} activeProjectId={activeProjectId} />}
+            {screen === "meetings" && <MeetingsScreen user={user} activeProjectId={activeProjectId} initialOpenId={openMeetingId} />}
+            {screen === "safetyreports" && <SafetyReportsScreen user={user} activeProjectId={activeProjectId} onOpenMeeting={(id) => { setOpenMeetingId(id); setScreen("meetings"); }} />}
             {screen === "meetingsignin" && <MeetingSignInScreen />}
             {screen === "verifybadge" && <BadgeVerifyScreen />}
             {screen === "trafficcontrol" && <TrafficControlScreen user={user} activeProjectId={activeProjectId} />}
