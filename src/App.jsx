@@ -12342,7 +12342,64 @@ function ManageSubcontractorsScreen({ user, activeProjectId }) {
   );
 }
 
-function ManageRosterScreen({ user }) {
+function AllProjectsRoster({ user, onSwitchProject }) {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [q, setQ] = useState("");
+  const [openProj, setOpenProj] = useState({});
+  useEffect(() => {
+    supabase.rpc("list_personnel_all_projects", { p_token: user.sessionToken }).then(({ data, error }) => {
+      setRows(error || !Array.isArray(data) ? [] : data.filter((r) => !(PROJECTS[r.project_slug] && PROJECTS[r.project_slug].inactive)));
+      setLoading(false);
+    });
+  }, [user?.sessionToken]);
+  const needle = q.trim().toLowerCase();
+  const match = (r) => !needle || `${r.name} ${r.employer || ""} ${r.badge_number || ""} ${r.employee_id || ""} ${(r.qualifications || []).map((x) => x.label).join(" ")}`.toLowerCase().includes(needle);
+  const byProject = {};
+  rows.filter(match).forEach((r) => { (byProject[r.project_slug] = byProject[r.project_slug] || { name: r.project_name, people: [] }).people.push(r); });
+  const slugs = Object.keys(byProject);
+  return (
+    <div>
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, employer, badge or designation across every project" className="w-full rounded-md border px-3 py-2 text-[13px] mb-2" style={{ borderColor: "#C9C6BC" }} />
+      <div className="text-[10px] mb-2" style={{ color: STEEL }}>{rows.filter(match).length} people across {slugs.length} project{slugs.length === 1 ? "" : "s"}. Tap Open to manage someone in their project.</div>
+      {loading && <div className="text-[12px] mb-2" style={{ color: STEEL }}>Loading…</div>}
+      {slugs.map((slug) => (
+        <div key={slug} className="bg-white rounded-md border mb-2" style={{ borderColor: "#E4E2DA" }}>
+          <button onClick={() => setOpenProj((o) => ({ ...o, [slug]: !(o[slug] ?? !!needle) }))} className="w-full flex items-center justify-between p-3 text-left">
+            <span className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{byProject[slug].name}</span>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-sm" style={{ background: "#FFF8E1", color: "#93650A", fontFamily: "IBM Plex Mono, monospace" }}>{byProject[slug].people.length}</span>
+          </button>
+          {(openProj[slug] ?? !!needle) && (
+            <div className="px-3 pb-3 space-y-1.5">
+              {byProject[slug].people.map((r) => (
+                <div key={r.id} className="rounded-sm border px-2.5 py-2" style={{ borderColor: "#E4E2DA", opacity: r.active === false ? 0.55 : 1 }}>
+                  <div className="flex items-center justify-between">
+                    <div className="min-w-0">
+                      <div className="text-[12px] font-bold truncate">{r.name}{r.active === false ? " (inactive)" : ""}</div>
+                      <div className="text-[10px]" style={{ color: STEEL }}>{r.employer || "—"} · Badge {r.badge_number || "—"}{r.can_add_personnel ? " · Admin" : ""}</div>
+                    </div>
+                    <button onClick={() => onSwitchProject && onSwitchProject(slug, "manageroster")} className="flex-shrink-0 ml-2 text-[9px] font-bold uppercase px-2 py-1 rounded-sm" style={{ background: INK, color: GOLD, fontFamily: "IBM Plex Mono, monospace" }}>Open</button>
+                  </div>
+                  {(r.qualifications || []).length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1.5">
+                      {r.qualifications.map((x) => (
+                        <span key={x.id} className="text-[9px] px-1.5 py-0.5 rounded-sm" style={{ background: x.status === "expired" ? "#FCEFEF" : x.status === "expiring" ? "#FFF4DC" : "#E9F6EC", color: x.status === "expired" ? ALERT : INK }}>{x.label}{x.expires_at ? ` · exp ${fmtD(x.expires_at)}` : ""}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+      {!loading && slugs.length === 0 && <div className="text-[12px] text-center py-6" style={{ color: STEEL }}>No one found.</div>}
+    </div>
+  );
+}
+
+function ManageRosterScreen({ user, onSwitchProject }) {
+  const [rosterScope, setRosterScope] = useState("project"); // "project" | "all" (Safety Hub Admins only)
   const [people, setPeople] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -12389,11 +12446,20 @@ function ManageRosterScreen({ user }) {
           Export CSV
         </button>
       </div>
+      {user && user.isHubAdmin && (
+        <div className="flex gap-2 mb-3">
+          {[["project", "This Project"], ["all", "All Projects"]].map(([k, l]) => (
+            <button key={k} onClick={() => setRosterScope(k)} className="flex-1 text-[10px] font-bold uppercase py-2 rounded-sm" style={{ background: rosterScope === k ? GOLD : "white", color: rosterScope === k ? INK : STEEL, border: `1px solid ${rosterScope === k ? GOLD : "#C9C6BC"}`, fontFamily: "IBM Plex Mono, monospace" }}>{l}</button>
+          ))}
+        </div>
+      )}
+      {rosterScope === "all" && user && user.isHubAdmin ? <AllProjectsRoster user={user} onSwitchProject={onSwitchProject} /> : (<>
       {loading && <div className="text-[12px] mb-2" style={{ color: STEEL }}>Loading…</div>}
       {people.map((p) => <RosterRow key={p.id} person={p} user={user} onChanged={load} />)}
       {!loading && people.length === 0 && (
         <div className="text-[12px] text-center py-6" style={{ color: STEEL }}>Nobody on this roster yet.</div>
       )}
+      </>)}
     </div>
   );
 }
@@ -15919,7 +15985,7 @@ export default function SafetyHubPrototype() {
     setScreen("home");
   };
 
-  const handleSwitchProject = async (projectId) => {
+  const handleSwitchProject = async (projectId, targetScreen) => {
     // Safety Hub Admins stay logged in and jump straight to the project.
     if (user && user.isHubAdmin && user.sessionToken) {
       await loadProjectMap();
@@ -15950,7 +16016,7 @@ export default function SafetyHubPrototype() {
           });
           setShowProjectSwitcher(false);
           setConcernReports([]);
-          setScreen("home");
+          setScreen(typeof targetScreen === "string" ? targetScreen : "home");
           return;
         }
       }
@@ -16219,7 +16285,7 @@ export default function SafetyHubPrototype() {
             {screen === "managesubmittedforms" && <SubmittedFormsScreen user={user} />}
             {screen === "personnel" && <PersonnelScreen user={user} go={go} />}
             {screen === "addperson" && <AddPersonScreen user={user} onDone={() => go("personnel")} />}
-            {screen === "manageroster" && <ManageRosterScreen user={user} />}
+            {screen === "manageroster" && <ManageRosterScreen user={user} onSwitchProject={handleSwitchProject} />}
             {screen === "managesubcontractors" && <ManageSubcontractorsScreen user={user} activeProjectId={activeProjectId} />}
             {screen === "managebulletin" && <ManageBulletinScreen user={user} />}
             {screen === "workplans" && <WorkPlansScreen user={user} go={go} />}
