@@ -404,6 +404,16 @@ const QUARTERLY_MONTHLY_PROJECTS = ["nti-sylvania", "nti-golden-triangle"];
 const DESIGNATION_FORM_PROJECTS = ["nti-sylvania", "nti-golden-triangle"];
 
 // Period choices carry no year - the submission date supplies the year.
+// ---- Date display: always MM/DD/YYYY (timestamps shown in Central time) ----
+function fmtD(v) {
+  if (v === null || v === undefined || v === "") return "";
+  if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v)) { const [y, m, d] = v.split("-"); return `${m}/${d}/${y}`; }
+  const dt = v instanceof Date ? v : new Date(v);
+  if (isNaN(dt.getTime())) return String(v);
+  // date-only text (no time) is a calendar day: format as-is, no time-zone shift
+  const dateOnly = typeof v === "string" && !/[:T]/.test(v);
+  return dt.toLocaleDateString("en-US", { ...(dateOnly ? {} : { timeZone: "America/Chicago" }), month: "2-digit", day: "2-digit", year: "numeric" });
+}
 const QM_MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const QM_GC_BLOCK = { at: "before", title: "General Contractor", text: "North Tarrant Infrastructure, LLC" };
 
@@ -561,7 +571,7 @@ function QuarterlySubmissionsScreen({ user, admin }) {
           <div className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{s.form_title}</div>
           {s.period && <div className="text-[11px] mt-0.5 font-bold" style={{ color: INK }}>Period: {s.period}</div>}
           {admin && <div className="text-[11px] mt-0.5" style={{ color: STEEL }}>{s.submitted_by} · {s.employer || "—"}</div>}
-          <div className="text-[10px] mt-0.5" style={{ color: STEEL, ...mono }}>{new Date(s.submitted_at).toLocaleString()}</div>
+          <div className="text-[10px] mt-0.5" style={{ color: STEEL, ...mono }}>{fmtDT(s.submitted_at)}</div>
           <div className="flex gap-2 mt-2 flex-wrap">
             {s.filled_pdf_url ? (
               <button onClick={() => window.open(s.filled_pdf_url, "_blank")} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm" style={{ background: GOLD, color: INK, ...mono }}>View / Download</button>
@@ -695,8 +705,8 @@ function SummarySubmissionsScreen({ user, admin }) {
             <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-sm flex-shrink-0" style={{ background: r.countersigned_at ? "#DFF3E3" : "#FFF3C4", color: r.countersigned_at ? "#1E7A34" : "#7A5B00", ...mono }}>{r.countersigned_at ? "Countersigned" : "Awaiting NTI"}</span>
           </div>
           {admin && <div className="text-[11px] mt-0.5" style={{ color: STEEL }}>{r.submitted_by}</div>}
-          <div className="text-[10px] mt-0.5" style={{ color: STEEL, ...mono }}>Submitted {new Date(r.submitted_at).toLocaleString()}</div>
-          {r.countersigned_at && <div className="text-[10px] mt-0.5" style={{ color: "#1E7A34", ...mono }}>Countersigned by {r.countersigned_by} · {new Date(r.countersigned_at).toLocaleString()}</div>}
+          <div className="text-[10px] mt-0.5" style={{ color: STEEL, ...mono }}>Submitted {fmtDT(r.submitted_at)}</div>
+          {r.countersigned_at && <div className="text-[10px] mt-0.5" style={{ color: "#1E7A34", ...mono }}>Countersigned by {r.countersigned_by} · {fmtDT(r.countersigned_at)}</div>}
           <div className="flex gap-2 mt-2 flex-wrap">
             {r.filled_pdf_url && <button onClick={() => window.open(r.filled_pdf_url, "_blank")} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: INK, ...mono }}>View Submitted</button>}
             {r.countersigned_pdf_url && <button onClick={() => window.open(r.countersigned_pdf_url, "_blank")} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm" style={{ background: GOLD, color: INK, ...mono }}>View Countersigned</button>}
@@ -714,7 +724,7 @@ function SummarySubmissionsScreen({ user, admin }) {
         <div className="fixed inset-0 z-30 flex items-end sm:items-center justify-center bg-black/70 p-3">
           <div className="bg-white rounded-md w-full max-w-md p-4 max-h-[92vh] overflow-y-auto">
             <div className="text-[15px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>Countersign for NTI</div>
-            <div className="text-[11px] mt-1" style={{ color: STEEL }}>{signing.employer || signing.submitted_by} - submitted {new Date(signing.submitted_at).toLocaleString()}</div>
+            <div className="text-[11px] mt-1" style={{ color: STEEL }}>{signing.employer || signing.submitted_by} - submitted {fmtDT(signing.submitted_at)}</div>
             <button onClick={() => window.open(signing.filled_pdf_url, "_blank")} className="w-full mt-3 text-[11px] font-bold uppercase py-2 rounded-sm border" style={{ borderColor: "#C9C6BC", color: INK, ...mono }}>1. Open the submitted document to review</button>
             <label className="block mt-3 text-[11px] uppercase font-bold" style={{ color: STEEL, ...mono }}>2. NTI representative name</label>
             <input value={signName} onChange={(e) => setSignName(e.target.value)} className="w-full rounded-md border px-3 py-2 text-[13px] mt-1" style={{ borderColor: "#C9C6BC" }} />
@@ -908,7 +918,7 @@ function HomeScreen({ go, user, activeProjectId }) {
           ? []
           : data.map((row) => ({
               title: row.title,
-              date: row.posted_at ? new Date(row.posted_at).toLocaleDateString() : "",
+              date: row.posted_at ? fmtD(row.posted_at) : "",
               message: row.message,
               checklist: row.checklist || null,
               pinned: !!row.pinned,
@@ -2514,7 +2524,7 @@ function PreOrientationFormStep({ form, projectId, activeProjectId, scheduleId, 
   const [submitting, setSubmitting] = useState(false);
   const [pdfError, setPdfError] = useState("");
   const [error, setError] = useState("");
-  const todayStr = new Date().toLocaleDateString();
+  const todayStr = fmtD();
 
   const setStatus = (gi, i, val) => setStatusValues((sv) => ({ ...sv, [gi]: { ...(sv[gi] || {}), [i]: val } }));
   const setChoice = (gi, i) => setChoiceValues((cv) => ({ ...cv, [gi]: i }));
@@ -3027,7 +3037,7 @@ function ManageOrientationSchedulesScreen({ user }) {
               <div className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{s.subcontractor}</div>
               <div className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-sm" style={{ background: "#FFF8E1", color: "#93650A", fontFamily: "IBM Plex Mono, monospace" }}>{s.session_day}</div>
             </div>
-            <div className="text-[11px] mt-0.5" style={{ color: STEEL }}>{s.headcount} attending · Scheduled {new Date(s.submitted_at).toLocaleDateString()}</div>
+            <div className="text-[11px] mt-0.5" style={{ color: STEEL }}>{s.headcount} attending · Scheduled {fmtD(s.submitted_at)}</div>
             <div className="mt-2 space-y-1.5">
               {submissions.length === 0 && (
                 <div className="text-[11px]" style={{ color: STEEL }}>No forms submitted yet.</div>
@@ -3142,7 +3152,7 @@ function OrientationSubmissionsScreen({ user }) {
             )}
           </div>
           <div className="text-[11px] mt-0.5" style={{ color: STEEL }}>{s.submitted_by} · {s.employer || "—"}</div>
-          <div className="text-[10px] mt-0.5" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{new Date(s.submitted_at).toLocaleString()}</div>
+          <div className="text-[10px] mt-0.5" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{fmtDT(s.submitted_at)}</div>
           <div className="flex gap-2 mt-2 flex-wrap">
             {s.filled_pdf_url ? (
               <button onClick={() => window.open(s.filled_pdf_url, "_blank")} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>
@@ -3226,7 +3236,7 @@ function SignInCard({ entry, user, onDone }) {
         <div>Position: {entry.position || "—"}</div>
         <div>Work Type: {entry.work_type || "—"}</div>
         <div>Operator: {entry.is_operator ? "Yes" : "No"}</div>
-        <div>Submitted: {new Date(entry.submitted_at).toLocaleDateString()}</div>
+        <div>Submitted: {fmtD(entry.submitted_at)}</div>
       </div>
       <div className="flex gap-2">
         <button onClick={() => setCreating(true)} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>Create Badge</button>
@@ -3261,7 +3271,7 @@ function ManageOrientationSignInsScreen({ user, activeProjectId }) {
         { label: "Operator", get: (e) => (e.is_operator ? "Yes" : "No") },
         { label: "Position", get: (e) => e.position },
         { label: "Type of Work", get: (e) => e.work_type },
-        { label: "Submitted At", get: (e) => new Date(e.submitted_at).toLocaleString() },
+        { label: "Submitted At", get: (e) => fmtDT(e.submitted_at) },
       ]
     );
   };
@@ -4108,7 +4118,7 @@ function ToolboxWeekAckList({ week, user, onClose }) {
                   <div className="text-[11px]" style={{ color: STEEL }}>{a.employer || "—"}</div>
                 </div>
                 <div className="text-[10px]" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>
-                  {new Date(a.acknowledged_at).toLocaleDateString()}
+                  {fmtD(a.acknowledged_at)}
                 </div>
               </div>
             ))}
@@ -5164,7 +5174,9 @@ function CertificateList({ certs, onView }) {
 // ---- Admin: per-person training detail, test answer review, certificates ----
 function fmtDT(ts) {
   if (!ts) return "—";
-  return new Date(ts).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+  const dt = ts instanceof Date ? ts : new Date(ts);
+  if (isNaN(dt.getTime())) return String(ts);
+  return dt.toLocaleString("en-US", { timeZone: "America/Chicago", month: "2-digit", day: "2-digit", year: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
 function ExamReviewModal({ user, examAttemptId, onClose }) {
@@ -5789,7 +5801,7 @@ function TrainingScreen({ user, go }) {
           <div key={i} className="bg-white rounded-md p-3 border" style={{ borderColor: "#E4E2DA" }}>
             <div className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{r.course_title}</div>
             <div className="text-[11px] mt-1" style={{ color: STEEL }}>
-              Completed {new Date(r.completed_at).toLocaleDateString()} · {formatActiveTime(r.total_active_seconds)} active time
+              Completed {fmtD(r.completed_at)} · {formatActiveTime(r.total_active_seconds)} active time
               {r.total_quizzes > 0 ? ` · Score: ${r.correct_count}/${r.total_quizzes}` : ""}
             </div>
           </div>
@@ -9191,7 +9203,7 @@ function composePickText(p) {
 function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, onFollowUp }) {
   const { notifyEmail, id: activeProjectId, name: projName } = useContext(ProjectContext);
   const subcontractorOptions = useSubcontractors(activeProjectId);
-  const todayStr = new Date().toLocaleDateString();
+  const todayStr = fmtD();
   const [standardValues, setStandardValues] = useState({
     name: user?.name || "",
     subcontractor: user?.employer || "",
@@ -10411,7 +10423,7 @@ function UtilityPermitRenewals({ user, projectName, onClose }) {
   const [loading, setLoading] = useState(false);
   const [activeId, setActiveId] = useState(null);
   const [num, setNum] = useState("");
-  const [date, setDate] = useState(new Date().toLocaleDateString());
+  const [date, setDate] = useState(fmtD());
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const form = resolveFormForProject(FORMS_DEFAULT.find((f) => f.title === "Utility Locate Permit"), modalProjectId);
@@ -10513,7 +10525,7 @@ function UtilityPermitRenewals({ user, projectName, onClose }) {
             return (
               <div key={p.id} className="border rounded-md p-2.5 mb-2" style={{ borderColor: "#E4E2DA" }}>
                 <div className="text-[12px] font-bold">{inf.location}</div>
-                <div className="text-[10px]" style={{ color: STEEL }}>{p.submitted_by} · {new Date(p.submitted_at).toLocaleDateString()} · Ticket {inf.ticket || "-"}</div>
+                <div className="text-[10px]" style={{ color: STEEL }}>{p.submitted_by} · {fmtD(p.submitted_at)} · Ticket {inf.ticket || "-"}</div>
                 <div className="text-[10px]" style={{ color: STEEL }}>
                   {(p.refreshes || []).length === 0 && !inf.initialRefresh ? "No updates yet" : `Latest: ${last ? `${last.number} (${last.date})` : `${inf.initialRefresh} (${inf.initialRefreshDate})`}`}
                   {(p.refreshes || []).length + (inf.initialRefresh ? 1 : 0) > 0 ? ` · ${(p.refreshes || []).length + (inf.initialRefresh ? 1 : 0)} refresh(es)` : ""}
@@ -10534,7 +10546,7 @@ function UtilityPermitRenewals({ user, projectName, onClose }) {
                   </div>
                 ) : (
                   <div className="flex gap-2 mt-2">
-                    <button onClick={() => { setActiveId(p.id); setNum(""); setDate(new Date().toLocaleDateString()); setMsg(""); }} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>Add {upLabel}</button>
+                    <button onClick={() => { setActiveId(p.id); setNum(""); setDate(fmtD()); setMsg(""); }} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>Add {upLabel}</button>
                     {p.filled_pdf_url && <button onClick={() => window.open(p.filled_pdf_url, "_blank")} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>View PDF</button>}
                   </div>
                 )}
@@ -10671,7 +10683,7 @@ function ConfinedSpaceCloseout({ user, projectName, onClose }) {
           {permits.map((p) => (
             <div key={p.id} className="border rounded-md p-2.5 mb-2" style={{ borderColor: isCanceled(p) ? "#C9C6BC" : "#E4E2DA", background: isCanceled(p) ? "#F4F3EF" : "white" }}>
               <div className="text-[12px] font-bold">{locationOf(p)}</div>
-              <div className="text-[10px]" style={{ color: STEEL }}>{p.submitted_by} - {new Date(p.submitted_at).toLocaleString([], { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" })}</div>
+              <div className="text-[10px]" style={{ color: STEEL }}>{p.submitted_by} - {fmtDT(p.submitted_at)}</div>
               <div className="text-[10px] font-bold" style={{ color: isCanceled(p) ? ALERT : STEEL }}>
                 {isCanceled(p) ? "CANCELED" : "OPEN"}{lastTimeOut(p) ? ` - Time Out ${lastTimeOut(p)}` : ""}
               </div>
@@ -10892,7 +10904,7 @@ function LinkedFormsBlock({ submission, links }) {
       <div className="text-[10px] uppercase font-bold mb-1" style={{ color: INK, fontFamily: "IBM Plex Mono, monospace" }}>Linked Forms</div>
       {sibs.map((l) => (
         <div key={l.submission_id} className="flex items-center justify-between gap-2 text-[12px] mb-1">
-          <span className="min-w-0 truncate">{l.form_title} <span style={{ color: STEEL }}>({new Date(l.submitted_at).toLocaleDateString()})</span></span>
+          <span className="min-w-0 truncate">{l.form_title} <span style={{ color: STEEL }}>({fmtD(l.submitted_at)})</span></span>
           {l.filled_pdf_url && <button onClick={() => window.open(l.filled_pdf_url, "_blank")} className="text-[10px] font-bold uppercase px-2 py-1 rounded-sm flex-shrink-0" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>View</button>}
         </div>
       ))}
@@ -10927,7 +10939,7 @@ function MySubmissionsScreen({ user }) {
       {submissions.map((s) => (
         <div key={s.id} className="bg-white rounded-md p-3 border mb-2" style={{ borderColor: "#E4E2DA" }}>
           <div className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{s.form_title}</div>
-          <div className="text-[10px] mt-0.5" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{new Date(s.submitted_at).toLocaleString()}</div>
+          <div className="text-[10px] mt-0.5" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{fmtDT(s.submitted_at)}</div>
           <div className="flex gap-2 mt-2 flex-wrap">
             {s.filled_pdf_url ? (
               <button onClick={() => window.open(s.filled_pdf_url, "_blank")} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>
@@ -11028,7 +11040,7 @@ function SubmittedFormsScreen({ user }) {
         <div key={s.id} className="bg-white rounded-md p-3 border mb-2" style={{ borderColor: "#E4E2DA" }}>
           <div className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{s.form_title}</div>
           <div className="text-[11px] mt-0.5" style={{ color: STEEL }}>{s.submitted_by} · {s.employer || "—"}</div>
-          <div className="text-[10px] mt-0.5" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{new Date(s.submitted_at).toLocaleString()}</div>
+          <div className="text-[10px] mt-0.5" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{fmtDT(s.submitted_at)}</div>
           <div className="flex gap-2 mt-2 flex-wrap">
             {s.filled_pdf_url ? (
               <button onClick={() => window.open(s.filled_pdf_url, "_blank")} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>
@@ -11173,7 +11185,7 @@ function EmployeeDetail({ emp, onClose, photo }) {
             </div>
             <div className="rounded-sm px-2 py-1.5" style={{ background: "#F4F3EF" }}>
               <div className="text-[9px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Orientation Date</div>
-              <div className="text-[12px] font-bold">{emp.orientationDate || "—"}</div>
+              <div className="text-[12px] font-bold">{fmtD(emp.orientationDate) || "—"}</div>
             </div>
           </div>
           <div className="text-[11px] uppercase font-bold mb-1.5" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>
@@ -11729,7 +11741,7 @@ function PersonnelScreen({ user, go }) {
             <div className="flex-1 min-w-0">
               <div className="text-[14px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 500 }}>{e.name}</div>
               <div className="text-[11px] mt-0.5" style={{ color: STEEL }}>{e.employer || "—"} · {e.role}</div>
-              <div className="text-[10px] mt-0.5" style={{ color: STEEL }}>Oriented {e.orientationDate ? new Date(e.orientationDate + "T00:00:00").toLocaleDateString() : "—"}</div>
+              <div className="text-[10px] mt-0.5" style={{ color: STEEL }}>Oriented {e.orientationDate ? fmtD(e.orientationDate) : "—"}</div>
               <div className="flex gap-1 mt-1.5 flex-wrap">
                 {e.quals.length === 0 ? (
                   <span className="text-[10px]" style={{ color: STEEL }}>No quals on file</span>
@@ -12023,9 +12035,9 @@ function RosterRow({ person, user, onChanged }) {
                 <div className="flex-1 min-w-0">
                   <QualTag status={q.status}>{q.label}</QualTag>
                   <div className="text-[10px] mt-0.5" style={{ color: STEEL }}>
-                    {q.issued_at && <>Issued {new Date(q.issued_at + "T00:00:00").toLocaleDateString()}</>}
+                    {q.issued_at && <>Issued {fmtD(q.issued_at)}</>}
                     {q.issued_at && q.expires_at && " · "}
-                    {q.expires_at && <>Expires {new Date(q.expires_at + "T00:00:00").toLocaleDateString()}</>}
+                    {q.expires_at && <>Expires {fmtD(q.expires_at)}</>}
                     {!q.issued_at && !q.expires_at && "No dates on file"}
                   </div>
                 </div>
@@ -12186,7 +12198,7 @@ function ManageRosterScreen({ user }) {
         { label: "Training Access", get: (p) => (p.training_access ? "Yes" : "No") },
         { label: "Admin", get: (p) => (p.can_add_personnel ? "Yes" : "No") },
         { label: "Active", get: (p) => (p.active ? "Yes" : "No") },
-        { label: "Qualifications", get: (p) => (p.qualifications || []).map((q) => `${q.label} (${q.status}${q.expires_at ? `, exp ${q.expires_at}` : ""})`).join("; ") },
+        { label: "Qualifications", get: (p) => (p.qualifications || []).map((q) => `${q.label} (${q.status}${q.expires_at ? `, exp ${fmtD(q.expires_at)}` : ""})`).join("; ") },
       ]
     );
   };
@@ -13432,7 +13444,7 @@ function PreConstructionDocSlot({ title, doc, user, onDone }) {
       <div className="text-[13px] mb-2" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{title}</div>
       {doc && doc.doc_link && !fileName && (
         <div className="flex items-center justify-between mb-2 text-[11px]" style={{ color: STEEL }}>
-          <span>Currently uploaded · {new Date(doc.posted_at).toLocaleDateString()}</span>
+          <span>Currently uploaded · {fmtD(doc.posted_at)}</span>
           <button onClick={() => window.open(doc.doc_link, "_blank")} className="font-bold uppercase" style={{ color: GOLD, fontFamily: "IBM Plex Mono, monospace" }}>View</button>
         </div>
       )}
@@ -13777,7 +13789,7 @@ function WeeklyReportScreen({ user, go, activeProjectId }) {
             </div>
             <div className="flex-1 min-w-0">
               <div className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{r.title}</div>
-              <div className="text-[10px] uppercase font-bold mt-0.5" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{new Date(r.posted_at).toLocaleDateString()}</div>
+              <div className="text-[10px] uppercase font-bold mt-0.5" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{fmtD(r.posted_at)}</div>
             </div>
             <ChevronRight size={16} color={STEEL} className="flex-shrink-0" />
           </button>
@@ -13939,7 +13951,7 @@ function ManageWeeklyReportScreen({ user }) {
         ) : (
           <div key={r.id} className="bg-white rounded-md p-3 border mb-2" style={{ borderColor: "#E4E2DA" }}>
             <div className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{r.title}</div>
-            <div className="text-[11px] mt-0.5" style={{ color: STEEL }}>{new Date(r.posted_at).toLocaleDateString()}{!r.doc_link ? " · No file uploaded" : ""}</div>
+            <div className="text-[11px] mt-0.5" style={{ color: STEEL }}>{fmtD(r.posted_at)}{!r.doc_link ? " · No file uploaded" : ""}</div>
             <div className="flex gap-2 mt-2">
               <button onClick={() => setEditingId(r.id)} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Edit</button>
               <button onClick={() => remove(r.id)} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm border" style={{ borderColor: ALERT, color: ALERT, fontFamily: "IBM Plex Mono, monospace" }}>Delete</button>
@@ -14222,7 +14234,7 @@ function BadgeVerifyScreen() {
                 {info.qualifications.map((q, i) => (
                   <div key={i} className="flex justify-between gap-2 py-1 text-[12px]" style={{ borderTop: "1px solid #E4E2DA" }}>
                     <span>{q.label}</span>
-                    <span className="flex-shrink-0 font-bold" style={{ color: q.status === "expired" ? ALERT : q.status === "expiring" ? "#B7791F" : "#2E7D32" }}>{q.expires_at ? `Exp ${String(q.expires_at).slice(0, 10)}` : q.status}</span>
+                    <span className="flex-shrink-0 font-bold" style={{ color: q.status === "expired" ? ALERT : q.status === "expiring" ? "#B7791F" : "#2E7D32" }}>{q.expires_at ? `Exp ${fmtD(q.expires_at)}` : q.status}</span>
                   </div>
                 ))}
               </div>
@@ -14277,7 +14289,7 @@ function AppleWalletPreviewModal({ user, onClose }) {
               </div>
               <div className="flex gap-6 mb-3">
                 <div><div style={lab}>Employer</div><div style={val}>{user.employer || "—"}</div></div>
-                <div><div style={lab}>Orientation</div><div style={val}>{user.orientationDate || "—"}</div></div>
+                <div><div style={lab}>Orientation</div><div style={val}>{fmtD(user.orientationDate) || "—"}</div></div>
               </div>
               <div className="mb-4"><div style={lab}>Project</div><div style={val}>{proj.name}</div></div>
               <div className="mx-auto rounded-lg flex items-center justify-center" style={{ background: "white", width: 156, height: 156 }}>
@@ -14293,7 +14305,7 @@ function AppleWalletPreviewModal({ user, onClose }) {
               {quals.map((q, i) => (
                 <div key={i} className="py-2 flex justify-between gap-3" style={{ borderTop: "1px solid #2b2b2b" }}>
                   <span className="text-[12px] text-white">{q.label}</span>
-                  <span className="text-[11px] flex-shrink-0" style={{ color: q.status === "expired" ? "#FF8A80" : q.status === "expiring" ? GOLD : "#9AD29A" }}>{q.expires_at ? `Exp ${String(q.expires_at).slice(0, 10)}` : q.status}</span>
+                  <span className="text-[11px] flex-shrink-0" style={{ color: q.status === "expired" ? "#FF8A80" : q.status === "expiring" ? GOLD : "#9AD29A" }}>{q.expires_at ? `Exp ${fmtD(q.expires_at)}` : q.status}</span>
                 </div>
               ))}
               <div className="text-[10px] mt-4" style={{ color: "#8A8678" }}>{badgeTitleFor(proj.id)} issued through the FCUS Safety Hub. Scan the QR code on the front to open this badge online.</div>
@@ -14380,7 +14392,7 @@ async function renderBadgeCanvases({ user, projectName, slug, groups }) {
   if (user.employer) { c.fillStyle = "#1a1a1a"; c.font = `700 36px ${BODY}`; wrap(c, user.employer, W - 100).slice(0, 1).forEach((ln) => { c.fillText(ln, cx, y); y += 46; }); }
   c.textAlign = "left";
   y += 6;
-  const boxes = [["BADGE", user.badge], ["ID", user.empId], ["ORIENTATION", user.orientationDate]].filter((b) => b[1]);
+  const boxes = [["BADGE", user.badge], ["ID", user.empId], ["ORIENTATION", fmtD(user.orientationDate)]].filter((b) => b[1]);
   const bw = (W - 100 - (boxes.length - 1) * 16) / Math.max(boxes.length, 1);
   boxes.forEach((b, i) => {
     const bx = 50 + i * (bw + 16);
@@ -14396,7 +14408,7 @@ async function renderBadgeCanvases({ user, projectName, slug, groups }) {
       const col = q.status === "expired" ? "#C62828" : q.status === "expiring" ? "#B7791F" : "#2E7D32";
       c.fillStyle = col; rr(c, 50, y + 8, 14, 40, 6); c.fill();
       c.fillStyle = "#1a1a1a"; c.font = `700 26px ${BODY}`; c.fillText(String(q.label).slice(0, 25), 78, y + 34);
-      if (q.expires_at) { c.fillStyle = "#5C6670"; c.font = `400 20px ${BODY}`; c.textAlign = "right"; c.fillText("Exp " + String(q.expires_at).slice(0, 10), W - 290, y + 34); c.textAlign = "left"; }
+      if (q.expires_at) { c.fillStyle = "#5C6670"; c.font = `400 20px ${BODY}`; c.textAlign = "right"; c.fillText("Exp " + fmtD(q.expires_at), W - 290, y + 34); c.textAlign = "left"; }
       y += 52;
     });
     if ((user.quals || []).length > 3) { c.fillStyle = "#5C6670"; c.font = `400 22px ${BODY}`; c.fillText(`+ ${(user.quals || []).length - 3} more - see back`, 78, y + 16); }
@@ -14424,7 +14436,7 @@ async function renderBadgeCanvases({ user, projectName, slug, groups }) {
   const all = (user.quals || []);
   if (all.length > 3 && y < 900) {
     c.fillStyle = "#5C6670"; c.font = `700 22px ${MONO}`; c.fillText("ADDITIONAL DESIGNATIONS", 50, y); y += 10;
-    all.slice(3, 9).forEach((q) => { c.fillStyle = "#1a1a1a"; c.font = `700 24px ${BODY}`; c.fillText(String(q.label).slice(0, 34), 50, y + 32); if (q.expires_at) { c.fillStyle = "#5C6670"; c.font = `400 20px ${BODY}`; c.textAlign = "right"; c.fillText("Exp " + String(q.expires_at).slice(0, 10), W - 50, y + 32); c.textAlign = "left"; } y += 40; });
+    all.slice(3, 9).forEach((q) => { c.fillStyle = "#1a1a1a"; c.font = `700 24px ${BODY}`; c.fillText(String(q.label).slice(0, 34), 50, y + 32); if (q.expires_at) { c.fillStyle = "#5C6670"; c.font = `400 20px ${BODY}`; c.textAlign = "right"; c.fillText("Exp " + fmtD(q.expires_at), W - 50, y + 32); c.textAlign = "left"; } y += 40; });
   }
   if (sQr) {
     const qs = 300, qy = H - 70 - qs - 150;
@@ -14564,7 +14576,7 @@ function BadgeModal({ user, onClose, onLogout }) {
             </div>
             <div className="rounded-sm px-2 py-1.5" style={{ background: "#F4F3EF" }}>
               <div className="text-[9px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Orientation Date</div>
-              <div className="text-[12px] font-bold">{user.orientationDate || "—"}</div>
+              <div className="text-[12px] font-bold">{fmtD(user.orientationDate) || "—"}</div>
             </div>
           </div>
           {user.quals.length > 0 && (
@@ -14576,9 +14588,9 @@ function BadgeModal({ user, onClose, onLogout }) {
                     <QualTag status={q.status}>{q.label}</QualTag>
                     {(q.issued_at || q.expires_at) && (
                       <div className="text-[9px] mt-0.5 px-1" style={{ color: "#9AA0A6" }}>
-                        {q.issued_at && <>Issued {new Date(q.issued_at + "T00:00:00").toLocaleDateString()}</>}
+                        {q.issued_at && <>Issued {fmtD(q.issued_at)}</>}
                         {q.issued_at && q.expires_at && " · "}
-                        {q.expires_at && <>Expires {new Date(q.expires_at + "T00:00:00").toLocaleDateString()}</>}
+                        {q.expires_at && <>Expires {fmtD(q.expires_at)}</>}
                       </div>
                     )}
                   </div>
@@ -14616,7 +14628,7 @@ function BadgeModal({ user, onClose, onLogout }) {
                   <div key={i} className="rounded-sm px-2 py-1.5" style={{ background: "#F4F3EF" }}>
                     <div className="text-[11px] font-bold">{r.course_title}</div>
                     <div className="text-[10px]" style={{ color: STEEL }}>
-                      {new Date(r.completed_at).toLocaleDateString()} · {formatActiveTime(r.total_active_seconds)}
+                      {fmtD(r.completed_at)} · {formatActiveTime(r.total_active_seconds)}
                       {r.total_quizzes > 0 ? ` · ${r.correct_count}/${r.total_quizzes}` : ""}
                     </div>
                   </div>
@@ -14748,7 +14760,7 @@ function TruckDriverBadgeCard({ driver, projectSlug, projectName }) {
 function TruckDriverAffidavitStep({ driver, projectSlug, projectName, onSaved }) {
   const [f, setF] = useState({ name: driver.name || "", company: driver.company || "" });
   const cfg = tdConfig(projectSlug, projectName);
-  const todayLabel = new Date().toLocaleDateString("en-US", { timeZone: "America/Chicago" });
+  const todayLabel = fmtD(new Date());
   const [certified, setCertified] = useState(false);
   const [empEmpty, setEmpEmpty] = useState(true);
   const empRef = useRef(null);
@@ -14762,7 +14774,7 @@ function TruckDriverAffidavitStep({ driver, projectSlug, projectName, onSaved })
     try {
       const cfg = tdConfig(projectSlug, projectName);
       const now = new Date();
-      const dateLabel = now.toLocaleDateString("en-US", { timeZone: "America/Chicago" });
+      const dateLabel = fmtD(now);
       const bytes = await buildGenericFormPdf({
         form: cfg.form, slug: projectSlug, projectName,
         standardValues: { name: f.name.trim(), subcontractor: f.company.trim(), date: dateLabel },
@@ -15258,7 +15270,7 @@ function TruckSessionCard({ ss, projectSlug, onConfirm, onCancel, onChanged }) {
   return (
     <div className="rounded-md border p-3 mb-2 bg-white" style={{ borderColor: isOpen ? GOLD : "#E4E2DA" }}>
       <div className="flex items-center justify-between mb-1">
-        <div className="text-[13px] font-bold" style={{ fontFamily: "Oswald, sans-serif" }}>{ss.company || "Group"} - {new Date(ss.session_date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}{ss.location ? ` - ${ss.location}` : ""}</div>
+        <div className="text-[13px] font-bold" style={{ fontFamily: "Oswald, sans-serif" }}>{ss.company || "Group"} - {fmtD(ss.session_date)}{ss.location ? ` - ${ss.location}` : ""}</div>
         <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-sm" style={{ background: isOpen ? GOLD : ss.status === "confirmed" ? "#2E7D32" : "#9AA0A6", color: isOpen ? INK : "white", ...mono }}>{ss.status.toUpperCase()}</span>
       </div>
       {isOpen && (
@@ -15295,7 +15307,7 @@ function TruckSessionCard({ ss, projectSlug, onConfirm, onCancel, onChanged }) {
           </div>
         </div>
       )}
-      {ss.status === "confirmed" && <div className="text-[10px] mt-1" style={{ color: STEEL }}>Confirmed by {ss.confirmed_by || "-"} on {ss.confirmed_at ? new Date(ss.confirmed_at).toLocaleString() : ""}</div>}
+      {ss.status === "confirmed" && <div className="text-[10px] mt-1" style={{ color: STEEL }}>Confirmed by {ss.confirmed_by || "-"} on {ss.confirmed_at ? fmtDT(ss.confirmed_at) : ""}</div>}
     </div>
   );
 }
@@ -15381,7 +15393,7 @@ function TruckDriverAdminCard({ d, user, projectSlug, projectName, onChanged }) 
             <div>Phone: {d.phone || "-"}</div><div>Email: {d.email || "-"}</div>
             {d.resume_code && <div>Resume code: <b style={{ letterSpacing: "0.08em" }}>{d.resume_code}</b></div>}
             {d.badge_number && <div>Badge: <b>{d.badge_number}</b></div>}{d.pin && <div>PIN: <b>{d.pin}</b></div>}
-            <div>CDL: {d.cdl_number || "-"} {d.cdl_state || ""}</div><div>Started: {new Date(d.created_at).toLocaleDateString()}</div>
+            <div>CDL: {d.cdl_number || "-"} {d.cdl_state || ""}</div><div>Started: {fmtD(d.created_at)}</div>
           </div>
           <div className="rounded-md border p-2 mb-3" style={{ borderColor: "#E4E2DA" }}>
             <div className="text-[10px] uppercase font-bold mb-1" style={{ color: STEEL, ...mono }}>Documents on this driver's badge</div>
@@ -15394,11 +15406,11 @@ function TruckDriverAdminCard({ d, user, projectSlug, projectName, onChanged }) 
             {d.cdl_photo_url && <img src={d.cdl_photo_url} alt="CDL front" className="w-full rounded-md mb-2" style={{ maxHeight: 220, objectFit: "contain", background: "#F4F3EF" }} />}
             {d.cdl_back_photo_url && <img src={d.cdl_back_photo_url} alt="CDL back" className="w-full rounded-md mb-2" style={{ maxHeight: 220, objectFit: "contain", background: "#F4F3EF" }} />}
             <div className="text-[11px] font-bold" style={{ color: d.video_completed_at ? "#2E7D32" : ALERT }}>
-              {d.video_completed_at ? `Safety video completed ${new Date(d.video_completed_at).toLocaleString()}` : `Safety video not completed${d.video_duration ? ` (${Math.round(((d.video_seconds || 0) / d.video_duration) * 100)}% watched)` : ""}`}
+              {d.video_completed_at ? `Safety video completed ${fmtDT(d.video_completed_at)}` : `Safety video not completed${d.video_duration ? ` (${Math.round(((d.video_seconds || 0) / d.video_duration) * 100)}% watched)` : ""}`}
             </div>
-            {d.video_session && <div className="text-[10px]" style={{ color: "#B7791F" }}>Video credited through group session: {d.video_session.company || "Group"}{d.video_session.location ? `, ${d.video_session.location}` : ""} on {d.video_session.session_date ? new Date(d.video_session.session_date + "T12:00:00").toLocaleDateString() : ""}. Confirmed by {d.video_session.confirmed_by || "-"}{d.video_session.leader_phone ? ` (${d.video_session.leader_phone})` : ""}.</div>}
-            {d.affidavit_signed_at && <div className="text-[10px]" style={{ color: STEEL }}>Verification form signed {new Date(d.affidavit_signed_at).toLocaleString()}</div>}
-            {d.reviewed_at && <div className="text-[10px]" style={{ color: STEEL }}>Reviewed by {d.reviewed_by || "-"} on {new Date(d.reviewed_at).toLocaleDateString()}{d.review_notes ? ` - ${d.review_notes}` : ""}</div>}
+            {d.video_session && <div className="text-[10px]" style={{ color: "#B7791F" }}>Video credited through group session: {d.video_session.company || "Group"}{d.video_session.location ? `, ${d.video_session.location}` : ""} on {d.video_session.session_date ? fmtD(d.video_session.session_date) : ""}. Confirmed by {d.video_session.confirmed_by || "-"}{d.video_session.leader_phone ? ` (${d.video_session.leader_phone})` : ""}.</div>}
+            {d.affidavit_signed_at && <div className="text-[10px]" style={{ color: STEEL }}>Verification form signed {fmtDT(d.affidavit_signed_at)}</div>}
+            {d.reviewed_at && <div className="text-[10px]" style={{ color: STEEL }}>Reviewed by {d.reviewed_by || "-"} on {fmtD(d.reviewed_at)}{d.review_notes ? ` - ${d.review_notes}` : ""}</div>}
           </div>
           {d.status === "submitted" && !rejecting && (
             <div className="flex gap-2">
@@ -15454,8 +15466,8 @@ function ManageTruckDriversScreen({ user, activeProjectId, go }) {
   const exportCsv = () => exportToCsv(`truck-driver-badges-${new Date().toISOString().slice(0, 10)}.csv`, rows.filter((r) => r.status === "approved"), [
     { label: "Badge", get: (r) => r.badge_number }, { label: "Name", get: (r) => r.name }, { label: "Company", get: (r) => r.company },
     { label: "Phone", get: (r) => r.phone }, { label: "Email", get: (r) => r.email }, { label: "CDL Number", get: (r) => r.cdl_number }, { label: "CDL State", get: (r) => r.cdl_state },
-    { label: "Video Completed", get: (r) => (r.video_completed_at ? new Date(r.video_completed_at).toLocaleString() : "") },
-    { label: "Badge Issued", get: (r) => (r.badge_issued_at ? new Date(r.badge_issued_at).toLocaleDateString() : "") },
+    { label: "Video Completed", get: (r) => (r.video_completed_at ? fmtDT(r.video_completed_at) : "") },
+    { label: "Badge Issued", get: (r) => (r.badge_issued_at ? fmtD(r.badge_issued_at) : "") },
     { label: "Active", get: (r) => (r.active === false ? "No" : "Yes") },
   ]);
   return (
@@ -15510,7 +15522,7 @@ function TruckDriverVerifyScreen() {
             <div className="grid grid-cols-2 gap-2 text-left mt-3">
               <div><div className="text-[9px] uppercase" style={{ color: STEEL }}>Badge</div><div className="text-[13px] font-bold">{info.badge_number}</div></div>
               <div><div className="text-[9px] uppercase" style={{ color: STEEL }}>Company</div><div className="text-[13px] font-bold">{info.company || "-"}</div></div>
-              <div><div className="text-[9px] uppercase" style={{ color: STEEL }}>Safety Video</div><div className="text-[13px] font-bold">{info.video_completed_at ? new Date(info.video_completed_at).toLocaleDateString() : "-"}</div></div>
+              <div><div className="text-[9px] uppercase" style={{ color: STEEL }}>Safety Video</div><div className="text-[13px] font-bold">{info.video_completed_at ? fmtD(info.video_completed_at) : "-"}</div></div>
               <div><div className="text-[9px] uppercase" style={{ color: STEEL }}>Project</div><div className="text-[13px] font-bold">{info.project_name}</div></div>
             </div>
           </div>
@@ -15999,7 +16011,7 @@ export default function SafetyHubPrototype() {
                   const now = new Date();
                   setConcernReports((r) => [
                     ...r,
-                    { ...report, date: now.toLocaleDateString(), time: now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) },
+                    { ...report, date: fmtD(now), time: now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) },
                   ]);
                 }}
               />
