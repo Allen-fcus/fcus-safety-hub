@@ -13178,6 +13178,31 @@ function RosterRow({ person, user, onChanged }) {
   const [expiryTouched, setExpiryTouched] = useState(false);
   const [addingQual, setAddingQual] = useState(false);
   const quals = person.qualifications || [];
+  // Manually add a certification file (photo or PDF) to this person's badge
+  const [certTitle, setCertTitle] = useState("");
+  const [certQualId, setCertQualId] = useState("");
+  const [certFile, setCertFile] = useState(null);
+  const [certBusy, setCertBusy] = useState(false);
+  const [certErr, setCertErr] = useState("");
+  const addCertFile = async () => {
+    if (!certFile) { setCertErr("Choose a file first."); return; }
+    setCertBusy(true); setCertErr("");
+    const path = `cert-${person.id}-${Date.now()}-${certFile.name.replace(/[^a-zA-Z0-9.\-_]/g, "_")}`;
+    const up = await supabase.storage.from("documents").upload(path, certFile, { contentType: certFile.type || undefined });
+    if (up.error) { setCertBusy(false); setCertErr("Upload failed: " + (up.error.message || "unknown error")); return; }
+    const url = (supabase.storage.from("documents").getPublicUrl(path).data || {}).publicUrl || "";
+    const q = quals.find((x) => String(x.id) === String(certQualId));
+    const res = await supabase.rpc("add_personnel_certificate", {
+      p_token: user.sessionToken, p_person_id: person.id,
+      p_title: certTitle.trim() || (q ? q.label + " certification" : "Certification"),
+      p_url: url, p_qualification_id: q ? q.id : null,
+    });
+    setCertBusy(false);
+    if (reportRpcFailure("Add certification file", res)) return;
+    setCertTitle(""); setCertQualId(""); setCertFile(null);
+    loadPersonDocs();
+    onChanged();
+  };
 
   // Auto-fill the expiration date when the label matches a known
   // certification type and an issued date is set — unless the admin
@@ -13457,17 +13482,30 @@ function RosterRow({ person, user, onChanged }) {
 
           <div className="text-[10px] uppercase font-bold mt-1 mb-1.5" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Files</div>
           <div className="space-y-1.5 mb-3">
-            {personDocs.length === 0 && <div className="text-[11px]" style={{ color: STEEL }}>No files yet. Approved designation forms and their supporting documents are filed here.</div>}
+            {personDocs.length === 0 && <div className="text-[11px]" style={{ color: STEEL }}>No files yet. Approved designation forms, supporting documents and certification files you add are filed here.</div>}
             {personDocs.map((d) => (
               <div key={d.id} className="flex items-center justify-between bg-white rounded-sm px-2.5 py-1.5 border" style={{ borderColor: "#E4E2DA" }}>
                 <div className="min-w-0 flex-1">
                   <div className="text-[12px] truncate">{d.title}</div>
-                  <div className="text-[10px]" style={{ color: STEEL }}>{d.kind === "proof" ? "Supporting document" : "Signed form"} · added {fmtD(d.added_at)}</div>
+                  <div className="text-[10px]" style={{ color: STEEL }}>{d.kind === "proof" ? "Certification / supporting document" : "Signed form"} · added {fmtD(d.added_at)}</div>
                 </div>
                 <button onClick={() => window.open(d.url, "_blank")} className="flex-shrink-0 ml-2 text-[9px] font-bold uppercase px-2 py-1 rounded-sm" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>View</button>
                 <button onClick={() => removePersonDoc(d.id)} className="flex-shrink-0 ml-2"><X size={14} color={STEEL} /></button>
               </div>
             ))}
+          </div>
+
+          <div className="bg-white rounded-sm p-2.5 border mb-3" style={{ borderColor: "#E4E2DA" }}>
+            <div className="text-[10px] uppercase font-bold mb-1.5" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Add certification file</div>
+            <select value={certQualId} onChange={(e) => setCertQualId(e.target.value)} className="w-full border rounded-sm px-2 py-1.5 text-[12px] mb-1.5" style={{ borderColor: "#C9C6BC" }}>
+              <option value="">Not tied to a designation</option>
+              {quals.map((q) => <option key={q.id} value={q.id}>{q.label}</option>)}
+            </select>
+            <input value={certTitle} onChange={(e) => setCertTitle(e.target.value)} placeholder="Title (optional), e.g. OSHA 30 card" className="w-full border rounded-sm px-2 py-1.5 text-[12px] mb-1.5" style={{ borderColor: "#C9C6BC" }} />
+            <input type="file" accept="application/pdf,image/*" onChange={(e) => setCertFile((e.target.files && e.target.files[0]) || null)} className="w-full text-[11px] mb-1.5" />
+            {certErr && <div className="text-[11px] mb-1.5" style={{ color: ALERT }}>{certErr}</div>}
+            <button onClick={addCertFile} disabled={certBusy || !certFile} className="w-full text-[11px] font-bold uppercase py-2 rounded-sm disabled:opacity-50" style={{ background: INK, color: GOLD, fontFamily: "IBM Plex Mono, monospace" }}>{certBusy ? "Uploading…" : "Upload & add to badge"}</button>
+            <div className="text-[10px] mt-1.5" style={{ color: STEEL }}>Picking a designation links the file to it, so the badge shows a file link beside that designation.</div>
           </div>
 
           {saveError && <div className="text-[11px] mb-2" style={{ color: ALERT }}>{saveError}</div>}
