@@ -13923,6 +13923,7 @@ function ManageRosterScreen({ user, onSwitchProject }) {
   const [rosterScope, setRosterScope] = useState("project"); // "project" | "all" (Safety Hub Admins only)
   const [people, setPeople] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [rosterQuery, setRosterQuery] = useState("");
 
   const load = async () => {
     setLoading(true);
@@ -13957,6 +13958,9 @@ function ManageRosterScreen({ user, onSwitchProject }) {
     );
   };
 
+  const rq = rosterQuery.trim().toLowerCase();
+  const shownPeople = !rq ? people : people.filter((p) => [p.name, p.employer, p.role, p.employee_id, p.badge_number, p.contact_email, p.contact_phone, ...(p.qualifications || []).map((q) => q.label)].some((v) => String(v == null ? "" : v).toLowerCase().includes(rq)));
+
   return (
     <div className="px-4 pt-4 pb-8" style={{ background: "#F4F3EF", minHeight: "100%" }}>
       <div className="flex items-center justify-between mb-3">
@@ -13976,9 +13980,17 @@ function ManageRosterScreen({ user, onSwitchProject }) {
       )}
       {rosterScope === "all" && user && user.isHubAdmin ? <AllProjectsRoster user={user} onSwitchProject={onSwitchProject} /> : (<>
       {loading && <div className="text-[12px] mb-2" style={{ color: STEEL }}>Loading…</div>}
-      {people.map((p) => <RosterRow key={p.id} person={p} user={user} onChanged={load} />)}
+      <div className="relative mb-3">
+        <input value={rosterQuery} onChange={(e) => setRosterQuery(e.target.value)} placeholder="Search name, employer, role, employee #, badge #, phone or email" className="w-full rounded-md border px-3 py-2 pr-8 text-[13px] bg-white" style={{ borderColor: "#C9C6BC" }} />
+        {rosterQuery && <button onClick={() => setRosterQuery("")} className="absolute right-2 top-1/2 -translate-y-1/2"><X size={14} color={STEEL} /></button>}
+      </div>
+      {rosterQuery.trim() && <div className="text-[10px] mb-2" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{shownPeople.length} of {people.length} people</div>}
+      {shownPeople.map((p) => <RosterRow key={p.id} person={p} user={user} onChanged={load} />)}
       {!loading && people.length === 0 && (
         <div className="text-[12px] text-center py-6" style={{ color: STEEL }}>Nobody on this roster yet.</div>
+      )}
+      {!loading && people.length > 0 && shownPeople.length === 0 && (
+        <div className="text-[12px] text-center py-6" style={{ color: STEEL }}>No one matches "{rosterQuery.trim()}".</div>
       )}
       </>)}
     </div>
