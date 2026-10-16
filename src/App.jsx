@@ -13392,6 +13392,7 @@ function RosterRow({ person, user, onChanged }) {
   }, [editing, user?.isHubAdmin, user?.sessionToken, person.id]);
   const [saving, setSaving] = useState(false);
   const [pinResult, setPinResult] = useState(null);
+  const [sendOpen, setSendOpen] = useState(false);
   const [photoFile, setPhotoFile] = useState(null);
   const [photoPreview, setPhotoPreview] = useState(person.photo_url || null);
   const photoInputRef = useRef(null);
@@ -13570,10 +13571,32 @@ function RosterRow({ person, user, onChanged }) {
           <div className="text-[11px]" style={{ color: STEEL }}>ID {person.employee_id} · Badge {person.badge_number}{!person.active ? " · Inactive" : ""}{person.can_add_personnel ? " · Admin" : ""}{person.is_rep_account ? " · Rep Account" : ""}</div>
           {(person.contact_email || person.contact_phone) && <div className="text-[11px]" style={{ color: STEEL }}>{[person.contact_phone, person.contact_email].filter(Boolean).join(" · ")}</div>}
         </div>
-        <button onClick={() => { setEditing((e) => !e); setConfirmDelete(false); }} className="text-[10px] font-bold uppercase px-2 py-1 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>
+<div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
+          {person.active && <button onClick={() => { setSendOpen((o) => !o); setPinResult(null); }} className="text-[10px] font-bold uppercase px-2 py-1 rounded-sm" style={{ background: sendOpen ? INK : GOLD, color: sendOpen ? GOLD : INK, fontFamily: "IBM Plex Mono, monospace" }}>{sendOpen ? "Close" : "Send Login"}</button>}
+                  <button onClick={() => { setEditing((e) => !e); setConfirmDelete(false); }} className="text-[10px] font-bold uppercase px-2 py-1 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>
           {editing ? "Close" : "Edit"}
         </button>
+        </div>
       </div>
+
+      {sendOpen && (
+        <div className="mt-3 pt-3 border-t text-center" style={{ borderColor: "#E4E2DA" }}>
+          {!pinResult ? (
+            <>
+              <div className="text-[12px] mb-2" style={{ color: STEEL }}>
+                Logins are stored securely, so the old PIN can't be looked up. Sending login info sets a <b>new PIN</b> for {person.name}; their current PIN stops working.
+              </div>
+              {!contactPhone && !contactEmail && <div className="text-[11px] mb-2" style={{ color: ALERT }}>No phone or email on file. Add one under Edit first, or use Copy.</div>}
+              <button onClick={doResetPin} className="w-full text-[11px] font-bold uppercase py-2 rounded-sm" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>Set new PIN &amp; continue</button>
+            </>
+          ) : (
+            <div className="rounded-sm p-2" style={{ background: "#FFF8E1" }}>
+              <div className="text-[12px]">New PIN for {person.name}: <span className="font-bold">{pinResult}</span></div>
+              <div className="flex justify-center"><BadgeShareButtons name={person.name} badge={person.badge_number} pin={pinResult} phone={contactPhone} email={contactEmail} slug={activeProjectId} projectName={activeProjectName} /></div>
+            </div>
+          )}
+        </div>
+      )}
 
       {editing && (
         <div className="mt-3 pt-3 border-t" style={{ borderColor: "#E4E2DA" }}>
