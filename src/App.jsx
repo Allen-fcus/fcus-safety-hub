@@ -9175,6 +9175,34 @@ const CERTIFICATION_VALIDITY_YEARS = [
   { match: "driving awareness", years: 1 },
 ];
 
+// Standard training names — picking from this list keeps spelling identical so the Training overview can count them.
+const STANDARD_TRAININGS = ["OSHA 30", "OSHA 10", "Fall Protection Training", "MEWP Training (3B)", "Excavation Training", "Driving Awareness", "CPR & First Aid", "TMA Operator Training", "Traffic Control Maintainer (Level 2)", "Confined Space"];
+function TrainingPicker({ value, onChange, onEnter, inputClass = "rounded-md border px-2.5 py-1.5 text-[13px]" }) {
+  const isStd = STANDARD_TRAININGS.includes(value);
+  const [other, setOther] = useState(false);
+  const showOther = other || (!!value && !isStd);
+  return (
+    <div className="flex-1 min-w-0">
+      <select
+        value={showOther ? "__other" : value}
+        onChange={(e) => {
+          if (e.target.value === "__other") { setOther(true); onChange(""); }
+          else { setOther(false); onChange(e.target.value); }
+        }}
+        className={`w-full bg-white ${inputClass}`}
+        style={{ borderColor: "#C9C6BC" }}
+      >
+        <option value="">Choose training…</option>
+        {STANDARD_TRAININGS.map((x) => <option key={x} value={x}>{x}</option>)}
+        <option value="__other">Other (type your own)…</option>
+      </select>
+      {showOther && (
+        <input value={value} onChange={(e) => onChange(e.target.value)} onKeyDown={(e) => e.key === "Enter" && onEnter && onEnter()} placeholder="Type the training name" className={`w-full mt-1.5 ${inputClass}`} style={{ borderColor: "#C9C6BC" }} />
+      )}
+    </div>
+  );
+}
+
 function suggestedExpiryFor(label, issuedDateStr) {
   if (!label || !issuedDateStr) return "";
   const lower = label.toLowerCase();
@@ -13207,7 +13235,7 @@ function AddPersonScreen({ user, onDone, prefill }) {
 
       <label className="text-[10px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Designations / Qualifications</label>
       <div className="flex gap-2 mt-1 mb-2">
-        <input value={qualLabel} onChange={(e) => setQualLabel(e.target.value)} placeholder="e.g. Competent Person – Fall Protection" className="flex-1 rounded-md border px-2.5 py-1.5 text-[13px]" style={{ borderColor: "#C9C6BC" }} onKeyDown={(e) => e.key === "Enter" && addQual()} />
+        <TrainingPicker value={qualLabel} onChange={setQualLabel} onEnter={addQual} />
         <button onClick={addQual} className="text-[10px] font-bold uppercase px-3 rounded-sm" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>Add</button>
       </div>
       <div className="space-y-1.5 mb-4">
@@ -14062,7 +14090,7 @@ function RosterRow({ person, user, onChanged }) {
             ))}
           </div>
           <div className="bg-white rounded-md p-2 border mb-3" style={{ borderColor: "#E4E2DA" }}>
-            <input value={newQualLabel} onChange={(e) => setNewQualLabel(e.target.value)} placeholder="e.g. OSHA 30, Driving Awareness" className="w-full rounded-md border px-2 py-1.5 text-[12px] mb-1.5" style={{ borderColor: "#C9C6BC" }} />
+            <div className="mb-1.5"><TrainingPicker value={newQualLabel} onChange={setNewQualLabel} inputClass="rounded-md border px-2 py-1.5 text-[12px]" /></div>
             <div className="flex gap-2 mb-1">
               <div className="flex-1">
                 <label className="text-[9px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Issued</label>
