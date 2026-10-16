@@ -3203,10 +3203,10 @@ function MeetingsSheetsPanel({ user, activeProjectId, initialOpenId }) {
   const [add, setAdd] = useState({ first: "", last: "", org: "", title: "", email: "", phone: "", sig: "" });
   const [err, setErr] = useState("");
 
-  const loadList = async () => {
-    setLoading(true);
+  const loadList = async (silent) => {
+    if (silent !== true) setLoading(true);
     const { data } = await supabase.rpc("list_meetings", { p_token: token });
-    setList(Array.isArray(data) ? data : []);
+    if (Array.isArray(data) || silent !== true) setList(Array.isArray(data) ? data : []);
     setLoading(false);
   };
   const loadDetail = async (id) => {
@@ -3214,6 +3214,7 @@ function MeetingsSheetsPanel({ user, activeProjectId, initialOpenId }) {
     setDetail(data || null);
   };
   useEffect(() => { if (token) loadList(); }, [token, activeProjectId]);
+  useLivePoll(async () => { await loadList(true); if (openId && !editing && !addOpen) await loadDetail(openId); }, 10000, !!token);
   useEffect(() => { if (openId) { setShowQr(false); setQrUrl(null); setEditing(false); setAddOpen(false); loadDetail(openId); } else setDetail(null); }, [openId]);
   useEffect(() => {
     if (!showQr || !detail) return;
@@ -4854,14 +4855,15 @@ function OrientationSubmissionsScreen({ user }) {
   const [roster, setRoster] = useState([]);
   const { id: activeSlug } = useContext(ProjectContext) || {};
 
-  const load = async () => {
-    setLoading(true);
+  const load = async (silent) => {
+    if (silent !== true) setLoading(true);
     const { data, error } = await supabase.rpc("list_orientation_form_submissions_admin", { p_token: user.sessionToken });
-    setSubmissions(error || !data ? [] : data);
+    if (silent !== true || (!error && data)) setSubmissions(error || !data ? [] : data);
     setLoading(false);
   };
 
   useEffect(() => { load(); }, [user?.sessionToken]);
+  useLivePoll(load, 15000, !!user?.sessionToken);
   useEffect(() => {
     supabase.rpc("list_personnel_admin", { p_token: user.sessionToken }).then(({ data }) => setRoster(Array.isArray(data) ? data : []));
   }, [user?.sessionToken]);
@@ -5037,14 +5039,15 @@ function ManageOrientationSignInsScreen({ user, activeProjectId }) {
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const load = async () => {
-    setLoading(true);
+  const load = async (silent) => {
+    if (silent !== true) setLoading(true);
     const { data, error } = await supabase.rpc("list_orientation_signins_admin", { p_token: user.sessionToken });
-    setEntries(error || !data ? [] : data);
+    if (silent !== true || (!error && data)) setEntries(error || !data ? [] : data);
     setLoading(false);
   };
 
   useEffect(() => { load(); }, [user?.sessionToken]);
+  useLivePoll(load, 10000, !!user?.sessionToken);
 
   const exportSignins = () => {
     exportToCsv(
@@ -13431,6 +13434,63 @@ const canonTraining = (label) => {
   if (/fall protection/i.test(l) && !/(competent|qualified|rescue)/i.test(l)) return "Fall Protection Training";
   return l;
 };
+// ---------- Live refresh: poll silently while the page is visible, and refetch when the app comes back to the front ----------
+function useLivePoll(fn, ms = 15000, enabled = true) {
+  const ref = useRef(fn);
+  ref.current = fn;
+  useEffect(() => {
+    if (!enabled) return undefined;
+    const tick = () => { if (!document.hidden) { try { const r = ref.current(true); if (r && r.catch) r.catch(() => {}); } catch (e) { /* ignore */ } } };
+    const t = setInterval(tick, ms);
+    document.addEventListener("visibilitychange", tick);
+    window.addEventListener("focus", tick);
+    return () => { clearInterval(t); document.removeEventListener("visibilitychange", tick); window.removeEventListener("focus", tick); };
+  }, [ms, enabled]);
+}
+
+// ---------- New-version check: compares the script this tab loaded with what the server is serving now ----------
+function currentBundleSrc() {
+  const el = Array.from(document.scripts).find((x) => /\/assets\/.*\.js/.test(x.src || ""));
+  return el ? el.getAttribute("src") : "";
+}
+function useUpdateAvailable() {
+  const [available, setAvailable] = useState(false);
+  const loaded = useRef(currentBundleSrc());
+  useEffect(() => {
+    if (!loaded.current) return undefined; // dev server or unknown build: nothing to compare
+    const check = async () => {
+      if (document.hidden) return;
+      try {
+        const res = await fetch("/?v=" + Date.now(), { cache: "no-store" });
+        if (!res.ok) return;
+        const html = await res.text();
+        const m = html.match(/<script[^>]+src="([^"]*\/assets\/[^"]+\.js)"/i);
+        if (m && m[1] !== loaded.current) setAvailable(true);
+      } catch (e) { /* offline: ignore */ }
+    };
+    const t = setInterval(check, 60000);
+    document.addEventListener("visibilitychange", check);
+    return () => { clearInterval(t); document.removeEventListener("visibilitychange", check); };
+  }, []);
+  return available;
+}
+async function applyAppUpdate() {
+  try {
+    if (navigator.serviceWorker) { const regs = await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map((r) => r.unregister())); }
+    if (window.caches) { const keys = await caches.keys(); await Promise.all(keys.map((k) => caches.delete(k))); }
+  } catch (e) { /* ignore */ }
+  window.location.reload();
+}
+function UpdateBanner() {
+  return (
+    <div className="fixed left-0 right-0 z-[100] flex justify-center px-3" style={{ top: "env(safe-area-inset-top, 0px)", paddingTop: 8 }}>
+      <button onClick={applyAppUpdate} className="rounded-md px-4 py-2 text-[12px] font-bold shadow-lg" style={{ background: GOLD, color: INK, border: "1px solid " + INK }}>
+        A new version is ready — tap to update
+      </button>
+    </div>
+  );
+}
+
 function TrainingDonut({ counts, size = 150 }) {
   const total = TRAIN_ORDER.reduce((n, k) => n + (counts[k] || 0), 0);
   const r = 52, c = 2 * Math.PI * r;
@@ -14868,14 +14928,15 @@ function ManageOrientationScreen({ user }) {
   const [showNew, setShowNew] = useState(false);
   const [editingId, setEditingId] = useState(null);
 
-  const load = async () => {
-    setLoading(true);
+  const load = async (silent) => {
+    if (silent !== true) setLoading(true);
     const { data, error } = await supabase.rpc("list_orientation_admin", { p_token: user.sessionToken });
-    setSessions(error || !data ? [] : data);
+    if (silent !== true || (!error && data)) setSessions(error || !data ? [] : data);
     setLoading(false);
   };
 
   useEffect(() => { load(); }, [user?.sessionToken]);
+  useLivePoll(load, 15000, !!user?.sessionToken && !showNew && !editingId);
 
   const remove = async (id) => {
     await supabase.rpc("delete_orientation_session", { p_token: user.sessionToken, p_session_id: id });
@@ -18029,6 +18090,7 @@ export default function SafetyHubPrototype() {
   const [showLogin, setShowLogin] = useState(false);
   const [pendingScreen, setPendingScreen] = useState(null);
   const [openMeetingId, setOpenMeetingId] = useState(null);
+  const updateAvailable = useUpdateAvailable();
 
   // On load, check for a saved session token and re-log the person in
   // automatically instead of making them enter their PIN every time.
@@ -18287,6 +18349,7 @@ export default function SafetyHubPrototype() {
     <LanguageContext.Provider value={{ lang, setLang, t }}>
     <ProjectContext.Provider value={PROJECTS[activeProjectId]}>
     <div className="min-h-screen flex flex-col md:flex-row" style={{ background: "#F4F3EF" }}>
+      {updateAvailable && <UpdateBanner />}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500&family=IBM+Plex+Mono:wght@500;600&family=Dancing+Script:wght@600&display=swap');
         * { font-family: 'Inter', sans-serif; }
