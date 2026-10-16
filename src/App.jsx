@@ -470,6 +470,7 @@ const QUARTERLY_MONTHLY_FORMS_DEFAULT = [
 ];
 
 function QuarterlyMonthlyScreen({ user, go }) {
+  const staffViewer = useStaffViewer(user);
   const [openForm, setOpenForm] = useState(null);
   const [viewingPdf, setViewingPdf] = useState(null);
 
@@ -483,7 +484,7 @@ function QuarterlyMonthlyScreen({ user, go }) {
           {user && user.sessionToken && go && (
             <button onClick={() => go("quarterlymysubmissions")} className="text-[10px] font-bold uppercase px-2 py-1 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>My Submissions</button>
           )}
-          {user && user.canAddPersonnel && go && (
+          {user && (user.canAddPersonnel || staffViewer) && go && (
             <button onClick={() => go("managequarterlysubmissions")} className="text-[10px] font-bold uppercase px-2 py-1 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Submissions</button>
           )}
         </div>
@@ -554,7 +555,7 @@ function QuarterlySubmissionsScreen({ user, admin }) {
   return (
     <div className="px-4 pt-4 pb-8" style={{ background: "#F4F3EF", minHeight: "100%" }}>
       <div className="text-[12px] mb-3" style={{ color: STEEL }}>
-        {admin ? "Every Quarterly Inspection and Monthly Fire Protection verification submitted on this project, with the completed document. Admin only." : "The Quarterly and Monthly verifications you've submitted, with the completed document. These are kept here."}
+        {admin ? "Every Quarterly Inspection and Monthly Fire Protection verification submitted on this project, with the completed document." : "The Quarterly and Monthly verifications you've submitted, with the completed document. These are kept here."}
       </div>
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={admin ? "Search by name, employer or period" : "Search by period"} className="w-full rounded-md border px-3 py-2 text-[13px] mb-2" style={{ borderColor: "#C9C6BC" }} />
       <div className="flex gap-2 mb-3">
@@ -579,7 +580,7 @@ function QuarterlySubmissionsScreen({ user, admin }) {
               <div className="flex-1 text-[10px] text-center py-1.5" style={{ color: STEEL }}>No generated PDF for this submission</div>
             )}
           </div>
-          {admin && (
+          {admin && user.canAddPersonnel && (
             <button onClick={() => doDelete(s.id)} className="w-full mt-2 text-[10px] font-bold uppercase py-1.5 rounded-sm" style={{ background: confirmDeleteId === s.id ? ALERT : "white", color: confirmDeleteId === s.id ? "white" : ALERT, border: `1px solid ${ALERT}`, ...mono }}>
               {confirmDeleteId === s.id ? "Tap Again to Permanently Delete" : "Delete"}
             </button>
@@ -685,7 +686,7 @@ function SummarySubmissionsScreen({ user, admin }) {
   return (
     <div className="px-4 pt-4 pb-8" style={{ background: "#F4F3EF", minHeight: "100%" }}>
       <div className="text-[12px] mb-3" style={{ color: STEEL }}>
-        {admin ? "Every Summary of Safety Requirements submitted on this project. Review the contractor's signed copy, then countersign for NTI. Admin only." : "The Summary of Safety Requirements you've submitted, and whether NTI has countersigned it."}
+        {admin ? "Every Summary of Safety Requirements submitted on this project. Review the contractor's signed copy, then countersign for NTI." : "The Summary of Safety Requirements you've submitted, and whether NTI has countersigned it."}
       </div>
       {admin && (
         <>
@@ -710,9 +711,9 @@ function SummarySubmissionsScreen({ user, admin }) {
           <div className="flex gap-2 mt-2 flex-wrap">
             {r.filled_pdf_url && <button onClick={() => window.open(r.filled_pdf_url, "_blank")} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: INK, ...mono }}>View Submitted</button>}
             {r.countersigned_pdf_url && <button onClick={() => window.open(r.countersigned_pdf_url, "_blank")} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm" style={{ background: GOLD, color: INK, ...mono }}>View Countersigned</button>}
-            {admin && !r.countersigned_at && r.filled_pdf_url && <button onClick={() => { setSigning(r); setErr(""); setSigEmpty(true); }} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm" style={{ background: INK, color: GOLD, ...mono }}>Review &amp; Countersign</button>}
+            {admin && user.canAddPersonnel && !r.countersigned_at && r.filled_pdf_url && <button onClick={() => { setSigning(r); setErr(""); setSigEmpty(true); }} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm" style={{ background: INK, color: GOLD, ...mono }}>Review &amp; Countersign</button>}
           </div>
-          {admin && (
+          {admin && user.canAddPersonnel && (
             <button onClick={() => doDelete(r.id)} className="w-full mt-2 text-[10px] font-bold uppercase py-1.5 rounded-sm" style={{ background: confirmDeleteId === r.id ? ALERT : "white", color: confirmDeleteId === r.id ? "white" : ALERT, border: `1px solid ${ALERT}`, ...mono }}>
               {confirmDeleteId === r.id ? "Tap Again to Permanently Delete" : "Delete"}
             </button>
@@ -880,6 +881,11 @@ const SAFETY_ROLE_RE = /safety|\bhse\b|\behs\b|\bh\s*&\s*s\b|health\s*(and|&)\s*
 function canSeeSafetyReports(user) {
   return !!(user && user.canViewMeetings && (user.isHubAdmin || SAFETY_ROLE_RE.test(user.role || "")));
 }
+// Sylvania only: Ferrovial / NTI staff (any company name on the badge) can look at everyone's records and submissions,
+// but cannot add, change or delete anything unless they are also a project admin or Safety Hub admin.
+function isStaffViewer(user, projectId) { return !!(user && user.canViewMeetings && projectId === "nti-sylvania"); }
+function useStaffViewer(user) { const ctx = useContext(ProjectContext) || {}; return isStaffViewer(user, ctx.id); }
+const STAFF_VIEW_SCREENS = ["managesubmittedforms", "managequarterlysubmissions", "summaryreview"];
 const NAV_ORDER = ["home", "orientation", "forms", "hsstandards", "safetyplan", "workplans", "preconstruction", "safetyreports", "meetings", "reports", "toolbox", "quarterlymonthly", "training", "laborlaws", "trafficcontrol", "concern", "truckdriver", "emergency", "personnel"];
 const sortByNavOrder = (items) => {
   const rank = (k) => { const i = NAV_ORDER.indexOf(k); return i === -1 ? NAV_ORDER.indexOf("concern") : i; };
@@ -4771,7 +4777,7 @@ function OrientationSubmissionsScreen({ user }) {
   return (
     <div className="px-4 pt-4 pb-8" style={{ background: "#F4F3EF", minHeight: "100%" }}>
       <div className="text-[12px] mb-3" style={{ color: STEEL }}>
-        Every form submitted through Orientation Scheduling only — with the actual completed document. This never includes Site Safety Forms submissions. Admin only.
+        Every form submitted through Orientation Scheduling only — with the actual completed document. This never includes Site Safety Forms submissions.
       </div>
       <div className="flex gap-2 mb-3">
         {[["all", "All Forms"], ["drug", "Drug Screens by Subcontractor"]].map(([k, l]) => (
@@ -4832,7 +4838,8 @@ function OrientationSubmissionsScreen({ user }) {
               </button>
             ))}
           </div>
-          {/designation$/i.test(s.form_title || "") && <ReviewDesignationPanel sub={s} user={user} slug={activeSlug} roster={roster} onDone={load} />}
+          {user.canAddPersonnel && /designation$/i.test(s.form_title || "") && <ReviewDesignationPanel sub={s} user={user} slug={activeSlug} roster={roster} onDone={load} />}
+          {user.canAddPersonnel && (
           <button
             onClick={() => doDelete(s.id)}
             className="w-full mt-2 text-[10px] font-bold uppercase py-1.5 rounded-sm"
@@ -4840,6 +4847,7 @@ function OrientationSubmissionsScreen({ user }) {
           >
             {confirmDeleteId === s.id ? "Tap Again to Permanently Delete" : "Delete"}
           </button>
+          )}
         </div>
       ))}
       {!loading && filtered.length === 0 && (
@@ -12369,7 +12377,7 @@ function FormsScreen({ user, go, activeProjectId }) {
               My Submissions
             </button>
           )}
-          {user && user.canAddPersonnel && (
+          {user && (user.canAddPersonnel || isStaffViewer(user, activeProjectId)) && (
             <button onClick={() => go("managesubmittedforms")} className="text-[10px] font-bold uppercase px-2 py-1 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>
               Submissions
             </button>
@@ -12629,6 +12637,7 @@ function SubmittedFormsScreen({ user }) {
             ))}
           </div>
           <LinkedFormsBlock submission={s} links={links} />
+          {user.canAddPersonnel && (
           <button
             onClick={() => doDelete(s.id)}
             className="w-full mt-2 text-[10px] font-bold uppercase py-1.5 rounded-sm"
@@ -12636,6 +12645,7 @@ function SubmittedFormsScreen({ user }) {
           >
             {confirmDeleteId === s.id ? "Tap Again to Permanently Delete" : "Delete"}
           </button>
+          )}
         </div>
       ))}
       {!loading && filtered.length === 0 && (
@@ -14252,7 +14262,7 @@ function OrientationScreen({ user, go, activeProjectId }) {
           </button>
         </div>
       )}
-      {user && user.canAddPersonnel && (
+      {user && (user.canAddPersonnel || isStaffViewer(user, activeProjectId)) && (
         <button onClick={() => go("orientationsubmissions")} className="w-full mb-4 flex items-center justify-center gap-1 text-[11px] font-bold uppercase py-2.5 rounded-md border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>
           Submissions
         </button>
@@ -15228,7 +15238,9 @@ function PreconSubmissionsScreen({ user }) {
   const [searchText, setSearchText] = useState("");
   const [formFilter, setFormFilter] = useState("");
   const [dateFilter, setDateFilter] = useState("");
-  const admin = !!(user && user.canAddPersonnel);
+  const staff = useStaffViewer(user);
+  const canManage = !!(user && user.canAddPersonnel);
+  const admin = canManage || staff; // admin = sees everyone's submissions
   const load = async () => {
     setLoading(true);
     const { data, error } = await supabase.rpc("list_preconstruction_submissions", { p_token: user.sessionToken });
@@ -15285,7 +15297,7 @@ function PreconSubmissionsScreen({ user }) {
               <button key={i} onClick={() => window.open(url, "_blank")} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Attachment {(x.proof_doc_urls || []).length > 1 ? i + 1 : ""}</button>
             ))}
           </div>
-          {admin && (
+          {canManage && (
             <button onClick={() => doDelete(x.id)} className="w-full mt-2 text-[10px] font-bold uppercase py-1.5 rounded-sm" style={{ background: confirmDeleteId === x.id ? ALERT : "white", color: confirmDeleteId === x.id ? "white" : ALERT, border: `1px solid ${ALERT}`, fontFamily: "IBM Plex Mono, monospace" }}>
               {confirmDeleteId === x.id ? "Tap Again to Permanently Delete" : "Delete"}
             </button>
@@ -15333,12 +15345,12 @@ function PreConstructionScreen({ user, go, activeProjectId }) {
         {user && user.sessionToken && (
           <button onClick={() => go("summarymysubmissions")} className="text-[10px] font-bold uppercase px-2 py-1 rounded-sm border flex-shrink-0" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>My Summary</button>
         )}
-        {user && user.canAddPersonnel && (
+        {user && (user.canAddPersonnel || isStaffViewer(user, activeProjectId)) && (
           <button onClick={() => go("summaryreview")} className="text-[10px] font-bold uppercase px-2 py-1 rounded-sm flex-shrink-0" style={{ background: INK, color: GOLD, fontFamily: "IBM Plex Mono, monospace" }}>Review &amp; Sign</button>
         )}
         {user && user.sessionToken && (
           <button onClick={() => go("preconsubmissions")} className="text-[10px] font-bold uppercase px-2 py-1 rounded-sm flex-shrink-0" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>
-            {user.canAddPersonnel ? "All Submissions" : "My Submissions"}
+            {user.canAddPersonnel || isStaffViewer(user, activeProjectId) ? "All Submissions" : "My Submissions"}
           </button>
         )}
         </div>
@@ -17850,7 +17862,7 @@ export default function SafetyHubPrototype() {
   // Central navigation gate: which screens are locked depends on the
   // active project (Houston gates everything except the always-public ones)
   const go = (targetScreen) => {
-    if (isAdminOnlyScreen(targetScreen) && (!user || !user.canAddPersonnel)) {
+    if (isAdminOnlyScreen(targetScreen) && (!user || !(user.canAddPersonnel || (STAFF_VIEW_SCREENS.includes(targetScreen) && isStaffViewer(user, activeProjectId))))) {
       if (!user) { setPendingScreen(targetScreen); setShowLogin(true); }
       return;
     }
@@ -18014,7 +18026,7 @@ export default function SafetyHubPrototype() {
 
         <div className="flex-1 overflow-y-auto">
           <div className={`md:mx-auto md:w-full ${screen === "home" ? "md:max-w-6xl" : "md:max-w-3xl"}`}>
-            {isAdminOnlyScreen(screen) && (!user || !user.canAddPersonnel) ? (
+            {isAdminOnlyScreen(screen) && (!user || !(user.canAddPersonnel || (STAFF_VIEW_SCREENS.includes(screen) && isStaffViewer(user, activeProjectId)))) ? (
               <div className="px-4 pt-16 text-center">
                 <Lock size={28} color={STEEL} className="mx-auto mb-3" />
                 <div className="text-[14px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>Admins Only</div>
