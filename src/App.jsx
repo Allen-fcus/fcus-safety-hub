@@ -953,6 +953,28 @@ function HomeScreen({ go, user, activeProjectId }) {
 
   const sortedPosts = [...posts].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
 
+  // The newest Toolbox Talk week (entered in the Toolbox tab) also shows on the bulletin board.
+  // It always follows the latest week, so when a new one is entered the previous one drops off here.
+  const [latestWeek, setLatestWeek] = useState(null);
+  const [weekOpen, setWeekOpen] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    async function loadLatestWeek() {
+      await loadProjectMap();
+      const projectUuid = projectIdForSlug(activeProjectId);
+      if (!projectUuid) { if (!cancelled) setLatestWeek(null); return; }
+      const { data: wk } = await supabase.from("toolbox_weeks").select("*").eq("project_id", projectUuid).order("posted_at", { ascending: false }).limit(1);
+      if (cancelled) return;
+      const w = wk && wk[0];
+      if (!w) { setLatestWeek(null); return; }
+      const { data: talks } = await supabase.from("toolbox_talks").select("*").eq("week_id", w.id);
+      if (cancelled) return;
+      setLatestWeek({ id: w.id, week_label: w.week_label, posted_at: w.posted_at, talks: talks || [] });
+    }
+    loadLatestWeek();
+    return () => { cancelled = true; };
+  }, [activeProjectId]);
+
   const [emergencyContacts, setEmergencyContacts] = useState([]);
 
   useEffect(() => {
@@ -1083,6 +1105,19 @@ function HomeScreen({ go, user, activeProjectId }) {
         </div>
         {loadingPosts && <div className="text-[12px] mb-2" style={{ color: STEEL }}>Loading…</div>}
         <div className="space-y-2 md:space-y-0 md:grid md:grid-cols-2 md:gap-3">
+          {latestWeek && latestWeek.talks.length > 0 && (user && user.sessionToken ? (
+            <div className="md:col-span-2">
+              <div className="text-[9px] uppercase font-bold mb-1" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Toolbox Talk of the week</div>
+              <ToolboxWeekCard week={latestWeek} user={user} latest expanded={weekOpen} onToggle={() => setWeekOpen((v) => !v)} />
+            </div>
+          ) : latestWeek && (
+            <button onClick={() => go("toolbox")} className="md:col-span-2 w-full text-left bg-white rounded-md p-3 border" style={{ borderColor: GOLD, borderLeftWidth: 3 }}>
+              <div className="text-[9px] uppercase font-bold inline-block px-1.5 py-0.5 rounded-sm mb-1" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>Toolbox Talk of the week</div>
+              <div className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{latestWeek.week_label}</div>
+              <div className="mt-1 space-y-0.5">{latestWeek.talks.map((tk, ti) => <div key={ti} className="text-[12px]" style={{ color: "#333" }}>{tk.title}</div>)}</div>
+              <div className="text-[10px] font-bold uppercase mt-1.5" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Log in to open</div>
+            </button>
+          ))}
           {sortedPosts.map((p, i) => (
             <div
               key={i}
@@ -1112,7 +1147,7 @@ function HomeScreen({ go, user, activeProjectId }) {
               )}
             </div>
           ))}
-          {sortedPosts.length === 0 && (
+          {sortedPosts.length === 0 && !latestWeek && (
             <div className="text-[12px] text-center py-4 md:col-span-2" style={{ color: STEEL }}>No announcements yet.</div>
           )}
         </div>
