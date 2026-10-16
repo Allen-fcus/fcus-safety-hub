@@ -875,6 +875,11 @@ function SiteWeatherCard({ projectId }) {
 }
 
 // Order of the tabs/menu on every project (items not listed keep their relative order before Truck Drivers).
+// Safety Reports: only people whose role is in safety (plus hub admins), on top of the usual Ferrovial/GC staff gate
+const SAFETY_ROLE_RE = /safety|\bhse\b|\behs\b|\bh\s*&\s*s\b|health\s*(and|&)\s*safety/i;
+function canSeeSafetyReports(user) {
+  return !!(user && user.canViewMeetings && (user.isHubAdmin || SAFETY_ROLE_RE.test(user.role || "")));
+}
 const NAV_ORDER = ["home", "orientation", "forms", "hsstandards", "safetyplan", "workplans", "preconstruction", "safetyreports", "meetings", "reports", "toolbox", "quarterlymonthly", "training", "laborlaws", "trafficcontrol", "concern", "truckdriver", "emergency", "personnel"];
 const sortByNavOrder = (items) => {
   const rank = (k) => { const i = NAV_ORDER.indexOf(k); return i === -1 ? NAV_ORDER.indexOf("concern") : i; };
@@ -900,7 +905,7 @@ function HomeScreen({ go, user, activeProjectId }) {
     { key: "emergency", label: t("emergencyContacts"), desc: t("emergencyDesc"), icon: Phone, count: t("alwaysAvailable") },
     ...(LABOR_LAWS_PROJECTS.includes(activeProjectId) ? [{ key: "laborlaws", label: t("laborLaws"), desc: t("laborLawsDesc"), icon: ShieldAlert, count: t("alwaysAvailable") }] : []),
     ...(TRAFFIC_CONTROL_PROJECTS.includes(activeProjectId) ? [{ key: "trafficcontrol", label: "Traffic Control", desc: "Clear Zone Criteria and other traffic control standards", icon: ShieldAlert, count: "1 document" }] : []),
-    ...(user && user.canViewMeetings ? [{ key: "safetyreports", label: "Safety Reports", desc: "Incident reports, statements, investigations and classification", icon: ShieldAlert, count: "Incidents" }] : []),
+    ...(canSeeSafetyReports(user) ? [{ key: "safetyreports", label: "Safety Reports", desc: "Incident reports, statements, investigations and classification", icon: ShieldAlert, count: "Incidents" }] : []),
     ...(user && user.canViewMeetings ? [{ key: "meetings", label: "Meetings", desc: "Sign-in sheets with QR code, for GC and Ferrovial staff", icon: Users, count: "Sign-ins" }] : []),
     { key: "concern", label: t("reportConcern"), desc: t("reportConcernDesc"), icon: MessageSquare, count: t("alwaysAvailable") },
   ];
@@ -2794,8 +2799,8 @@ function MeetingsScreen({ user, activeProjectId, initialOpenId }) {
 }
 
 function SafetyReportsScreen({ user, activeProjectId, onOpenMeeting }) {
-  if (!user || !user.canViewMeetings) {
-    return <div className="px-4 pt-10 text-center text-[12px]" style={{ color: STEEL }}>Safety Reports are only available to Ferrovial and general contractor staff on this project.</div>;
+  if (!canSeeSafetyReports(user)) {
+    return <div className="px-4 pt-10 text-center text-[12px]" style={{ color: STEEL }}>Safety Reports are only available to staff with a safety role on this project.</div>;
   }
   return <SafetyReportsPanel user={user} activeProjectId={activeProjectId} onOpenMeeting={onOpenMeeting} />;
 }
@@ -17572,7 +17577,7 @@ export default function SafetyHubPrototype() {
     { key: "emergency", icon: Phone, label: t("emergencyContacts") },
     ...(LABOR_LAWS_PROJECTS.includes(activeProjectId) ? [{ key: "laborlaws", icon: ShieldAlert, label: t("laborLaws") }] : []),
     ...(TRAFFIC_CONTROL_PROJECTS.includes(activeProjectId) ? [{ key: "trafficcontrol", icon: ShieldAlert, label: "Traffic Control" }] : []),
-    ...(user && user.canViewMeetings ? [{ key: "safetyreports", icon: ShieldAlert, label: "Safety Reports" }] : []),
+    ...(canSeeSafetyReports(user) ? [{ key: "safetyreports", icon: ShieldAlert, label: "Safety Reports" }] : []),
     ...(user && user.canViewMeetings ? [{ key: "meetings", icon: Users, label: "Meetings" }] : []),
   ];
   const orderedSidebarItems = sortByNavOrder(sidebarItems);
