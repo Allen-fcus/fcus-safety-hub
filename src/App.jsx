@@ -1718,6 +1718,8 @@ function MeetingFormCard({ initial, onSave, onCancel, saving }) {
 // SAFETY REPORTS (incident management) - lives inside Sign In Sheets
 // ============================================================
 const SR_L = {"area": ["3C Sylvania", "3C Golden Triangle", "Off Site"], "type": ["AL", "GL", "MVA", "Near Miss", "Theft", "Utility Strike"], "yn1": ["Yes", "No"], "yn2": ["Yes", "No"], "drug": ["Yes", "No", "Requested"], "activity": ["ACT-01 Site establishment (Clearance, fencing, welfate, set-up, etc)", "ACT-02 Demolition (Service isolation, restricted areas/zones, asbestos)", "ACT-03 Service Diversions (Overhead cables, underground ducts, substations)", "ACT-04 Excavations and earthworks (Leveling, piling, drainage, trenches, etc.)", "ACT-05 Pavements", "ACT-06 Signaling, Beaconing and defense elements", "ACT-07 Erection of Structures (Steel works, falsework, scaffolding, tower cranes)", "ACT-08 Concrete (In-situ, Precast concrete, structural)", "ACT-09 Tunnels (Hand dig, mechanical, TBM (Open/Close face), sprayed concrete, etc.)", "ACT-10 Railway Assembly", "ACT-11 Building envelope (Blockwork, brickwork, stonework, cladding, window, doors, stairs)", "ACT-12 Roof Works (Fragile surfaces, Bitumen, Felt & Batton, tiled, glazed)", "ACT-13 Partitioning (Block/Brick work, Plasterboard,property systems)", "ACT-14 Installation (Mechanical, Heating & Ventilation, Electrical, Telecoms, Security, Carpentry)", "ACT-15 Finishing works (Cladding, Carpentry, Paint & Decorating, Ceilings, etc.)", "ACT-16 Services (Fire, Fuel, Water, Gas, Electrical mains)", "ACT-17 Landscaping and Ecology", "ACT-18 Testing & Commissioning (Electrical, Mechanical, Telecoms, etc.)", "ACT-19 Maintenance & Operation"], "standard": ["FER-MIN-STD-01 PPE", "FER-MIN-STD-02 Fall Protection", "FER-MIN-STD-03 Opening Protection", "FER-MIN-STD-04 Machinery and Equipment", "FER-MIN-STD-05 Lifting Loads", "FER-MIN-STD-06 Aerial Work Platforms", "FER-MIN-STD-07 Trench and Shaft excavations", "FER-MIN-STD-08 Traffic Control", "FER-MIN-STD-09 Working Platforms", "FER-MIN-STD-10 Ladders", "FER-MIN-STD-11 Electrical Safety", "FER-MIN-STD-12 Illuminations", "FER-MIN-STD-13 Utilities", "FER-MIN-STD-14 Explosives", "FER-MIN-STD-15 Air quality and Confined Space", "FER-MIN-STD-16 Mobile devices", "FER-MIN-STD-17 Sanitation", "FER-MIN-STD-18 Housekeeping", "FER-MIN-STD-19 Manual Handling", "FER-MIN-STD-20 Chemical, biological agents and radiations", "FER-MIN-STD-22 Safety Planning", "FER-MIN-STD-23 Organization and Coordination of activities", "FER-MIN-STD-24 Safety Supervision"], "causation": ["FER-01 Falls from a heights", "FER-02 Slip, trip and fall on the same level", "FER-03 Struck by falling objects", "FER-04 Struck by vehicle/machinery", "FER-05 Being hit by moving objects", "FER-06 Caught in, cut or compressed by equipment or objects", "FER-07 Projection of fragments or particles", "FER-08 Trapping", "FER-09 Overexertion", "FER-10 Other muscular stress", "FER-11 Contact with electricity", "FER-12 Contact or exposure to heat and cold", "FER-13 Vehicle accident", "FER-14 Contact with chemical or substance", "FER-15 Exposure to radiation", "FER-16 Exposure to noise", "FER-17 Exposure to mechanical vibration", "FER-18 Other and multiple mechanism of incident", "FER-19 Fire", "FER-20 Explosion", "FER-21 Assault", "FER-22 Other"], "conditions": ["01-PREM-01 Premises - Access and egress not adequate", "01-PREM-02 Premises - Access and egress points not used", "01-PREM-03 Premises - Hazards of the working area not protected", "01-PREM-04 Premises - Workplace unsuitable for the task in hand", "01-PREM-05 Premises - Insufficient space for the task in hand", "01-PREM-06 Premises - Workplace not used as intended", "01-PREM-07 Premises - People not segregated from hazardous areas/Substances/Machines", "01-PREM-08 Premises - Light, temperature and ventilation not suitable", "01-PREM-09 Premises - The ergonomics of the workstation don't suit the person", "01-PREM-10 Premises - The work area was not clean and tidy", "01-PREM-11 Premises - Weather conditions", "01-PREM-12 Premises - Appropriate warning signs not in place", "01-PREM-13 Premises - Unforeseable hazard (external to the work performed)", "02-PLANT-01 Plant and Equipment - Unsuitable plant and equipment for the job", "02-PLANT-02 Plant and Equipment - Plant and equipment in bad working condition and poorly maintained", "02-PLANT-03 Plant and Equipment - Pland and equipment improperly used", "02-PLANT-04 Plant and Equipment - Inadequate controls or guards for the safe use of the equipment", "02-PLANT-05 Plant and Equipment - Controls or guards improperly used or maintained", "02-PLANT-06 Plant and Equipment - Materials/substances improperly used", "02-PLANT-07 Plant and Equipment - Improper materials/ substances being used", "02-PLANT-08 Plant and Equipment - Materials/ Substances improperly used", "02-PLANT-09 Plant and Equipment - Exposure to hazardous materials and by-products improperly controlled", "02-PLANT-10 Plant and Equipment - Suitable PPE not available", "02-PLANT-11 Plant and Equipment - PPE in poor conditions", "02-PLANT-12 Plant and Equipment - Necessary PPE not used", "02-PLANT-13 Plant and Equipment - Necessary PPE improperly used", "03-WORK-01 Procedures - Inexistence of working procedures and instructions for the task", "03-WORK-02 Procedures - Working procedures and instructions outdated", "03-WORK-03 Procedures - Working procedures and instructions not realistic, accurate or inadequate", "03-WORK-04 Procedures - Working procedures and instructions dont deal with the circumstances of the adverse event", "03-WORK-05 Procedures - Working procedures and instructions not followed", "03-WORK-06 Procedures - Working procedures and instructions not available or provided to those carrying out to work", "03-WORK-07 Procedures - Working procedures and instructions were not supervised", "03-WORK-08 Procedures - Workers were not informed of the working procedures they should adopt", "04-PERS-01 People - People involved not suited for their job (Competence, Physically, Emotionally ...)", "04-PERS-02 People - Fatigue", "04-PERS-03 People - Lack of risk perception", "04-PERS-04 People - Being distracted", "04-PERS-05 People - Horseplay", "04-PERS-06 People - Taking substances such as alcohol, drugs, medicines", "04-PERS-07 People - Violations of working procedures and instructions", "04-PERS-08 People - Taking short cuts"], "coordinator": ["Jim Quinn", "Paul Vares", "Allen Garcia"]};
+const SR_SIR = {"company": ["Alamo NEX CEK50", "NTI SEG 1-2  CEC24", "NPC C5EM", "NDH NTI CEC23", "JFK NTO CCA70", "OTG CAN CEN80"], "workerType": ["Own Employee / Trabajador propio", "Other Worker / Resto de los trabajadores", "Non-Worker / No es Trabajador", "None of the above / Ninguno de los anteriores"], "nature": ["FER-01 Fractures (excluding of vertebral column)", "FER-02 Fracture of vertebral column with or without mention of spinal cord lesion", "FER-03 Dislocations", "FER-04 Sprains and strains of joints and adjacent muscles", "FER-05 Intracranial injuries including concussions", "FER-06 Internal injury of chest, abdomen and pelvis", "FER-07 Traumatic amputation, including ecucleation of eye", "FER-08 Loss of sight", "FER-09 Open wound no including amputation", "FER-10 Superficial injury", "FER-11 Contusion with intact skin surface and crushing injury", "FER-12 Foreign body on external eye, in ear or nose or in respiratory, digestive or reproductive systems", "FER-13 Burns", "FER-14 Injuries to nerves and spinal cord without evidence of spinal bone injury", "FER-15 Poinsoning and toxic effects of substances", "FER-16 Loss of consciousness caused by inhalation, ingestion or absorption of harmful substances or biologic", "FER-17 Effects of weather, exposure, air pressure and other external causes", "FER-18 Multiple Injuries", "FER-19 Drowning and suffocation", "FER-20 Heart attacks, strokes and other non-traumatic pathologies", "FER-21 Other injuries"], "scenario": ["FER-01 Falls from height regardless of any injury outcome or if fall was suitably arrested", "FER-02 Traffic events, in connection with work, that required evasive action", "FER-03 Pedestrian struck by vehicle or mobile equipment", "FER-04 Roll- over or roll-away of mobile equipment", "FER-05 Failure of lifting operation or equipment", "FER-06 Uncontrolled release of hazardous energy", "FER-07 Fire or explosion", "FER-08 Fall of objects from height", "FER-09 Contact with mobile parts of equipment or machinery", "FER-10 Collapse of excavations, structures - including temporary works and scaffold", "FER-11 Event in a confined space or hazardous atmosphere", "FER-12 Event involving aquatic or subaquatic operations", "FER-13 Unintentional contact with utilities - underground and aerial power lines, gas main services", "FER-14 Electrical contact with voltages >50V AC or >120V DC", "FER-15 Exposure to toxic gases or hazardous substances greater than exposure limits", "FER-16 Assault (i.e. a violent bodily act or gesture that attempts or threatens to apply unwanted physical", "FER-17 Any event categorized as Major (Urgent and critical tr", "FER-18 Any event categorized as Catastrophic (Fatality; total"], "injClass": ["US001 Fatality", "US002 Days Away from Work", "US003 Restricted Work", "US004 Job Transfer", "US005 Medical Treatment", "US006 First Aid"], "treatment": ["FER-1 First Aid", "FER-2 Emergency Room", "FER-3 Clinic", "FER-4 Hospitalization under 1 day", "FER-5 Hospitalization over 1 day"], "risk": ["Minor (Not worthy but with low consequence)", "Moderate (Potential for event that cause short-term harm)", "Serious (Intense harm or loss with disabling and/or long-term consequence)", "Potential Fatal (Life threatening and deadly condidtion)"], "corrective": ["CA - Change in Policy", "CA - Change in Procedure", "CA - Change in Training", "CA - Refresher Training", "DA - Work Stoppage", "DA - Suspension/Termination/Removal", "DA - Written Warning"]};
+
 // Safety regulator by project: Tennessee (FCW24) works under the TOSHA state plan
 function srReg(slug) {
   return slug === "nashville"
@@ -1735,6 +1737,9 @@ const SR_FORM_META = {
   employee_statement: { label: "Employee Statement", short: "Statement", multiple: true },
   investigation_report: { label: "Incident Investigation Report", short: "Investigation", multiple: false },
   cority_entry: { label: "Near Miss / HiPo - Cority Entry", short: "Cority Entry", multiple: false },
+  sir: { label: "Significant Incident Report (SIR)", short: "SIR", multiple: false },
+  eir: { label: "Executive Incident Review (EIR)", short: "EIR", multiple: false },
+  lesson_learned: { label: "Lesson Learned Bulletin", short: "Lesson Learned", multiple: false },
 };
 
 // which forms a case needs, based on how it is classified
@@ -1747,6 +1752,14 @@ function srRequiredForms(c, forms) {
   if (c.near_miss || c.hipo || c.injury) list.push({ type: "cority_entry", need: "required", why: "Near Miss, HiPo and injury events are entered in Cority. This checklist walks through it." });
   list.push({ type: "investigation_report", need: severe ? "required" : (c.near_miss || c.property_damage || c.first_aid ? "recommended" : "optional"),
     why: c.hipo ? "HiPo events need an investigation to be completed." : severe ? "Injury / recordable / SIF events require a completed investigation with corrective actions." : "Complete after the investigation meeting to record root causes and corrective actions." });
+  const major = c.hipo || c.sif || c.fatality;
+  const notable = major || c.lost_time || c.recordable || c.near_miss;
+  list.push({ type: "sir", need: major ? "required" : (c.lost_time || c.recordable ? "recommended" : "optional"),
+    why: major ? "HiPo, SIF and fatality events are reported to Ferrovial on a Significant Incident Report. Attach it to the Cority entry." : "Used for the Ferrovial weekly significant incidents report when the event is serious enough." });
+  list.push({ type: "eir", need: major ? "required" : (c.lost_time || c.recordable ? "recommended" : "optional"),
+    why: "Presented after the investigation is complete: overview, findings and what we are doing differently." });
+  list.push({ type: "lesson_learned", need: major ? "required" : (notable ? "recommended" : "optional"),
+    why: "One-page bulletin sent to all employees so the incident is not repeated. Complete once the investigation is done." });
   return list.map((r) => ({ ...r, done: has(r.type) }));
 }
 
@@ -1933,6 +1946,117 @@ function srSchema(type, ctx) {
       ] },
     ],
   };
+  if (type === "sir") return {
+    title: "Significant Incident Report (SIR)", pdfTitle: "SIGNIFICANT INCIDENT REPORT (SIR)",
+    sections: [
+      { title: "Report", fields: [
+        { k: "reportType", l: "Report type", t: "select", opts: ["Injury", "Near Miss - HIPO"], req: true },
+        { k: "country", l: "Country", t: "select", opts: ["USA", "Canada"] },
+        { k: "contract", l: "Company - contract", t: "combo", opts: SR_SIR.company, full: true },
+        { k: "occurred", l: "Has an incident occurred?", t: "yesno", req: true },
+        { k: "_n", t: "info", l: "Weekly reports are due before 12 pm CST on Wednesdays. If the English and Spanish versions of the Ferrovial template differ, the English version applies." },
+      ] },
+      { title: "When and where", fields: [
+        { k: "location", l: "Location of the accident (where did the incident take place)", t: "text", full: true, req: true },
+        { k: "date", l: "Date of the incident", t: "date", req: true }, { k: "time", l: "Time of the incident", t: "time", req: true },
+      ] },
+      { title: "Who", fields: [
+        { k: "workerType", l: "Type of worker", t: "select", opts: SR_SIR.workerType, full: true },
+        { k: "ownName", l: "Own employee: full name", t: "text", showIf: (d) => /Own/.test(d.workerType || "") },
+        { k: "ownPosition", l: "Own employee: position", t: "text", showIf: (d) => /Own/.test(d.workerType || "") },
+        { k: "otherName", l: "Other worker: employee name", t: "text", showIf: (d) => /Other Worker/.test(d.workerType || "") },
+        { k: "otherPosition", l: "Other worker: position", t: "text", showIf: (d) => /Other Worker/.test(d.workerType || "") },
+        { k: "companyType", l: "Company", t: "select", opts: ["Ferrovial", "Subcontractor"] },
+        { k: "subName", l: "Subcontractor name", t: "text", showIf: (d) => d.companyType === "Subcontractor" },
+      ] },
+      { title: "What happened", fields: [
+        { k: "incidentLevel", l: "Type of incident", t: "select", opts: ["Fatal", "Serious incident according to procedure", "Other significant incidents"], req: true, full: true },
+        { k: "_s", t: "info", l: "Serious: a fracture (except fingers or toes), amputation, loss of sight, hospitalization of over one day, or loss of consciousness from inhaling, ingesting or absorbing dangerous substances or biological agents with hospitalization of over one day." },
+        { k: "nearMiss", l: "Near miss? (No = it is a HiPo)", t: "yesno" },
+        { k: "_h", t: "info", l: "A near miss is a high potential incident where no property was damaged and nobody was injured, but a slight shift in time or circumstances could have caused significant damage or injury." },
+        { k: "description", l: "Brief description (basic explanation of what happened)", t: "textarea", req: true, full: true },
+      ] },
+      { title: "Injury (if there was one)", fields: [
+        { k: "nature", l: "Nature of injury", t: "select", opts: SR_SIR.nature, full: true },
+        { k: "bodyPart", l: "Part of body", t: "text" }, { k: "bodySide", l: "Side", t: "select", opts: ["Right", "Left", "Not applicable"] },
+        { k: "injClass", l: "Incident classification", t: "select", opts: SR_SIR.injClass },
+        { k: "serious", l: "Serious according to Ferrovial procedure", t: "yesno" },
+        { k: "treatment", l: "Type of treatment", t: "select", opts: SR_SIR.treatment, full: true },
+      ] },
+      { title: "Classification", fields: [
+        { k: "riskClass", l: "Classification of risk", t: "select", opts: SR_SIR.risk, full: true },
+        { k: "activity", l: "Activity", t: "select", opts: SR_L.activity, full: true },
+        { k: "standard", l: "Health and Safety minimum standard", t: "select", opts: SR_L.standard, full: true },
+        { k: "causation", l: "Incident causation", t: "select", opts: SR_L.causation, full: true },
+        { k: "conditions", l: "Contributing conditions (immediate cause)", t: "select", opts: SR_L.conditions, full: true },
+        { k: "scenario", l: "HiPo scenario", t: "select", opts: SR_SIR.scenario, full: true },
+        { k: "lifesaving", l: "Was there a lifesaving control present?", t: "yesno" },
+        { k: "lifesavingNote", l: "If yes, indicate the preventive, mitigating or alternative control measure used. If no, indicate the control measures that could allow future fail-safe outcomes.", t: "textarea", full: true },
+        { k: "_l", t: "info", l: "Lifesaving controls do not depend on people, are effective when people make mistakes, and prevent or mitigate high energy, life-threatening exposures." },
+      ] },
+      { title: "HiPo corrective action (Cority requires at least one per HiPo)", fields: [
+        { k: "ca1", l: "Category 1", t: "select", opts: SR_SIR.corrective }, { k: "ca2", l: "Category 2", t: "select", opts: SR_SIR.corrective },
+        { k: "caText", l: "Describe the corrective action(s)", t: "textarea", full: true },
+        { k: "_p", t: "info", l: "Pictures are added when the report is submitted in the Ferrovial form or in Cority." },
+      ] },
+      { title: "Prepared by", fields: [
+        { k: "preparedBy", l: "Name", t: "text", req: true }, { k: "signDate", l: "Date", t: "date" },
+      ] },
+    ],
+  };
+  if (type === "eir") return {
+    title: "Executive Incident Review (EIR)", pdfTitle: "EXECUTIVE INCIDENT REVIEW (EIR)",
+    sections: [
+      { title: "Review details", fields: [
+        { k: "reviewDate", l: "Date of review", t: "date", req: true },
+        { k: "project", l: "Project name", t: "text" }, { k: "client", l: "Client", t: "text" },
+        { k: "location", l: "Location", t: "text" }, { k: "injuryType", l: "Incident / injury type", t: "text" },
+        { k: "incidentDate", l: "Date of incident", t: "date" },
+        { k: "moderator", l: "EIR moderator", t: "text" }, { k: "presenter", l: "EIR presenter", t: "text" },
+        { k: "shMgr", l: "Regional or Area SH&E Manager", t: "text", full: true },
+        { k: "_c", t: "info", l: "Protected from Disclosure by the Attorney-Client Privilege and Work Product Doctrine." },
+      ] },
+      { title: "1. Incident overview", fields: [
+        { k: "date", l: "Date", t: "date" }, { k: "time", l: "Time", t: "time" },
+        { k: "siteLocation", l: "Location on site", t: "text" }, { k: "type", l: "Incident type", t: "text" },
+        { k: "overview", l: "Brief description of incident (the activity taking place and what happened to the individual as a result)", t: "textarea", req: true, full: true },
+        { k: "overviewMore", l: "Incident overview continued (timeline, photos or sketches to show on the slides)", t: "textarea", full: true },
+      ] },
+      { title: "2. Findings", fields: [
+        { k: "findings", l: "As determined from the conclusion of the investigation: root causes and contributing factors", t: "textarea", req: true, full: true, hint: "Consider people, behaviors, management failure and supervision." },
+      ] },
+      { title: "3. Learning", fields: [
+        { k: "learning", l: "What are we doing differently to prevent it from happening again? This should match the corrective actions.", t: "textarea", req: true, full: true },
+      ] },
+      { title: "4. Questions / comments", fields: [
+        { k: "comments", l: "Questions and comments raised in the review", t: "textarea", full: true },
+      ] },
+    ],
+  };
+  if (type === "lesson_learned") return {
+    title: "Lesson Learned Bulletin", pdfTitle: "LESSON LEARNED BULLETIN",
+    sections: [
+      { title: "Bulletin", fields: [
+        { k: "issueDate", l: "Issue date", t: "date", req: true }, { k: "issuedBy", l: "Issued by", t: "text" },
+        { k: "bulletinTitle", l: "Title", t: "text", full: true, hint: "Short, for example: Struck by TMA - rear impact." },
+      ] },
+      { title: "What happened?", fields: [
+        { k: "brief", l: "Brief description", t: "textarea", req: true, full: true },
+        { k: "consequence", l: "Consequence", t: "textarea", full: true },
+        { k: "_p", t: "info", l: "Add a photo of the scene to the PDF or the sent email if one helps." },
+      ] },
+      { title: "Findings", fields: [
+        { k: "findings", l: "Findings", t: "rows", cols: [{ k: "text", l: "Finding", t: "text" }], min: 3, max: 8, full: true },
+      ] },
+      { title: "All operations must ensure", fields: [
+        { k: "ensure", l: "All operations must ensure", t: "rows", cols: [{ k: "text", l: "Action", t: "text" }], min: 3, max: 8, full: true },
+      ] },
+      { title: "Ferrovial H&S Standards to prevent the incident", fields: [
+        { k: "mgmt", l: "Management", t: "textarea", full: true }, { k: "ops", l: "Operational", t: "textarea", full: true },
+        { k: "_d", t: "info", l: "This Lesson Learned is an internal communication to all Ferrovial Construction employees, designed to disclose significant incidents so they are not repeated. It is not an incident investigation and does not determine or accept responsibility. It cannot be reproduced in whole or in part without the company's consent." },
+      ] },
+    ],
+  };
   // cority_entry
   return {
     title: "Near Miss / HiPo - Cority Entry", pdfTitle: "NEAR MISS / HIPO - CORITY ENTRY CHECKLIST",
@@ -1951,11 +2075,11 @@ function srSchema(type, ctx) {
       ] },
       { title: "Part 2 - Incident review (appears after you submit Part 1)", fields: [
         { k: "detail", l: "Detailed description (same as above)", t: "textarea", full: true },
-        { k: "causation", l: "Incident causation", t: "text", hint: "Use the magnifying icon to pick the one that matches the report. Do not guess - ask your manager." },
-        { k: "immediateCause", l: "Immediate cause", t: "text" },
+        { k: "causation", l: "Incident causation", t: "select", opts: SR_L.causation, full: true, hint: "Use the magnifying icon to pick the one that matches the report. Do not guess - ask your manager." },
+        { k: "immediateCause", l: "Immediate cause", t: "select", opts: SR_L.conditions, full: true },
         { k: "hipo", l: "HiPo?", t: "select", opts: ["1 - Yes", "2 - No"] },
         { k: "immediateAction", l: "Immediate action taken", t: "text", hint: "Most likely 'Work Stopped'. Do not guess - ask your manager." },
-        { k: "scenario", l: "HiPo scenario", t: "text", full: true },
+        { k: "scenario", l: "HiPo scenario", t: "select", opts: SR_SIR.scenario, full: true },
         { k: "approver", l: "Approval contact", t: "text", full: true },
         { k: "role", l: "Role", t: "text" },
         { k: "logged", l: "Added the report number to the control / log spreadsheet or the accident folder", t: "check", full: true },
@@ -1978,6 +2102,18 @@ function srDefaults(type, ctx) {
     drugScreen: c.drug_screen || "", policeReport: c.police_report || "", riskClass: c.risk_class || "", lifesaving: c.lifesaving_control === "yes" ? "Yes" : c.lifesaving_control === "no" ? "No" : "",
     description: "",
   };
+  const loc = [c.area, c.location_detail].filter(Boolean).join(" - ");
+  const dt = c.incident_date ? String(c.incident_date).slice(0, 10) : "";
+  if (type === "sir") return {
+    reportType: c.hipo || c.near_miss ? "Near Miss - HIPO" : "Injury", country: "USA", occurred: "Yes", location: loc, date: dt, time: c.incident_time || "",
+    companyType: "Ferrovial", incidentLevel: c.fatality ? "Fatal" : c.sif ? "Serious incident according to procedure" : "Other significant incidents",
+    nearMiss: c.near_miss && !c.hipo ? "Yes" : c.hipo ? "No" : "", serious: c.sif || c.fatality ? "Yes" : "",
+    riskClass: SR_SIR.risk.find((o) => o.split(" ")[0] === String(c.risk_class || "").split(" ")[0]) || "",
+    lifesaving: c.lifesaving_control === "yes" ? "Yes" : c.lifesaving_control === "no" ? "No" : "",
+    injClass: c.fatality ? SR_SIR.injClass[0] : c.lost_time ? SR_SIR.injClass[1] : c.medical_treatment ? SR_SIR.injClass[4] : c.first_aid ? SR_SIR.injClass[5] : "",
+  };
+  if (type === "eir") return { project: ctx.projectName || "", client: ctx.slug === "nti-sylvania" ? "North Tarrant Express Mobility Partners" : "", location: loc, incidentDate: dt, date: dt, time: c.incident_time || "", siteLocation: c.location_detail || "", type: c.incident_type || "", injuryType: srClassLabel(c) };
+  if (type === "lesson_learned") return { issueDate: todayISO(), issuedBy: ctx.userName || "" };
   if (type === "employee_statement") return { date: c.incident_date ? String(c.incident_date).slice(0, 10) : "", time: c.incident_time || "", location: [c.area, c.location_detail].filter(Boolean).join(" - "), state: srReg(ctx.slug).state };
   if (type === "investigation_report") {
     const t = [];
@@ -2322,7 +2458,7 @@ function SrFormView({ user, activeProjectId, projectName, detail, form, type, at
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
   const readOnly = status === "submitted";
-  const subjectOf = (d) => (type === "employee_statement" ? d.name : type === "investigation_report" ? d.brief && d.brief.slice(0, 80) : type === "incident_report" ? d.type : d.summary) || "";
+  const subjectOf = (d) => (type === "employee_statement" ? d.name : type === "investigation_report" ? d.brief && d.brief.slice(0, 80) : type === "incident_report" ? d.type : type === "sir" ? d.description && d.description.slice(0, 80) : type === "eir" ? d.overview && d.overview.slice(0, 80) : type === "lesson_learned" ? d.bulletinTitle : d.summary) || "";
 
   const missing = () => {
     const out = [];
