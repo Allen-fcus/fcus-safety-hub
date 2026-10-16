@@ -13417,6 +13417,20 @@ const LTO_KEY = "__lto";
 const LTO_RE = /osha\s*-?\s*(10|30)\b/i;
 const isNtiEmployer = (emp) => /\b(nti|north tarrant)\b/i.test(emp || "");
 
+const canonTraining = (label) => {
+  const l = String(label || "").trim();
+  if (/osha[\s_-]*30/i.test(l)) return "OSHA 30";
+  if (/osha[\s_-]*10/i.test(l)) return "OSHA 10";
+  if (/mewp/i.test(l)) return "MEWP Training (3B)";
+  if (/driving awareness/i.test(l)) return "Driving Awareness";
+  if (/(cpr|first[\s-]*aid)/i.test(l)) return "CPR & First Aid";
+  if (/\btma\b/i.test(l)) return "TMA Operator Training";
+  if (/traffic control/i.test(l) && /(maintainer|level\s*2)/i.test(l)) return "Traffic Control Maintainer (Level 2)";
+  if (/confined space/i.test(l) && !/(competent|attendant|supervisor)/i.test(l)) return "Confined Space";
+  if (/excavation/i.test(l) && !/(competent|qualified)/i.test(l)) return "Excavation Training";
+  if (/fall protection/i.test(l) && !/(competent|qualified|rescue)/i.test(l)) return "Fall Protection Training";
+  return l;
+};
 function TrainingDonut({ counts, size = 150 }) {
   const total = TRAIN_ORDER.reduce((n, k) => n + (counts[k] || 0), 0);
   const r = 52, c = 2 * Math.PI * r;
@@ -13445,7 +13459,7 @@ function TrainingOverview({ employees, onSelect }) {
   const [statusFilter, setStatusFilter] = useState("");
   const [search, setSearch] = useState("");
 
-  const people = useMemo(() => employees.filter((e) => scope === "all" || isNtiEmployer(e.employer)), [employees, scope]);
+  const people = useMemo(() => employees.filter((e) => scope === "all" || isNtiEmployer(e.employer)).map((e) => ({ ...e, quals: (e.quals || []).map((q) => ({ ...q, label: canonTraining(q.label) })) })), [employees, scope]);
 
   // every training label held by someone in scope, with status counts
   const catalog = useMemo(() => {
