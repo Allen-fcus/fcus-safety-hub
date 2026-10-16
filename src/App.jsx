@@ -5778,7 +5778,7 @@ function ToolboxWeekCard({ week, expanded, onToggle, user, latest }) {
                 <div className="text-[11px] text-center py-2" style={{ color: STEEL }}>{t("logInToConfirm")}</div>
               ) : docAckedIds[viewingDoc.id] ? (
                 <div className="w-full flex items-center justify-center gap-2 rounded-sm py-2.5 text-[12px] font-bold uppercase" style={{ background: "#E9F6EC", color: "#1E7A34", fontFamily: "IBM Plex Mono, monospace" }}>
-                  <CheckCircle2 size={15} /> Confirmed You Reviewed This
+                  <CheckCircle2 size={15} /> Confirmed You Reviewed This{user && user.name ? ` · ${user.name}` : ""}
                 </div>
               ) : (
                 <button
@@ -5984,43 +5984,69 @@ function ToolboxDocEditor({ weekId, user, onDone }) {
 }
 
 function ToolboxWeekAckList({ week, user, onClose }) {
-  const [list, setList] = useState([]);
+  const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
-      const { data } = await supabase.rpc("list_toolbox_week_acknowledgments", { p_token: user.sessionToken, p_week_id: week.id });
-      setList(data || []);
+      const { data: d } = await supabase.rpc("list_toolbox_week_confirmations", { p_token: user.sessionToken, p_week_id: week.id });
+      setData(d || { topics: [], whole_week: [] });
       setLoading(false);
     }
     load();
   }, [week.id]);
 
+  const topics = (data && data.topics) || [];
+  const wholeWeek = (data && data.whole_week) || [];
+  const total = topics.reduce((n, t) => n + t.confirmations.length, 0) + wholeWeek.length;
+  const exportCsv = () => {
+    const rows = [];
+    topics.forEach((t) => t.confirmations.forEach((a) => rows.push({ topic: t.title, ...a })));
+    wholeWeek.forEach((a) => rows.push({ topic: "(whole week)", ...a }));
+    exportToCsv(`toolbox-confirmations-${week.week_label.replace(/[^a-z0-9]+/gi, "-")}.csv`, rows, [
+      { label: "Week", get: () => week.week_label }, { label: "Topic", get: (r) => r.topic }, { label: "Name", get: (r) => r.name },
+      { label: "Employer", get: (r) => r.employer }, { label: "Badge Number", get: (r) => r.badge_number }, { label: "Employee ID", get: (r) => r.employee_id },
+      { label: "Confirmed", get: (r) => fmtDT(r.acknowledged_at) },
+    ]);
+  };
+  const Person = ({ a }) => (
+    <div className="bg-white rounded-md p-2.5 border flex items-center justify-between gap-2" style={{ borderColor: "#E4E2DA" }}>
+      <div className="min-w-0">
+        <div className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 500 }}>{a.name}</div>
+        <div className="text-[11px]" style={{ color: STEEL }}>{[a.employer, a.badge_number ? `Badge ${a.badge_number}` : ""].filter(Boolean).join(" · ") || "—"}</div>
+      </div>
+      <div className="text-[10px] text-right flex-shrink-0" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{fmtDT(a.acknowledged_at)}</div>
+    </div>
+  );
+
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/80 px-4">
-      <div className="bg-white rounded-md w-full max-w-sm overflow-hidden max-h-[80%] flex flex-col">
+      <div className="bg-white rounded-md w-full max-w-sm overflow-hidden max-h-[85%] flex flex-col">
         <div className="flex items-center justify-between p-3 border-b flex-shrink-0" style={{ borderColor: "#E4E2DA" }}>
-          <div className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{week.week_label}</div>
+          <div>
+            <div className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{week.week_label}</div>
+            <div className="text-[10px]" style={{ color: STEEL }}>Who confirmed each topic and when{!loading ? ` · ${total} confirmation${total === 1 ? "" : "s"}` : ""}</div>
+          </div>
           <button onClick={onClose}><X size={18} color={STEEL} /></button>
         </div>
         <div className="p-3 overflow-y-auto">
           {loading && <div className="text-[12px]" style={{ color: STEEL }}>Loading…</div>}
-          {!loading && list.length === 0 && (
-            <div className="text-[12px] text-center py-6" style={{ color: STEEL }}>Nobody has confirmed this week yet.</div>
-          )}
-          <div className="space-y-2">
-            {list.map((a, i) => (
-              <div key={i} className="bg-white rounded-md p-2.5 border flex items-center justify-between" style={{ borderColor: "#E4E2DA" }}>
-                <div>
-                  <div className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 500 }}>{a.name}</div>
-                  <div className="text-[11px]" style={{ color: STEEL }}>{a.employer || "—"}</div>
-                </div>
-                <div className="text-[10px]" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>
-                  {fmtD(a.acknowledged_at)}
-                </div>
+          {!loading && total === 0 && <div className="text-[12px] text-center py-6" style={{ color: STEEL }}>Nobody has confirmed this week yet.</div>}
+          {!loading && total > 0 && <button onClick={exportCsv} className="w-full mb-3 text-[10px] font-bold uppercase py-2 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Export CSV</button>}
+          {topics.map((t) => (
+            <div key={t.talk_id} className="mb-3">
+              <div className="text-[11px] font-bold mb-1" style={{ color: INK }}>{t.title} <span style={{ color: STEEL, fontWeight: 400 }}>({t.confirmations.length})</span></div>
+              <div className="space-y-1.5">
+                {t.confirmations.length === 0 ? <div className="text-[11px]" style={{ color: STEEL }}>No confirmations yet.</div> : t.confirmations.map((a, i) => <Person key={i} a={a} />)}
               </div>
-            ))}
-          </div>
+            </div>
+          ))}
+          {wholeWeek.length > 0 && (
+            <div className="mb-3">
+              <div className="text-[11px] font-bold mb-1" style={{ color: INK }}>Whole week (earlier confirmations) <span style={{ color: STEEL, fontWeight: 400 }}>({wholeWeek.length})</span></div>
+              <div className="space-y-1.5">{wholeWeek.map((a, i) => <Person key={i} a={a} />)}</div>
+            </div>
+          )}
         </div>
       </div>
     </div>
