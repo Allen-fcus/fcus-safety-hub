@@ -2708,6 +2708,81 @@ function SrFormView({ user, activeProjectId, projectName, detail, form, type, at
 }
 
 // ---------- a case ----------
+// ---------- one-glance summary of a case, pulled from the case and every form filled so far ----------
+function srCaseSummary(detail, live) {
+  const forms = detail.forms || [];
+  const pick = (type) => {
+    const list = forms.filter((f) => f.form_type === type);
+    return list.find((f) => f.status === "submitted") || list[0] || null;
+  };
+  const d = (type) => { const f = pick(type); return (f && f.data) || {}; };
+  const ir = d("incident_report"), inv = d("investigation_report"), sir = d("sir"), eir = d("eir"), ll = d("lesson_learned");
+  const first = (...v) => v.map((x) => (x == null ? "" : String(x).trim())).find((x) => x) || "";
+  const rowsText = (rows, key) => (Array.isArray(rows) ? rows : []).map((r) => (r && (r[key || "text"] || "")).toString().trim()).filter(Boolean);
+  const people = [];
+  forms.filter((f) => f.form_type === "employee_statement").forEach((f) => { if (f.data && f.data.name) people.push(f.data.name + (f.status === "submitted" || (f.data.paper && f.data.paper.length) ? "" : " (draft)")); });
+  [sir.ownName, sir.otherName].forEach((n) => { if (n && !people.some((p) => p.startsWith(n))) people.push(n); });
+  const chips = [];
+  if (live.fatality) chips.push("Fatality"); if (live.sif) chips.push("SIF"); if (live.hipo) chips.push("HiPo"); if (live.near_miss) chips.push("Near miss");
+  if (live.injury) chips.push("Injury"); if (live.first_aid) chips.push("First aid"); if (live.medical_treatment) chips.push("Medical treatment");
+  if (live.recordable) chips.push("Recordable"); if (live.lost_time) chips.push("Lost time" + (live.lost_days ? ` (${live.lost_days} days)` : ""));
+  if (!live.lost_time && Number(live.restricted_days) > 0) chips.push(`Restricted (${live.restricted_days} days)`);
+  if (live.osha_reportable) chips.push("Reportable"); if (live.property_damage) chips.push("Property damage");
+  const photos = [];
+  forms.forEach((f) => { ["photos", "paper"].forEach((k) => { ((f.data && f.data[k]) || []).forEach((p) => { if (p && p.url && /^image\//.test(p.type || "")) photos.push(p); }); }); });
+  const actions = rowsText(inv.actions).map((t, i) => { const r = inv.actions[i] || {}; return t + (r.who ? ` (${r.who})` : ""); });
+  return {
+    what: first(sir.description, inv.brief, ir.description, eir.overview, ll.brief),
+    consequence: first(ll.consequence),
+    chips, people,
+    injury: [first(sir.nature, inv.nature), first(sir.bodyPart, inv.bodyPart), first(sir.treatment)].filter(Boolean),
+    causes: [...rowsText(inv.findings), ...(eir.findings ? [String(eir.findings).trim()] : [])].filter(Boolean),
+    causeCodes: [first(sir.causation, ir.causation), first(sir.conditions, ir.conditions), first(sir.scenario)].filter(Boolean),
+    actions: [...actions, ...(sir.caText ? [String(sir.caText).trim()] : []), ...rowsText(ll.ensure)].filter(Boolean),
+    learning: first(eir.learning),
+    lifesaving: live.lifesaving_control === "yes" ? "Lifesaving control was in place" : live.lifesaving_control === "no" ? "No lifesaving control in place" : "",
+    photos,
+  };
+}
+
+function SrSummaryCard({ detail, live, onOpenForm, attendees }) {
+  const sm = srCaseSummary(detail, live);
+  const forms = detail.forms || [];
+  const lab = { color: STEEL, fontFamily: "IBM Plex Mono, monospace" };
+  const Row = ({ t, children }) => (children ? <div className="mt-2.5"><div className="text-[9px] uppercase font-bold mb-0.5" style={lab}>{t}</div>{children}</div> : null);
+  const List = ({ items }) => (items.length ? <ul className="space-y-0.5">{items.map((x, i) => <li key={i} className="text-[12px] leading-snug flex gap-1.5"><span style={{ color: GOLD }}>&bull;</span><span>{x}</span></li>)}</ul> : null);
+  return (
+    <div className="bg-white rounded-md p-3 border mb-3" style={{ borderColor: GOLD, borderLeftWidth: 3 }}>
+      <div className="text-[11px] uppercase font-bold" style={lab}>Summary</div>
+      {sm.chips.length > 0 && <div className="flex flex-wrap gap-1.5 mt-2">{sm.chips.map((c) => <span key={c} className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-sm" style={{ background: "#F1EFE8", color: INK, ...lab }}>{c}</span>)}</div>}
+      <Row t="What happened">{sm.what ? <div className="text-[12px] leading-snug whitespace-pre-line">{sm.what.length > 420 ? sm.what.slice(0, 420) + "…" : sm.what}</div> : <div className="text-[12px]" style={{ color: STEEL }}>No description yet. Fill in the Incident Report below.</div>}</Row>
+      <Row t="Consequence">{sm.consequence ? <div className="text-[12px] leading-snug">{sm.consequence}</div> : null}</Row>
+      <Row t="Where and when"><div className="text-[12px]">{[live.incident_date ? fmtD(live.incident_date) : "", live.incident_time, [live.area, live.location_detail].filter(Boolean).join(" - "), live.company_involved].filter(Boolean).join(" · ") || "-"}</div></Row>
+      <Row t="People involved">{sm.people.length ? <div className="text-[12px]">{sm.people.join(", ")}</div> : null}</Row>
+      <Row t="Injury">{sm.injury.length ? <div className="text-[12px]">{sm.injury.join(" · ")}</div> : null}</Row>
+      <Row t="Causes"><List items={sm.causes} />{sm.causeCodes.length > 0 && <div className="text-[11px] mt-1" style={{ color: STEEL }}>{sm.causeCodes.join(" · ")}</div>}</Row>
+      <Row t="Corrective actions"><List items={sm.actions} /></Row>
+      <Row t="Learning">{sm.learning ? <div className="text-[12px] leading-snug">{sm.learning}</div> : null}</Row>
+      <Row t="Lifesaving control">{sm.lifesaving ? <div className="text-[12px]">{sm.lifesaving}</div> : null}</Row>
+      <Row t={`Investigation meeting`}>{detail.meeting_id ? <div className="text-[12px]">{attendees.length} attendee{attendees.length === 1 ? "" : "s"} signed in</div> : null}</Row>
+      {sm.photos.length > 0 && (
+        <Row t={`Photos (${sm.photos.length})`}><div className="flex gap-1.5 overflow-x-auto">{sm.photos.slice(0, 8).map((p) => <a key={p.url} href={p.url} target="_blank" rel="noreferrer"><img src={p.url} alt="" className="h-14 w-14 object-cover rounded-sm border flex-shrink-0" style={{ borderColor: "#C9C6BC" }} /></a>)}</div></Row>
+      )}
+      <Row t="Reports (tap for full details)">
+        {forms.length ? (
+          <div className="flex flex-wrap gap-1.5">
+            {forms.map((f) => (
+              <button key={f.id} onClick={() => onOpenForm(detail, f, f.form_type, attendees)} className="text-[10px] font-bold uppercase px-2 py-1 rounded-sm border" style={{ borderColor: f.status === "submitted" ? "#2F6B2A" : "#C9A227", color: f.status === "submitted" ? "#2F6B2A" : "#7A5B00", ...lab }}>
+                {SR_FORM_META[f.form_type] ? SR_FORM_META[f.form_type].short : f.form_type}{f.form_type === "employee_statement" && f.data && f.data.name ? `: ${f.data.name}` : ""} {f.status === "submitted" ? "✓" : "· draft"}
+              </button>
+            ))}
+          </div>
+        ) : <div className="text-[12px]" style={{ color: STEEL }}>No reports started yet.</div>}
+      </Row>
+    </div>
+  );
+}
+
 function SrCaseView({ user, activeProjectId, projectName, caseId, onBack, onOpenForm, onOpenMeeting }) {
   const token = user.sessionToken;
   const canDelete = !!(user.canAddPersonnel || user.isHubAdmin);
@@ -2818,6 +2893,8 @@ function SrCaseView({ user, activeProjectId, projectName, caseId, onBack, onOpen
           {canDelete && <button onClick={remove} className="text-[10px] font-bold uppercase px-2.5 py-1.5 rounded-sm border ml-auto" style={{ borderColor: ALERT, color: ALERT, ...SR_MONO }}>Delete case</button>}
         </div>
       </div>
+
+      <SrSummaryCard detail={detail} live={live} onOpenForm={onOpenForm} attendees={attendees} />
 
       {activeProjectId === "nashville" && (
         <div className="rounded-md p-2.5 mb-3 text-[11px] leading-snug" style={{ background: "#E8EEF5", color: INK, border: "1px solid #C3D0E0" }}>
