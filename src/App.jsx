@@ -1843,7 +1843,7 @@ const SR_ANALYSIS_MGMT = [
   "Work procedure / permits: Lack of permit / authorization to work",
 ];
 
-function srSchema(type, ctx) {
+function srSchemaBase(type, ctx) {
   const areas = SR_AREAS[ctx.slug] || ["On Site", "Off Site"];
   const coord = SR_COORDINATORS[ctx.slug] || [];
   const yn = ["Yes", "No"];
@@ -1891,7 +1891,7 @@ function srSchema(type, ctx) {
         { k: "location", l: "Location of incident", t: "text", full: true },
         { k: "task", l: "Task being performed", t: "text", full: true },
         { k: "whereYou", l: "Where were you located at the time", t: "text", full: true },
-        { k: "account", l: "Briefly describe how the incident occurred and / or what you observed", t: "textarea", req: true, full: true },
+        { k: "account", l: "Briefly describe how the incident occurred and / or what you observed", t: "textarea", full: true, hint: "Required unless a paper statement is uploaded below." },
       ] },
       { title: "Certification", fields: [
         { k: "_c1", t: "info", l: "The information I have provided either in my own writing or verbally for the purpose of this form is true and correct. I understand that providing false or misleading information or omission of information on this report or any other forms relating to this claim may result in termination of my employment." },
@@ -1997,8 +1997,7 @@ function srSchema(type, ctx) {
       { title: "HiPo corrective action (Cority requires at least one per HiPo)", fields: [
         { k: "ca1", l: "Category 1", t: "select", opts: SR_SIR.corrective }, { k: "ca2", l: "Category 2", t: "select", opts: SR_SIR.corrective },
         { k: "caText", l: "Describe the corrective action(s)", t: "textarea", full: true },
-        { k: "_p", t: "info", l: "Pictures are added when the report is submitted in the Ferrovial form or in Cority." },
-      ] },
+              ] },
       { title: "Prepared by", fields: [
         { k: "preparedBy", l: "Name", t: "text", req: true }, { k: "signDate", l: "Date", t: "date" },
       ] },
@@ -2043,8 +2042,7 @@ function srSchema(type, ctx) {
       { title: "What happened?", fields: [
         { k: "brief", l: "Brief description", t: "textarea", req: true, full: true },
         { k: "consequence", l: "Consequence", t: "textarea", full: true },
-        { k: "_p", t: "info", l: "Add a photo of the scene to the PDF or the sent email if one helps." },
-      ] },
+              ] },
       { title: "Findings", fields: [
         { k: "findings", l: "Findings", t: "rows", cols: [{ k: "text", l: "Finding", t: "text" }], min: 3, max: 8, full: true },
       ] },
@@ -2090,6 +2088,18 @@ function srSchema(type, ctx) {
       ] },
     ],
   };
+}
+
+// every form gets a Photos section, except the employee statement which takes an uploaded paper copy instead
+function srSchema(type, ctx) {
+  const sc = srSchemaBase(type, ctx);
+  if (type === "employee_statement") {
+    return { ...sc, sections: [...sc.sections, { title: "Written statement on paper", fields: [
+      { k: "_pp", t: "info", l: "If the employee wrote the statement on paper, upload a photo or scan of it here instead of typing the account above. A PDF scan is added to the end of the report PDF." },
+      { k: "paper", l: "Paper statement (photos or PDF)", t: "files", accept: "any" },
+    ] }] };
+  }
+  return { ...sc, sections: [...sc.sections, { title: "Photos", fields: [{ k: "photos", l: "Photos of the scene, damage or equipment", t: "files", accept: "image" }] }] };
 }
 
 // starting values for a new form, taken from the case
@@ -2155,6 +2165,24 @@ function srCasePatchFromForm(type, d) {
   return p;
 }
 
+// ---------- photo / file attachments ----------
+// Shrinks phone photos to a sensible size before upload (JPEG, longest side 1600px). PDFs pass through untouched.
+async function srPrepareUpload(file) {
+  if (!/^image\//.test(file.type) || /gif|svg/.test(file.type)) return { blob: file, type: file.type || "application/octet-stream" };
+  try {
+    const url = URL.createObjectURL(file);
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
+    const scale = Math.min(1, 1600 / Math.max(img.width, img.height));
+    const c = document.createElement("canvas");
+    c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
+    const ctx = c.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height); ctx.drawImage(img, 0, 0, c.width, c.height);
+    URL.revokeObjectURL(url);
+    const blob = await new Promise((res) => c.toBlob(res, "image/jpeg", 0.85));
+    if (blob) return { blob, type: "image/jpeg" };
+  } catch (e) { /* fall back to the original file */ }
+  return { blob: file, type: file.type || "application/octet-stream" };
+}
+
 // ---------- PDF for any incident form ----------
 async function buildIncidentFormPdf({ schema, data, caseRow, projectName, extraSections }) {
   const { StandardFonts, rgb } = await import("pdf-lib");
@@ -2185,6 +2213,7 @@ async function buildIncidentFormPdf({ schema, data, caseRow, projectName, extraS
     });
     return out;
   };
+  const attachPdfs = [];
   let page, y, pageNo = 0;
   const header = (first) => {
     page = doc.addPage([W, H]); pageNo++;
@@ -2318,6 +2347,38 @@ async function buildIncidentFormPdf({ schema, data, caseRow, projectName, extraS
         const at = data[f.k + "_at"];
         page.drawText(nm ? (at ? "Signed electronically " + fmtDT(at) : "Signed electronically") : "Not signed", { x: M, y: y - 50, size: 7.5, font: sans, color: grey });
         y -= 58;
+      } else if (f.t === "files") {
+        const items = Array.isArray(data[f.k]) ? data[f.k] : [];
+        need(items.length ? 170 : 26);
+        page.drawText(clean(f.l).toUpperCase(), { x: M, y: y - 8, size: 6.5, font: sansB, color: grey });
+        y -= 14;
+        if (items.length === 0) { page.drawText("None attached", { x: M, y: y - 9, size: 9, font: sans, color: grey }); y -= 16; }
+        for (const it of items) {
+          const isImg = /^image\//.test(it.type || "") || /\.(jpe?g|png)$/i.test(it.name || "");
+          const isPdf = /pdf/i.test(it.type || "") || /\.pdf$/i.test(it.name || "");
+          let done = false;
+          if (isImg) {
+            try {
+              const bytes = new Uint8Array(await (await fetch(it.url)).arrayBuffer());
+              const png = /png/i.test(it.type || "") || /\.png$/i.test(it.name || "");
+              const im = png ? await doc.embedPng(bytes) : await doc.embedJpg(bytes);
+              const maxW = CW, maxH = 330;
+              const sc = Math.min(maxW / im.width, maxH / im.height, 1);
+              const w = im.width * sc, h = im.height * sc;
+              need(h + 18);
+              page.drawImage(im, { x: M, y: y - h, width: w, height: h });
+              page.drawText(clean(it.name || "").slice(0, 90), { x: M, y: y - h - 10, size: 7, font: sans, color: grey });
+              y -= h + 20; done = true;
+            } catch (e) { /* shown as a note below */ }
+          } else if (isPdf) {
+            attachPdfs.push(it);
+            need(16);
+            page.drawText(clean("Attached PDF (added at the end of this document): " + (it.name || "")).slice(0, 110), { x: M, y: y - 9, size: 9, font: sans, color: ink });
+            y -= 16; done = true;
+          }
+          if (!done) { need(16); page.drawText(clean("Could not include attachment: " + (it.name || it.url || "")).slice(0, 110), { x: M, y: y - 9, size: 9, font: sans, color: grey }); y -= 16; }
+        }
+        y -= 4;
       } else {
         const v = val(f, data);
         need(kvH(f.l, v, CW));
@@ -2333,10 +2394,71 @@ async function buildIncidentFormPdf({ schema, data, caseRow, projectName, extraS
     const t = `Page ${i + 1} of ${pages.length}`;
     p.drawText(t, { x: W - M - sans.widthOfTextAtSize(t, 7.5), y: 22, size: 7.5, font: sans, color: grey });
   });
+  for (const it of attachPdfs) {
+    try {
+      const src = await PDFDocument.load(new Uint8Array(await (await fetch(it.url)).arrayBuffer()), { ignoreEncryption: true });
+      const copied = await doc.copyPages(src, src.getPageIndices());
+      copied.forEach((cp) => doc.addPage(cp));
+    } catch (e) { /* attachment stays linked in the form even if it cannot be merged */ }
+  }
   return await doc.save();
 }
 
 // ---------- form fields ----------
+function SrFilesField({ f, value, readOnly, onChange, Lbl }) {
+  const items = Array.isArray(value) ? value : [];
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const anyType = f.accept === "any";
+  const pick = async (e) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = "";
+    if (!files.length) return;
+    setBusy(true); setErr("");
+    const added = [];
+    for (const file of files) {
+      const { blob, type } = await srPrepareUpload(file);
+      const ext = type === "image/jpeg" ? ".jpg" : "";
+      const base = file.name.replace(/[^a-zA-Z0-9.\-_]/g, "_").replace(/\.(heic|heif|jpe?g)$/i, "");
+      const path = `incident-${Date.now()}-${Math.random().toString(36).slice(2, 7)}-${base}${ext || (/\.[a-z0-9]+$/i.test(base) ? "" : "")}`;
+      const up = await supabase.storage.from("documents").upload(path, blob, { contentType: type });
+      if (up.error) { setErr("Upload failed: " + (up.error.message || "unknown error")); continue; }
+      const url = (supabase.storage.from("documents").getPublicUrl(path).data || {}).publicUrl || "";
+      added.push({ url, name: file.name, type });
+    }
+    setBusy(false);
+    if (added.length) onChange([...items, ...added]);
+  };
+  const remove = (i) => onChange(items.filter((_, j) => j !== i));
+  return (
+    <div>
+      <Lbl f={f} />
+      <div className="mt-1 grid grid-cols-3 sm:grid-cols-4 gap-2">
+        {items.map((it, i) => {
+          const isImg = /^image\//.test(it.type || "");
+          return (
+            <div key={it.url} className="relative rounded-md border overflow-hidden bg-white" style={{ borderColor: "#C9C6BC" }}>
+              <a href={it.url} target="_blank" rel="noreferrer" className="block">
+                {isImg ? <img src={it.url} alt={it.name} className="w-full h-20 object-cover" /> : <div className="h-20 flex items-center justify-center text-[10px] font-bold px-1 text-center" style={{ color: STEEL, ...SR_MONO }}>PDF</div>}
+                <div className="text-[9px] px-1 py-0.5 truncate" style={{ color: STEEL }}>{it.name}</div>
+              </a>
+              {!readOnly && <button type="button" onClick={() => remove(i)} className="absolute top-1 right-1 bg-white/90 rounded-full p-0.5"><X size={12} color={STEEL} /></button>}
+            </div>
+          );
+        })}
+        {items.length === 0 && readOnly && <div className="text-[11px]" style={{ color: STEEL }}>None attached.</div>}
+      </div>
+      {!readOnly && (
+        <label className="inline-block mt-2 text-[10px] font-bold uppercase px-2.5 py-1.5 rounded-sm border cursor-pointer" style={{ borderColor: "#C9C6BC", color: INK, ...SR_MONO }}>
+          {busy ? "Uploading…" : anyType ? "+ Add photo or PDF" : "+ Add photos"}
+          <input type="file" multiple hidden disabled={busy} accept={anyType ? "image/*,application/pdf" : "image/*"} onChange={pick} />
+        </label>
+      )}
+      {err && <div className="text-[11px] mt-1" style={{ color: ALERT }}>{err}</div>}
+    </div>
+  );
+}
+
 function SrFormFields({ schema, data, setData, readOnly }) {
   const bd = { borderColor: "#C9C6BC" };
   const inp = "w-full mt-1 rounded-md border px-2.5 py-1.5 text-[13px] bg-white disabled:bg-[#F4F3EF] disabled:text-[#5A574D]";
@@ -2396,6 +2518,7 @@ function SrFormFields({ schema, data, setData, readOnly }) {
         </div>
       );
     }
+    if (f.t === "files") return <SrFilesField f={f} value={v} readOnly={readOnly} onChange={(val) => upd(f.k, val)} Lbl={Lbl} />;
     if (f.t === "sig") return (
       <div>
         <Lbl f={f} />
@@ -2467,6 +2590,7 @@ function SrFormView({ user, activeProjectId, projectName, detail, form, type, at
       const v = data[f.k];
       if (v == null || (typeof v === "string" && !v.trim()) || (Array.isArray(v) && v.length === 0)) out.push(f.l);
     }));
+    if (type === "employee_statement" && !String(data.account || "").trim() && !(Array.isArray(data.paper) && data.paper.length)) out.push("Statement (typed, or upload the paper copy)");
     return out;
   };
   const extra = () => {
