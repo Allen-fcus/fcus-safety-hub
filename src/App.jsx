@@ -13377,8 +13377,170 @@ function BulkImportPanel({ user, onDone }) {
   );
 }
 
+// ---------- Training overview (Personnel Lookup, Sylvania): who holds which training, current vs expiring vs expired ----------
+const TRAIN_STATUS = {
+  current: { label: "Current", color: "#2E8B57" },
+  expiring: { label: "Expiring soon", color: "#E2A21B" },
+  expired: { label: "Expired", color: "#C0392B" },
+  missing: { label: "Not on file", color: "#9AA0A6" },
+};
+const TRAIN_ORDER = ["current", "expiring", "expired", "missing"];
+const LTO_KEY = "__lto";
+const LTO_RE = /osha\s*-?\s*(10|30)\b/i;
+const isNtiEmployer = (emp) => /\b(nti|north tarrant)\b/i.test(emp || "");
+
+function TrainingDonut({ counts, size = 150 }) {
+  const total = TRAIN_ORDER.reduce((n, k) => n + (counts[k] || 0), 0);
+  const r = 52, c = 2 * Math.PI * r;
+  let off = 0;
+  return (
+    <svg width={size} height={size} viewBox="0 0 140 140" role="img" aria-label={TRAIN_ORDER.map((k) => `${TRAIN_STATUS[k].label} ${counts[k] || 0}`).join(", ")}>
+      <circle cx="70" cy="70" r={r} fill="none" stroke="#ECEAE3" strokeWidth="22" />
+      {total > 0 && TRAIN_ORDER.map((k) => {
+        const n = counts[k] || 0;
+        if (!n) return null;
+        const len = (n / total) * c;
+        const el = <circle key={k} cx="70" cy="70" r={r} fill="none" stroke={TRAIN_STATUS[k].color} strokeWidth="22" strokeDasharray={`${len} ${c - len}`} strokeDashoffset={-off} transform="rotate(-90 70 70)" />;
+        off += len;
+        return el;
+      })}
+      <text x="70" y="66" textAnchor="middle" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600, fontSize: 26 }} fill={INK}>{total}</text>
+      <text x="70" y="84" textAnchor="middle" style={{ fontFamily: "IBM Plex Mono, monospace", fontSize: 9 }} fill={STEEL}>PEOPLE</text>
+    </svg>
+  );
+}
+
+function TrainingOverview({ employees, onSelect }) {
+  const mono = { fontFamily: "IBM Plex Mono, monospace" };
+  const [scope, setScope] = useState("nti");
+  const [training, setTraining] = useState(LTO_KEY);
+  const [statusFilter, setStatusFilter] = useState("");
+  const [search, setSearch] = useState("");
+
+  const people = useMemo(() => employees.filter((e) => scope === "all" || isNtiEmployer(e.employer)), [employees, scope]);
+
+  // every training label held by someone in scope, with status counts
+  const catalog = useMemo(() => {
+    const map = {};
+    people.forEach((e) => (e.quals || []).forEach((q) => {
+      const key = String(q.label || "").trim().toLowerCase();
+      if (!key) return;
+      const m = map[key] || (map[key] = { key, label: String(q.label).trim(), current: 0, expiring: 0, expired: 0, total: 0 });
+      const st = TRAIN_STATUS[q.status] ? q.status : "current";
+      m[st] += 1; m.total += 1;
+    }));
+    return Object.values(map).sort((a, b) => b.total - a.total || a.label.localeCompare(b.label));
+  }, [people]);
+
+  const rank = { current: 0, expiring: 1, expired: 2 };
+  // each person's standing for the chosen training
+  const rows = useMemo(() => people.map((e) => {
+    const quals = e.quals || [];
+    const hits = training === LTO_KEY ? quals.filter((q) => LTO_RE.test(q.label || "")) : quals.filter((q) => String(q.label || "").trim().toLowerCase() === training);
+    if (!hits.length) return { e, status: "missing", q: null };
+    const best = hits.slice().sort((a, b) => (rank[a.status] ?? 0) - (rank[b.status] ?? 0) || String(b.expires_at || "9999").localeCompare(String(a.expires_at || "9999")))[0];
+    return { e, status: TRAIN_STATUS[best.status] ? best.status : "current", q: best };
+  }), [people, training]);
+
+  const counts = {};
+  rows.forEach((r) => { counts[r.status] = (counts[r.status] || 0) + 1; });
+  const sq = search.trim().toLowerCase();
+  const shown = rows.filter((r) => (!statusFilter || r.status === statusFilter) && (!sq || [r.e.name, r.e.role, r.e.employer, r.e.badge].some((v) => String(v || "").toLowerCase().includes(sq))))
+    .sort((a, b) => TRAIN_ORDER.indexOf(a.status) - TRAIN_ORDER.indexOf(b.status) || a.e.name.localeCompare(b.e.name));
+  const trainingLabel = training === LTO_KEY ? "LTO (OSHA 10 / OSHA 30)" : (catalog.find((c) => c.key === training) || { label: training }).label;
+  const holders30 = training === LTO_KEY ? rows.filter((r) => r.q && /30/.test(r.q.label)).length : 0;
+  const holders10 = training === LTO_KEY ? rows.filter((r) => r.q && /\b10\b/.test(r.q.label) && !/30/.test(r.q.label)).length : 0;
+  const pct = (n) => (rows.length ? Math.round((n / rows.length) * 100) : 0);
+
+  const exportCsv = () => exportToCsv(`training-${trainingLabel.replace(/[^a-z0-9]+/gi, "-")}.csv`, shown, [
+    { label: "Name", get: (r) => r.e.name }, { label: "Employer", get: (r) => r.e.employer }, { label: "Role", get: (r) => r.e.role },
+    { label: "Badge", get: (r) => r.e.badge }, { label: "Training", get: () => trainingLabel },
+    { label: "Status", get: (r) => TRAIN_STATUS[r.status].label }, { label: "Held", get: (r) => (r.q ? r.q.label : "") },
+    { label: "Issued", get: (r) => (r.q && r.q.issued_at ? fmtD(r.q.issued_at) : "") }, { label: "Expires", get: (r) => (r.q && r.q.expires_at ? fmtD(r.q.expires_at) : "") },
+  ]);
+
+  return (
+    <div>
+      <div className="flex gap-2 mb-3">
+        {[["nti", "NTI employees"], ["all", "All companies"]].map(([k, l]) => (
+          <button key={k} onClick={() => { setScope(k); setStatusFilter(""); }} className="flex-1 text-[10px] font-bold uppercase py-2 rounded-sm" style={{ background: scope === k ? INK : "white", color: scope === k ? GOLD : STEEL, border: "1px solid #C9C6BC", ...mono }}>{l}</button>
+        ))}
+      </div>
+
+      <label className="text-[10px] uppercase font-bold" style={{ color: STEEL, ...mono }}>Training</label>
+      <select value={training} onChange={(e) => { setTraining(e.target.value); setStatusFilter(""); }} className="w-full mt-1 mb-3 rounded-md border px-2.5 py-2 text-[13px] bg-white" style={{ borderColor: "#C9C6BC" }}>
+        <option value={LTO_KEY}>LTO: OSHA 10 / OSHA 30</option>
+        {catalog.map((c) => <option key={c.key} value={c.key}>{c.label} ({c.total})</option>)}
+      </select>
+
+      <div className="bg-white rounded-md border p-3 mb-3" style={{ borderColor: "#E4E2DA" }}>
+        <div className="text-[13px] mb-2" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{trainingLabel}</div>
+        {rows.length === 0 ? <div className="text-[12px]" style={{ color: STEEL }}>No people in this group.</div> : (
+          <div className="flex items-center gap-3 flex-wrap justify-center">
+            <TrainingDonut counts={counts} />
+            <div className="flex-1 min-w-[150px] space-y-1.5">
+              {TRAIN_ORDER.map((k) => (
+                <button key={k} onClick={() => setStatusFilter(statusFilter === k ? "" : k)} className="w-full flex items-center gap-2 rounded-sm px-2 py-1.5 border text-left" style={{ borderColor: statusFilter === k ? INK : "#E4E2DA", background: statusFilter === k ? "#F4F3EF" : "white" }}>
+                  <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{ background: TRAIN_STATUS[k].color }} />
+                  <span className="flex-1 text-[12px]">{TRAIN_STATUS[k].label}</span>
+                  <span className="text-[12px] font-bold">{counts[k] || 0}</span>
+                  <span className="text-[10px] w-9 text-right" style={{ color: STEEL, ...mono }}>{pct(counts[k] || 0)}%</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {training === LTO_KEY && rows.length > 0 && <div className="text-[11px] mt-2" style={{ color: STEEL }}>{holders30} hold OSHA 30 · {holders10} hold OSHA 10 only. Tap a status to list those people.</div>}
+        {training !== LTO_KEY && rows.length > 0 && <div className="text-[11px] mt-2" style={{ color: STEEL }}>"Not on file" means this training is not recorded for them. Tap a status to list those people.</div>}
+      </div>
+
+      <div className="flex gap-2 mb-2">
+        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search these people" className="flex-1 rounded-md border px-3 py-2 text-[13px] bg-white" style={{ borderColor: "#C9C6BC" }} />
+        <button onClick={exportCsv} className="text-[10px] font-bold uppercase px-3 rounded-sm border flex-shrink-0" style={{ borderColor: "#C9C6BC", color: STEEL, ...mono }}>Export CSV</button>
+      </div>
+      <div className="text-[10px] mb-2 font-bold" style={{ color: STEEL, ...mono }}>{shown.length} of {rows.length} people{statusFilter ? ` · ${TRAIN_STATUS[statusFilter].label}` : ""}</div>
+      <div className="space-y-1.5 mb-5">
+        {shown.map((r) => (
+          <button key={r.e.id || r.e.badge} onClick={() => onSelect(r.e)} className="w-full text-left bg-white rounded-md px-3 py-2 border flex items-center gap-2" style={{ borderColor: "#E4E2DA" }}>
+            <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: TRAIN_STATUS[r.status].color }} />
+            <div className="flex-1 min-w-0">
+              <div className="text-[13px] truncate" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 500 }}>{r.e.name}</div>
+              <div className="text-[11px] truncate" style={{ color: STEEL }}>{[r.e.role, scope === "all" ? r.e.employer : ""].filter(Boolean).join(" · ") || "—"}</div>
+            </div>
+            <div className="text-right flex-shrink-0">
+              <div className="text-[10px] font-bold uppercase" style={{ color: TRAIN_STATUS[r.status].color, ...mono }}>{TRAIN_STATUS[r.status].label}</div>
+              <div className="text-[10px]" style={{ color: STEEL }}>{r.q ? `${training === LTO_KEY ? r.q.label + " · " : ""}${r.q.expires_at ? "exp " + fmtD(r.q.expires_at) : "no expiration"}` : ""}</div>
+            </div>
+          </button>
+        ))}
+        {shown.length === 0 && <div className="text-[12px] text-center py-4" style={{ color: STEEL }}>No one matches.</div>}
+      </div>
+
+      <div className="text-[11px] uppercase font-bold mb-2" style={{ color: STEEL, ...mono }}>All trainings on file ({catalog.length})</div>
+      <div className="space-y-1.5">
+        {catalog.map((c) => (
+          <button key={c.key} onClick={() => { setTraining(c.key); setStatusFilter(""); window.scrollTo && window.scrollTo({ top: 0 }); }} className="w-full text-left bg-white rounded-md px-3 py-2 border" style={{ borderColor: training === c.key ? INK : "#E4E2DA" }}>
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-[12px] truncate">{c.label}</div>
+              <div className="text-[11px] font-bold flex-shrink-0">{c.total}</div>
+            </div>
+            <div className="flex h-1.5 rounded-sm overflow-hidden mt-1.5" style={{ background: "#ECEAE3" }}>
+              {["current", "expiring", "expired"].map((k) => c[k] ? <div key={k} style={{ width: `${(c[k] / c.total) * 100}%`, background: TRAIN_STATUS[k].color }} /> : null)}
+            </div>
+            <div className="text-[10px] mt-1" style={{ color: STEEL }}>{c.current} current · {c.expiring} expiring · {c.expired} expired</div>
+          </button>
+        ))}
+        {catalog.length === 0 && <div className="text-[12px]" style={{ color: STEEL }}>No training recorded yet for this group.</div>}
+      </div>
+    </div>
+  );
+}
+
 function PersonnelScreen({ user, go }) {
   const { t } = useTranslation();
+  const projCtx = useContext(ProjectContext) || {};
+  const canSeeTraining = projCtx.id === "nti-sylvania" && !!user && (user.canAddPersonnel || user.canViewMeetings);
+  const [pview, setPview] = useState("directory");
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState(null);
   const [employees, setEmployees] = useState([]);
@@ -13452,7 +13614,20 @@ function PersonnelScreen({ user, go }) {
           Manage Subcontractors
         </button>
       )}
+      {canSeeTraining && (
+        <div className="flex gap-2 mb-3">
+          {[["directory", "Directory"], ["training", "Training overview"]].map(([k, l]) => (
+            <button key={k} onClick={() => setPview(k)} className="flex-1 text-[11px] font-bold uppercase py-2 rounded-sm" style={{ background: pview === k ? INK : "white", color: pview === k ? GOLD : STEEL, border: "1px solid #C9C6BC", fontFamily: "IBM Plex Mono, monospace" }}>{l}</button>
+          ))}
+        </div>
+      )}
       {loading && <div className="text-[12px] mb-2" style={{ color: STEEL }}>{t("loading")}</div>}
+      {canSeeTraining && pview === "training" ? (
+        <>
+          {!loading && <TrainingOverview employees={employees} onSelect={setSelected} />}
+          {selected && <EmployeeDetail emp={selected} onClose={() => setSelected(null)} photo={selected.photoUrl} user={user} />}
+        </>
+      ) : (<>
       <input
         value={query}
         onChange={(e) => setQuery(e.target.value)}
@@ -13512,6 +13687,7 @@ function PersonnelScreen({ user, go }) {
         )}
       </div>
       {selected && <EmployeeDetail emp={selected} onClose={() => setSelected(null)} photo={selected.photoUrl} user={user} />}
+      </>)}
     </div>
   );
 }
