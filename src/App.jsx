@@ -15700,6 +15700,14 @@ const PRECONSTRUCTION_STATIC_DOCS = {
     "nti-sylvania": "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/nti-work-plan-template.pdf",
   },
 };
+// One-line explanation of each pre-construction document, written from the forms themselves.
+const PRECONSTRUCTION_DOC_BLURBS = {
+  "Summary of Safety Requirements": "A short summary of the safety requirements for working on this project: orientation, the daily, weekly, monthly and quarterly paperwork, and reporting accidents. The contractor's senior site manager(s) and/or Safety Manager read it and sign to acknowledge receipt. It is only a summary; the full rules are in the Safety Plan.",
+  "Emergency Contacts List": "Your company's contact list for this project: office, project managers, superintendents, emergency contacts and safety representatives. Fill it out so we can reach the right people quickly.",
+  "Safety Questionnaire": "Fifteen questions about your company's safety record and program, such as your experience modifier, OSHA violations, incident rates, and your return-to-work and new-hire orientation programs. Answer every question; write \"None\" or \"N/A\" where one doesn't apply.",
+  "Man Hour Work Submittal": "A monthly report of how many male and female employees worked on this project and how many hours they worked, with totals. Submit one for each month.",
+  "Work Plan Template": "The template for writing your company's work plan for the work you will do on this project. Once the project accepts your plan, a copy must be kept on site and available for review.",
+};
 const PRECONSTRUCTION_DOC_TITLES = ["Summary of Safety Requirements", "Emergency Contacts List", "Safety Questionnaire", "Man Hour Work Submittal", "Work Plan Template"];
 
 // Fixed, fill-and-sign templates — same pattern as any other form in
@@ -16151,7 +16159,8 @@ function PreConstructionScreen({ user, go, activeProjectId }) {
           if (fillableBase) {
             return (
               <div key={title} className="bg-white rounded-md p-3 border" style={{ borderColor: "#E4E2DA" }}>
-                <div className="text-[14px] mb-2" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 500 }}>{title}</div>
+                <div className="text-[14px] mb-1" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 500 }}>{title}</div>
+                {PRECONSTRUCTION_DOC_BLURBS[title] && <div className="text-[12px] mb-2.5 leading-snug" style={{ color: STEEL }}>{PRECONSTRUCTION_DOC_BLURBS[title]}</div>}
                 <div className="flex gap-2">
                   <button
                     onClick={() => setFilling(fillableBase)}
@@ -16175,7 +16184,8 @@ function PreConstructionScreen({ user, go, activeProjectId }) {
           const doc = (title === "Work Plan Template" && PRECONSTRUCTION_STATIC_DOCS[title] && PRECONSTRUCTION_STATIC_DOCS[title][activeProjectId]) ? { title, doc_link: PRECONSTRUCTION_STATIC_DOCS[title][activeProjectId] } : docByTitle(title);
           return (
             <div key={title} className="bg-white rounded-md p-3 border" style={{ borderColor: "#E4E2DA" }}>
-              <div className="text-[14px] mb-2" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 500 }}>{title}</div>
+              <div className="text-[14px] mb-1" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 500 }}>{title}</div>
+                {PRECONSTRUCTION_DOC_BLURBS[title] && <div className="text-[12px] mb-2.5 leading-snug" style={{ color: STEEL }}>{PRECONSTRUCTION_DOC_BLURBS[title]}</div>}
               {doc && doc.doc_link ? (
                 <div className="flex gap-2">
                   <button onClick={() => setViewing(doc)} className="flex-1 flex items-center justify-center gap-1 text-[10px] font-bold uppercase px-2 py-1.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>
