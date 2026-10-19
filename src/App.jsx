@@ -907,11 +907,12 @@ function LifesavingControlsCard() {
     ["Tier 3", "Everything else (Alternative Controls)", "#C0392B", "Training, procedures, permits, warning signs and so on. While important, these controls rely heavily on human behavior."],
   ];
   return (
-    <div className="mt-5 rounded-md p-3 bg-white border" style={{ borderColor: GOLD, borderLeftWidth: 3 }}>
+    <div className="md:col-span-2 rounded-md p-3 bg-white border" style={{ borderColor: GOLD, borderLeftWidth: 3 }}>
       <button onClick={() => setOpen((o) => !o)} className="w-full flex items-center justify-between text-left">
         <div className="flex items-center gap-1.5 min-w-0">
           <ShieldAlert size={14} color={STEEL} />
           <span className="text-xs uppercase font-bold" style={{ color: STEEL, letterSpacing: "0.06em", ...mono }}>STKY - Stuff That Kills You</span>
+          <Lock size={11} color={STEEL} title="Permanent bulletin item" />
         </div>
         <ChevronRight size={16} color={STEEL} style={{ transform: open ? "rotate(90deg)" : "none", transition: "transform .15s" }} />
       </button>
@@ -1012,7 +1013,7 @@ function HomeScreen({ go, user, activeProjectId }) {
   // The newest Toolbox Talk week (entered in the Toolbox tab) also shows on the bulletin board.
   // It always follows the latest week, so when a new one is entered the previous one drops off here.
   const [latestWeek, setLatestWeek] = useState(null);
-  const [weekOpen, setWeekOpen] = useState(true);
+  const [weekOpen, setWeekOpen] = useState(false);
   useEffect(() => {
     let cancelled = false;
     async function loadLatestWeek() {
@@ -1161,19 +1162,6 @@ function HomeScreen({ go, user, activeProjectId }) {
         </div>
         {loadingPosts && <div className="text-[12px] mb-2" style={{ color: STEEL }}>Loading…</div>}
         <div className="space-y-2 md:space-y-0 md:grid md:grid-cols-2 md:gap-3">
-          {latestWeek && latestWeek.talks.length > 0 && (user && user.sessionToken ? (
-            <div className="md:col-span-2">
-              <div className="text-[9px] uppercase font-bold mb-1" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Toolbox Talk of the week</div>
-              <ToolboxWeekCard week={latestWeek} user={user} latest expanded={weekOpen} onToggle={() => setWeekOpen((v) => !v)} />
-            </div>
-          ) : latestWeek && (
-            <button onClick={() => go("toolbox")} className="md:col-span-2 w-full text-left bg-white rounded-md p-3 border" style={{ borderColor: GOLD, borderLeftWidth: 3 }}>
-              <div className="text-[9px] uppercase font-bold inline-block px-1.5 py-0.5 rounded-sm mb-1" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>Toolbox Talk of the week</div>
-              <div className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{latestWeek.week_label}</div>
-              <div className="mt-1 space-y-0.5">{latestWeek.talks.map((tk, ti) => <div key={ti} className="text-[12px]" style={{ color: "#333" }}>{tk.title}</div>)}</div>
-              <div className="text-[10px] font-bold uppercase mt-1.5" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Log in to open</div>
-            </button>
-          ))}
           {sortedPosts.map((p, i) => (
             <div
               key={i}
@@ -1203,9 +1191,20 @@ function HomeScreen({ go, user, activeProjectId }) {
               )}
             </div>
           ))}
-          {sortedPosts.length === 0 && !latestWeek && (
-            <div className="text-[12px] text-center py-4 md:col-span-2" style={{ color: STEEL }}>No announcements yet.</div>
-          )}
+          <LifesavingControlsCard />
+          {latestWeek && latestWeek.talks.length > 0 && (user && user.sessionToken ? (
+            <div className="md:col-span-2">
+              <div className="text-[9px] uppercase font-bold mb-1" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Toolbox Talk of the week</div>
+              <ToolboxWeekCard week={latestWeek} user={user} latest expanded={weekOpen} onToggle={() => setWeekOpen((v) => !v)} />
+            </div>
+          ) : latestWeek && (
+            <button onClick={() => go("toolbox")} className="md:col-span-2 w-full text-left bg-white rounded-md p-3 border" style={{ borderColor: GOLD, borderLeftWidth: 3 }}>
+              <div className="text-[9px] uppercase font-bold inline-block px-1.5 py-0.5 rounded-sm mb-1" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>Toolbox Talk of the week</div>
+              <div className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{latestWeek.week_label}</div>
+              <div className="mt-1 space-y-0.5">{latestWeek.talks.map((tk, ti) => <div key={ti} className="text-[12px]" style={{ color: "#333" }}>{tk.title}</div>)}</div>
+              <div className="text-[10px] font-bold uppercase mt-1.5" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Log in to open</div>
+            </button>
+          ))}
         </div>
       </div>
 
@@ -1240,7 +1239,6 @@ function HomeScreen({ go, user, activeProjectId }) {
         </div>
       </div>
 
-      <LifesavingControlsCard />
     </div>
   );
 }
