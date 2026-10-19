@@ -11018,6 +11018,12 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
     if (recipientIdx !== -1 && DRUG_SCREEN_RECIPIENT_BY_PROJECT[activeProjectId]) {
       initial[recipientIdx] = DRUG_SCREEN_RECIPIENT_BY_PROJECT[activeProjectId];
     }
+    // Start a new form from an earlier one: copy matching fields by label
+    Object.keys(prefillValues || {}).forEach((label) => {
+      if (label.startsWith("__")) return;
+      const pi = (form.fields || []).indexOf(label);
+      if (pi !== -1 && prefillValues[label]) initial[pi] = prefillValues[label];
+    });
     return initial;
   });
   const [statusValues, setStatusValues] = useState({});
@@ -12512,12 +12518,230 @@ function workingDaysBetween(a, b) {
   return n;
 }
 
+// ---------- JHA updates: go back into a submitted JHA and add what changed ----------
+const JHA_UPDATE_REASONS = ["Change in conditions", "Change in environment / weather", "New equipment", "New hazard identified", "Change in scope or work area", "Other"];
+
+// Adds one "JHA UPDATE" entry (one or more pages) to the end of a submitted JHA PDF
+async function appendJhaUpdate(baseBytes, { task, update, number, sigDataUrl }) {
+  const { StandardFonts, rgb } = await import("pdf-lib");
+  const doc = await PDFDocument.load(baseBytes);
+  const sans = await doc.embedFont(StandardFonts.Helvetica);
+  const sansB = await doc.embedFont(StandardFonts.HelveticaBold);
+  const clean = (t) => String(t == null ? "" : t).replace(/[–—]/g, "-").replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/[^\n -ÿ]/g, "?");
+  const ink = rgb(0.1, 0.1, 0.1), gold = rgb(0.98, 0.78, 0.02), grey = rgb(0.4, 0.42, 0.45), line = rgb(0.8, 0.79, 0.75);
+  const W = 612, H = 792, M = 36, TOP = H - 70, BOT = 50;
+  let page, y;
+  const newPage = () => {
+    page = doc.addPage([W, H]);
+    page.drawRectangle({ x: 0, y: H - 44, width: W, height: 44, color: ink });
+    const t = `UPDATE ${number}`;
+    page.drawText(t, { x: W - M - sansB.widthOfTextAtSize(t, 14), y: H - 28, size: 14, font: sansB, color: gold });
+    page.drawText("JOB HAZARD ANALYSIS - UPDATE", { x: M, y: H - 28, size: 10, font: sansB, color: rgb(1, 1, 1) });
+    y = TOP;
+  };
+  const need = (h) => { if (y - h < BOT) newPage(); };
+  const wrap = (text, font, size, maxW) => {
+    const out = [];
+    clean(text).split("\n").forEach((para) => {
+      let cur = "";
+      para.split(/\s+/).filter(Boolean).forEach((w) => { const tl = cur ? cur + " " + w : w; if (font.widthOfTextAtSize(tl, size) > maxW && cur) { out.push(cur); cur = w; } else cur = tl; });
+      out.push(cur);
+    });
+    return out;
+  };
+  const label = (t) => { need(30); page.drawText(clean(t).toUpperCase(), { x: M, y, size: 7.5, font: sansB, color: grey }); y -= 13; };
+  const para = (t, x = M, size = 10, font = sans) => { wrap(t || "-", font, size, W - M - x).forEach((ln) => { need(14); page.drawText(ln, { x, y, size, font, color: ink }); y -= 13; }); };
+  newPage();
+  label("Task"); para(task || "-", M, 11, sansB); y -= 6;
+  const stamp = update.at ? new Date(update.at).toLocaleString("en-US", { month: "2-digit", day: "2-digit", year: "numeric", hour: "numeric", minute: "2-digit" }) : "";
+  label("Entered by"); para(`${update.by || ""}   ${stamp}`); y -= 6;
+  label("Reason for update"); para((update.reasons || []).join(", ") || "-"); y -= 6;
+  label("What changed"); para(update.description); y -= 6;
+  if (update.equipment) { label("New equipment / tools"); para(update.equipment); y -= 6; }
+  if ((update.steps || []).length) {
+    label("Added steps, hazards and controls");
+    update.steps.forEach((s, i) => {
+      need(44);
+      page.drawText(clean(`Step ${i + 1}: ${s.step || "-"}`).slice(0, 95), { x: M, y, size: 10, font: sansB, color: ink }); y -= 13;
+      page.drawText("HAZARDS", { x: M + 8, y, size: 7, font: sansB, color: grey }); y -= 11;
+      para(s.hazard || "-", M + 8, 9.5);
+      need(24);
+      page.drawText("CONTROLS", { x: M + 8, y, size: 7, font: sansB, color: grey }); y -= 11;
+      para(s.control || "-", M + 8, 9.5);
+      y -= 4; need(10); page.drawLine({ start: { x: M, y }, end: { x: W - M, y }, thickness: 0.3, color: line }); y -= 10;
+    });
+  }
+  label("Crew who reviewed this update"); para((update.crew || []).join(", ") || "-"); y -= 10;
+  need(70);
+  label("Signature");
+  if (sigDataUrl) {
+    try {
+      const png = await doc.embedPng(sigDataUrl);
+      const h = 44, w = Math.min(200, (png.width / png.height) * h);
+      page.drawImage(png, { x: M, y: y - h, width: w, height: h });
+      y -= h + 4;
+    } catch (e) { /* signature image could not be embedded */ }
+  }
+  page.drawText(clean(update.by || ""), { x: M, y, size: 9, font: sans, color: grey });
+  return await doc.save();
+}
+
+function JhaUpdateModal({ user, projectName, onClose, onNewFromThis }) {
+  const { notifyEmail } = useContext(ProjectContext);
+  const form = FORMS_DEFAULT.find((f) => f.title === "Job Hazard Analysis");
+  const idx = (label) => String((form.fields || []).indexOf(label));
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [activeId, setActiveId] = useState(null);
+  const [reasons, setReasons] = useState([]);
+  const [description, setDescription] = useState("");
+  const [equipment, setEquipment] = useState("");
+  const [steps, setSteps] = useState([]);
+  const [crewText, setCrewText] = useState("");
+  const [sigEmpty, setSigEmpty] = useState(true);
+  const sigRef = useRef(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  const mono = { fontFamily: "IBM Plex Mono, monospace" };
+  const lab = { color: STEEL, ...mono };
+
+  const load = async () => {
+    setLoading(true);
+    const { data } = await supabase.rpc("list_jha_submissions", { p_token: user.sessionToken });
+    setItems(Array.isArray(data) ? data : []);
+    setLoading(false);
+  };
+  useEffect(() => { load(); }, []);
+
+  const taskOf = (p) => (p.fields || {})[idx("Task")] || "(no task entered)";
+  const crewList = () => crewText.split(/\n|,/).map((s) => s.trim()).filter(Boolean);
+  const startUpdate = (p) => { setActiveId(p.id); setReasons([]); setDescription(""); setEquipment(""); setSteps([]); setCrewText(""); setSigEmpty(true); setMsg(""); };
+  const toggleReason = (r) => setReasons((cur) => (cur.includes(r) ? cur.filter((x) => x !== r) : [...cur, r]));
+  const setStep = (i, k, v) => setSteps((cur) => cur.map((s, n) => (n === i ? { ...s, [k]: v } : s)));
+  const canSave = description.trim() && reasons.length && crewList().length && !sigEmpty && steps.every((s) => !(s.step || s.hazard || s.control) || (s.step.trim() && s.hazard.trim() && s.control.trim()));
+
+  const save = async (p) => {
+    if (!canSave) return;
+    setBusy(true); setMsg("");
+    try {
+      const update = {
+        reasons, description: description.trim(), equipment: equipment.trim(),
+        steps: steps.filter((s) => s.step.trim() && s.hazard.trim() && s.control.trim()).map((s) => ({ step: s.step.trim(), hazard: s.hazard.trim(), control: s.control.trim() })),
+        crew: crewList(), signed: true,
+      };
+      const { data } = await supabase.rpc("add_jha_update", { p_token: user.sessionToken, p_submission_id: p.id, p_update: update });
+      if (!data) { setMsg("Couldn't save. Make sure safety-hub-jha-updates.sql has been run, then try again."); setBusy(false); return; }
+      const saved = data.updates[data.updates.length - 1];
+      let newUrl = null;
+      try {
+        const sigDataUrl = sigRef.current ? sigRef.current.toDataURL("image/png") : null;
+        const baseRes = await fetch(data.pdf_url);
+        const baseBytes = new Uint8Array(await baseRes.arrayBuffer());
+        const bytes = await appendJhaUpdate(baseBytes, { task: taskOf(p), update: saved, number: data.updates.length, sigDataUrl });
+        const path = `submission-${Date.now()}-job-hazard-analysis-update-${data.updates.length}.pdf`;
+        const { error: upErr } = await supabase.storage.from("documents").upload(path, new Blob([bytes], { type: "application/pdf" }));
+        if (!upErr) {
+          const { data: u } = supabase.storage.from("documents").getPublicUrl(path);
+          newUrl = u && u.publicUrl ? u.publicUrl : null;
+          if (newUrl) await supabase.rpc("set_submission_pdf", { p_token: user.sessionToken, p_submission_id: p.id, p_pdf_url: newUrl });
+        }
+      } catch (e) { /* the update is saved even if the PDF could not be rebuilt */ }
+      if (notifyEmail) {
+        sendFormEmail({
+          toEmail: notifyEmail, formTitle: "Job Hazard Analysis - Update",
+          fieldsText: `JHA submitted by: ${p.submitted_by}\nTask: ${taskOf(p)}\nReason: ${reasons.join(", ")}\nWhat changed: ${update.description}${update.equipment ? `\nNew equipment: ${update.equipment}` : ""}\nCrew who reviewed: ${update.crew.join(", ")}${newUrl ? `\n\nUpdated JHA PDF: ${newUrl}` : ""}`,
+          submittedBy: user?.name || "Unknown", projectName: projectName || "",
+        });
+      }
+      setActiveId(null); setMsg(newUrl ? "Update added to the JHA." : "Update saved, but the PDF could not be rebuilt.");
+      await load();
+    } finally { setBusy(false); }
+  };
+
+  const newFromThis = (p) => {
+    const pre = {};
+    ["Task", "Certified FA/CPR Person Name", "Certified Flagger Name", "Machinery to be Used", "Tools to be Used", "Special PPE Required"].forEach((l) => { const v = (p.fields || {})[idx(l)]; if (v) pre[l] = v; });
+    onNewFromThis(pre);
+  };
+
+  const inp = "w-full mt-1 mb-2 rounded-md border px-2.5 py-1.5 text-[13px]";
+  return (
+    <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/80 p-4">
+      <div className="bg-white rounded-md w-full max-w-sm flex flex-col overflow-hidden" style={{ maxHeight: "88vh" }}>
+        <div className="flex items-center justify-between px-4 py-3" style={{ background: INK }}>
+          <div>
+            <div className="text-[14px]" style={{ color: GOLD, fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>Update a JHA</div>
+            <div className="text-[10px]" style={{ color: "#E4E2DA" }}>New conditions, environment, equipment or hazard</div>
+          </div>
+          <button onClick={onClose} aria-label="Close"><X size={18} color="white" /></button>
+        </div>
+        <div className="overflow-y-auto px-4 py-3">
+          <div className="text-[11px] mb-2" style={{ color: STEEL }}>If conditions, the environment, equipment or hazards change, add an update to the JHA you already filled out, or start a new JHA from it. Updates are added to the same PDF with your signature.</div>
+          {loading && <div className="text-[12px]" style={{ color: STEEL }}>Loading...</div>}
+          {msg && <div className="text-[11px] mb-2 font-bold" style={{ color: STEEL }}>{msg}</div>}
+          {items.map((p) => (
+            <div key={p.id} className="border rounded-md p-2.5 mb-2" style={{ borderColor: "#E4E2DA" }}>
+              <div className="text-[12px] font-bold">{taskOf(p)}</div>
+              <div className="text-[10px]" style={{ color: STEEL }}>{p.submitted_by}{p.employer ? ` - ${p.employer}` : ""} - {fmtDT(p.submitted_at)}</div>
+              {(p.updates || []).length > 0 && (
+                <div className="text-[10px] mt-1" style={{ color: "#B7791F" }}>
+                  {p.updates.length} update{p.updates.length === 1 ? "" : "s"}. Latest: {(p.updates[p.updates.length - 1].reasons || []).join(", ")} ({p.updates[p.updates.length - 1].by})
+                </div>
+              )}
+              {activeId === p.id ? (
+                <div className="mt-2">
+                  <label className="text-[10px] uppercase font-bold" style={lab}>What changed? <span style={{ color: ALERT }}>*</span></label>
+                  <div className="flex flex-wrap gap-1.5 mt-1 mb-2">
+                    {JHA_UPDATE_REASONS.map((r) => (
+                      <button key={r} onClick={() => toggleReason(r)} className="text-[10px] font-bold px-2 py-1 rounded-sm border" style={{ background: reasons.includes(r) ? GOLD : "white", color: INK, borderColor: reasons.includes(r) ? GOLD : "#C9C6BC" }}>{r}</button>
+                    ))}
+                  </div>
+                  <label className="text-[10px] uppercase font-bold" style={lab}>Describe the change <span style={{ color: ALERT }}>*</span></label>
+                  <textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g. Rain moved in, ground is soft near the excavation. Added a crane for the pipe lift." className={inp} style={{ borderColor: "#C9C6BC" }} />
+                  <label className="text-[10px] uppercase font-bold" style={lab}>New equipment / tools (if any)</label>
+                  <input value={equipment} onChange={(e) => setEquipment(e.target.value)} className={inp} style={{ borderColor: "#C9C6BC" }} />
+                  <div className="text-[10px] uppercase font-bold mb-1" style={lab}>New steps, hazards and controls (if any)</div>
+                  {steps.map((s, i) => (
+                    <div key={i} className="rounded-md border p-2 mb-2" style={{ borderColor: "#E4E2DA" }}>
+                      <div className="flex items-center justify-between mb-1"><span className="text-[10px] font-bold" style={lab}>STEP {i + 1}</span><button onClick={() => setSteps((cur) => cur.filter((_, n) => n !== i))} aria-label="Remove step"><X size={14} color={STEEL} /></button></div>
+                      <input value={s.step} onChange={(e) => setStep(i, "step", e.target.value)} placeholder="Step to complete work" className="w-full mb-1.5 rounded-md border px-2 py-1.5 text-[12px]" style={{ borderColor: "#C9C6BC" }} />
+                      <textarea rows={2} value={s.hazard} onChange={(e) => setStep(i, "hazard", e.target.value)} placeholder="Hazards of this step" className="w-full mb-1.5 rounded-md border px-2 py-1.5 text-[12px]" style={{ borderColor: "#C9C6BC" }} />
+                      <textarea rows={2} value={s.control} onChange={(e) => setStep(i, "control", e.target.value)} placeholder="Actions taken to prevent hazards" className="w-full rounded-md border px-2 py-1.5 text-[12px]" style={{ borderColor: "#C9C6BC" }} />
+                    </div>
+                  ))}
+                  <button onClick={() => setSteps((cur) => [...cur, { step: "", hazard: "", control: "" }])} className="w-full text-[10px] font-bold uppercase py-1.5 rounded-sm border mb-3" style={{ borderColor: "#C9C6BC", color: STEEL, ...mono }}>+ Add a step</button>
+                  <label className="text-[10px] uppercase font-bold" style={lab}>Crew who reviewed this update (one name per line) <span style={{ color: ALERT }}>*</span></label>
+                  <textarea rows={3} value={crewText} onChange={(e) => setCrewText(e.target.value)} className={inp} style={{ borderColor: "#C9C6BC" }} />
+                  <label className="text-[10px] uppercase font-bold" style={lab}>Your signature <span style={{ color: ALERT }}>*</span></label>
+                  <div className="mt-1 mb-3"><SignaturePad autoName={user?.name || ""} onChange={setSigEmpty} canvasRef={sigRef} /></div>
+                  <div className="flex gap-2">
+                    <button disabled={busy || !canSave} onClick={() => save(p)} className="flex-1 text-[10px] font-bold uppercase py-2 rounded-sm" style={{ background: GOLD, color: INK, opacity: busy || !canSave ? 0.5 : 1, ...mono }}>{busy ? "Saving..." : "Add Update"}</button>
+                    <button onClick={() => setActiveId(null)} className="flex-1 text-[10px] font-bold uppercase py-2 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, ...mono }}>Cancel</button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex gap-2 mt-2 flex-wrap">
+                  <button onClick={() => startUpdate(p)} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm whitespace-nowrap" style={{ background: GOLD, color: INK, ...mono }}>Add Update</button>
+                  <button onClick={() => newFromThis(p)} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm border whitespace-nowrap" style={{ borderColor: "#C9C6BC", color: STEEL, ...mono }}>New JHA From This</button>
+                  {p.filled_pdf_url && <button onClick={() => window.open(p.filled_pdf_url, "_blank")} className="text-[10px] font-bold uppercase px-3 py-1.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, ...mono }}>PDF</button>}
+                </div>
+              )}
+            </div>
+          ))}
+          {!loading && items.length === 0 && <div className="text-[12px]" style={{ color: STEEL }}>No JHAs submitted on this project in the last 14 days. Fill out a new JHA to get started.</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function FormsScreen({ user, go, activeProjectId }) {
   const { sheetUrls, name: projDisplayName } = useContext(ProjectContext);
   const [openForm, setOpenForm] = useState(null);
   const [openPrefill, setOpenPrefill] = useState(null);
   const [showRefresh, setShowRefresh] = useState(false);
   const [showCloseout, setShowCloseout] = useState(false);
+  const [showJhaUpdate, setShowJhaUpdate] = useState(false);
   const [viewingPdf, setViewingPdf] = useState(null);
   const [downloaded, setDownloaded] = useState({});
   const [formsRaw, loading] = useSheetData(sheetUrls.forms, FORMS_DEFAULT, (row) => ({
@@ -12554,6 +12778,7 @@ function FormsScreen({ user, go, activeProjectId }) {
         </div>
       </div>
       {loading && <div className="text-[12px] mb-2" style={{ color: STEEL }}>Loading…</div>}
+      {showJhaUpdate && <JhaUpdateModal user={user} projectName={projDisplayName} onClose={() => setShowJhaUpdate(false)} onNewFromThis={(pre) => { const target = forms.find((x) => x.title === "Job Hazard Analysis"); if (target) { setShowJhaUpdate(false); setOpenPrefill(pre); setOpenForm(target); } }} />}
       {showCloseout && <ConfinedSpaceCloseout user={user} projectName={projDisplayName} onClose={() => setShowCloseout(false)} />}
       {showRefresh && <UtilityPermitRenewals user={user} projectName={projDisplayName} onClose={() => setShowRefresh(false)} />}
       <div className="space-y-2">
@@ -12577,6 +12802,11 @@ function FormsScreen({ user, go, activeProjectId }) {
                 {downloaded[i] ? <CheckCircle2 size={13} color={GOLD} /> : <Download size={13} />} {downloaded[i] ? "Saved" : "Download"}
               </button>
             </div>
+            {f.title === "Job Hazard Analysis" && user && user.sessionToken && (
+              <button onClick={() => setShowJhaUpdate(true)} className="w-full mt-2 text-center text-[10px] font-bold uppercase px-2 py-1.5 rounded-sm border-2" style={{ borderColor: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>
+                Update an Existing JHA
+              </button>
+            )}
             {f.title === "Confined Space Entry Permit" && user && user.sessionToken && (
               <button onClick={() => setShowCloseout(true)} className="w-full mt-2 text-center text-[10px] font-bold uppercase px-2 py-1.5 rounded-sm border-2" style={{ borderColor: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>
                 Close Out / Cancel Permit
