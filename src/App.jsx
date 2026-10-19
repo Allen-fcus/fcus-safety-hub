@@ -892,6 +892,85 @@ const sortByNavOrder = (items) => {
   return items.map((it, i) => ({ it, i })).sort((a, b) => rank(a.it.key) - rank(b.it.key) || a.i - b.i).map((x) => x.it);
 };
 
+// ---------- Home: Life-threatening hazards and lifesaving controls (content from the Lifesaving Controls document) ----------
+function LifesavingControlsCard() {
+  const mono = { fontFamily: "IBM Plex Mono, monospace" };
+  const [open, setOpen] = useState(false);
+  const [hz, setHz] = useState("");
+  const criteria = [
+    ["It does not depend on a person to work.", "Once in place, it functions without human intervention."],
+    ["It is effective even when people make mistakes.", ""],
+    ["It prevents (Tier 1) or mitigates (Tier 2) a life-threatening exposure.", ""],
+  ];
+  const tiers = [
+    ["Tier 1", "Prevention (Direct Controls)", "#2E8B57", "The most effective controls. They stop the hazard from contacting the worker, often with a physical barrier between you and the hazard, so there is no exposure. Think of guardrails, machine guarding or hole covers. These controls PREVENT the incident from happening."],
+    ["Tier 2", "Mitigation (Reduce Impact)", "#E2A21B", "These controls do not stop the incident, but they lessen its severity. A personal fall arrest system is a good example: if you fall, the harness and lanyard mitigate the consequences. These controls REDUCE harm."],
+    ["Tier 3", "Everything else (Alternative Controls)", "#C0392B", "Training, procedures, permits, warning signs and so on. While important, these controls rely heavily on human behavior."],
+  ];
+  return (
+    <div className="mt-5 rounded-md p-3 bg-white border" style={{ borderColor: GOLD, borderLeftWidth: 3 }}>
+      <button onClick={() => setOpen((o) => !o)} className="w-full flex items-center justify-between text-left">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <ShieldAlert size={14} color={STEEL} />
+          <span className="text-xs uppercase font-bold" style={{ color: STEEL, letterSpacing: "0.06em", ...mono }}>STKY - Stuff That Kills You</span>
+        </div>
+        <ChevronRight size={16} color={STEEL} style={{ transform: open ? "rotate(90deg)" : "none", transition: "transform .15s" }} />
+      </button>
+      <div className="text-[12px] mt-2 leading-snug" style={{ color: "#333" }}>
+        <b>Life-threatening hazards and lifesaving controls.</b> STKY is a focus on every one of our projects: know the hazards that can kill you, and the controls that protect you even when someone makes a mistake. If a lifesaving control cannot be applied, stop the activity and reassess.
+      </div>
+      {open && (
+        <div className="mt-3">
+          <div className="text-[9px] uppercase font-bold mb-1.5" style={{ color: STEEL, ...mono }}>What is a lifesaving control?</div>
+          <div className="text-[12px] mb-1.5" style={{ color: "#333" }}>When in place, a control measure is "lifesaving" if it meets these three criteria:</div>
+          <div className="space-y-1.5 mb-2">
+            {criteria.map(([a, b], i) => (
+              <div key={i} className="flex items-start gap-2 rounded-sm px-2 py-1.5" style={{ background: "#F4F3EF" }}>
+                <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 text-[11px] font-bold" style={{ background: GOLD, color: INK }}>{i + 1}</div>
+                <div className="text-[12px] leading-snug" style={{ color: "#222" }}><b>{a}</b>{b ? ` ${b}` : ""}</div>
+              </div>
+            ))}
+          </div>
+          <div className="text-[12px] font-bold rounded-sm px-2 py-1.5 mb-4" style={{ background: "#FCEFEF", color: ALERT }}>If these controls cannot be applied, the activity must be stopped and reassessed, combining alternative measures that ensure safety.</div>
+
+          <div className="text-[9px] uppercase font-bold mb-1.5" style={{ color: STEEL, ...mono }}>Three tiers of control</div>
+          <div className="text-[12px] mb-2" style={{ color: "#333" }}>Just as not all hazards are created equal, not all control measures are created equal.</div>
+          <div className="space-y-2 mb-4">
+            {tiers.map(([t, name, color, text]) => (
+              <div key={t} className="rounded-md border p-2.5" style={{ borderColor: "#E4E2DA", borderLeft: `4px solid ${color}` }}>
+                <div className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{t}: {name}</div>
+                <div className="text-[12px] mt-0.5 leading-snug" style={{ color: "#333" }}>{text}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="text-[9px] uppercase font-bold mb-1.5" style={{ color: STEEL, ...mono }}>STKY hazards and their lifesaving controls</div>
+          <div className="space-y-1.5">
+            {Object.keys(LIFE_THREATENING).map((h) => (
+              <div key={h} className="rounded-md border" style={{ borderColor: hz === h ? INK : "#E4E2DA" }}>
+                <button onClick={() => setHz(hz === h ? "" : h)} className="w-full flex items-center justify-between px-2.5 py-2 text-left">
+                  <span className="text-[12px] font-bold">{h}</span>
+                  <ChevronRight size={14} color={STEEL} style={{ transform: hz === h ? "rotate(90deg)" : "none", transition: "transform .15s" }} />
+                </button>
+                {hz === h && (
+                  <div className="px-2.5 pb-2.5 space-y-1">
+                    {LIFE_THREATENING[h].map((c, i) => (
+                      <div key={i} className="flex items-start gap-1.5">
+                        <div className="w-1 h-1 rounded-full mt-1.5 flex-shrink-0" style={{ background: "#2E8B57" }} />
+                        <span className="text-[12px] leading-snug" style={{ color: "#333" }}>{c}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function HomeScreen({ go, user, activeProjectId }) {
   const { fallbacks, name: projectName } = useContext(ProjectContext);
   const { t } = useTranslation();
@@ -1183,6 +1262,8 @@ function HomeScreen({ go, user, activeProjectId }) {
           <div className="text-[12px]" style={{ color: STEEL }}>Toolbox Talk: "Fall Protection Refresher" — watch by Friday. Required for all crew on {projectName} sites.</div>
         </div>
       </div>
+
+      <LifesavingControlsCard />
     </div>
   );
 }
