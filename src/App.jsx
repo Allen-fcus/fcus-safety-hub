@@ -886,7 +886,7 @@ function canSeeSafetyReports(user) {
 function isStaffViewer(user, projectId) { return !!(user && user.canViewMeetings && projectId === "nti-sylvania"); }
 function useStaffViewer(user) { const ctx = useContext(ProjectContext) || {}; return isStaffViewer(user, ctx.id); }
 const STAFF_VIEW_SCREENS = ["managesubmittedforms", "managequarterlysubmissions", "summaryreview"];
-const NAV_ORDER = ["home", "huboverview", "orientation", "forms", "hsstandards", "safetyplan", "workplans", "preconstruction", "safetyreports", "meetings", "reports", "toolbox", "quarterlymonthly", "training", "laborlaws", "trafficcontrol", "concern", "truckdriver", "emergency", "personnel"];
+const NAV_ORDER = ["home", "orientation", "forms", "hsstandards", "safetyplan", "workplans", "preconstruction", "safetyreports", "meetings", "reports", "toolbox", "quarterlymonthly", "training", "laborlaws", "trafficcontrol", "concern", "truckdriver", "emergency", "personnel"];
 const sortByNavOrder = (items) => {
   const rank = (k) => { const i = NAV_ORDER.indexOf(k); return i === -1 ? NAV_ORDER.indexOf("concern") : i; };
   return items.map((it, i) => ({ it, i })).sort((a, b) => rank(a.it.key) - rank(b.it.key) || a.i - b.i).map((x) => x.it);
@@ -913,7 +913,6 @@ function HomeScreen({ go, user, activeProjectId }) {
     ...(TRAFFIC_CONTROL_PROJECTS.includes(activeProjectId) ? [{ key: "trafficcontrol", label: "Traffic Control", desc: "Clear Zone Criteria and other traffic control standards", icon: ShieldAlert, count: "1 document" }] : []),
     ...(canSeeSafetyReports(user) ? [{ key: "safetyreports", label: "Safety Reports", desc: "Incident reports, statements, investigations and classification", icon: ShieldAlert, count: "Incidents" }] : []),
     ...(user && user.canViewMeetings ? [{ key: "meetings", label: "Meetings", desc: "Sign-in sheets with QR code, for GC and Ferrovial staff", icon: Users, count: "Sign-ins" }] : []),
-    ...(user && user.isHubAdmin ? [{ key: "huboverview", label: "Hub Overview", desc: "All projects combined: sign-ins, forms, work plans, toolbox, trucks and training", icon: BarChart3, count: "All projects" }] : []),
     { key: "concern", label: t("reportConcern"), desc: t("reportConcernDesc"), icon: MessageSquare, count: t("alwaysAvailable") },
   ];
   const orderedSections = sortByNavOrder(sections);
@@ -16714,6 +16713,7 @@ function ManageWeeklyReportScreen({ user }) {
 // ---- Login (modal, only needed to claim/view a badge) ----
 // ---- Project Switcher ----
 function ProjectSwitcherModal({ activeProjectId, onSelect, onClose, keepsLogin }) {
+  const hubAdminView = !!keepsLogin;
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/85 px-6">
       <div className="w-full max-w-xs rounded-xl overflow-hidden" style={{ background: "white", boxShadow: "0 10px 40px rgba(0,0,0,0.4)" }}>
@@ -16723,7 +16723,7 @@ function ProjectSwitcherModal({ activeProjectId, onSelect, onClose, keepsLogin }
         </div>
         <HazardRule height={4} />
         <div className="p-3 space-y-2">
-          {Object.values(PROJECTS).filter((p) => !p.inactive).map((p) => {
+          {Object.values(PROJECTS).filter((p) => !p.inactive && (p.id !== "safety-hub" || hubAdminView)).map((p) => {
             const active = p.id === activeProjectId;
             return (
               <button
@@ -16732,7 +16732,7 @@ function ProjectSwitcherModal({ activeProjectId, onSelect, onClose, keepsLogin }
                 className="w-full text-left rounded-md p-3 border flex items-center justify-between"
                 style={{ borderColor: active ? GOLD : "#E4E2DA", background: active ? "#FFF8E1" : "white" }}
               >
-                <span className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: active ? 700 : 500 }}>{p.name}</span>
+                <span className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: active ? 700 : 500 }}>{p.id === "safety-hub" ? "Safety Hub — Overview of all projects" : p.name}</span>
                 {active && <CheckCircle2 size={16} color={GOLD} />}
               </button>
             );
@@ -18284,7 +18284,7 @@ function TruckDriverVerifyScreen() {
 // reporting, and the Labor Law QR code that anyone can scan).
 const ALWAYS_PUBLIC_SCREENS = ["emergency", "concern", "laborlaws", "trafficcontrol", "meetingsignin", "orientationsignin", "hsstandards", "orientationschedule", "verifybadge", "truckdriver", "verifytruckdriver"];
 // Normally-gated screens for every project.
-const BASE_GATED_SCREENS = ["forms", "safetyplan", "toolbox", "workplans", "mysubmissions", "quarterlymysubmissions", "summarymysubmissions", "preconsubmissions", "preconstruction", "quarterlymonthly", "training", "meetings", "safetyreports", "huboverview"];
+const BASE_GATED_SCREENS = ["forms", "safetyplan", "toolbox", "workplans", "mysubmissions", "quarterlymysubmissions", "summarymysubmissions", "preconsubmissions", "preconstruction", "quarterlymonthly", "training", "meetings", "safetyreports"];
 // Projects where EVERYTHING (except the always-public screens above)
 // requires a badge — including Home itself.
 const FULLY_GATED_PROJECTS = ["sh99-houston"];
@@ -18443,6 +18443,14 @@ export default function SafetyHubPrototype() {
   };
 
   const handleSwitchProject = async (projectId, targetScreen) => {
+    // "Safety Hub" is the combined overview. Only Safety Hub Admins get it, and they keep their login.
+    if (projectId === "safety-hub" && user && user.isHubAdmin && user.sessionToken) {
+      setActiveProjectId("safety-hub");
+      setShowProjectSwitcher(false);
+      setConcernReports([]);
+      setScreen("home");
+      return;
+    }
     // Safety Hub Admins stay logged in and jump straight to the project.
     if (user && user.isHubAdmin && user.sessionToken) {
       await loadProjectMap();
@@ -18498,7 +18506,6 @@ export default function SafetyHubPrototype() {
     personnel: t("personnelLookup"),
     orientation: t("orientation"),
     workplans: t("workPlans"),
-    huboverview: "Hub Overview",
     preconstruction: "Pre-Construction",
     quarterlymonthly: "Quarterly/Monthly Inspections",
     quarterlymysubmissions: "My Quarterly/Monthly Submissions",
@@ -18612,9 +18619,9 @@ export default function SafetyHubPrototype() {
     ...(TRAFFIC_CONTROL_PROJECTS.includes(activeProjectId) ? [{ key: "trafficcontrol", icon: ShieldAlert, label: "Traffic Control" }] : []),
     ...(canSeeSafetyReports(user) ? [{ key: "safetyreports", icon: ShieldAlert, label: "Safety Reports" }] : []),
     ...(user && user.canViewMeetings ? [{ key: "meetings", icon: Users, label: "Meetings" }] : []),
-    ...(user && user.isHubAdmin ? [{ key: "huboverview", icon: BarChart3, label: "Hub Overview" }] : []),
   ];
-  const orderedSidebarItems = sortByNavOrder(sidebarItems);
+  const overviewMode = activeProjectId === "safety-hub" && !!(user && user.isHubAdmin);
+  const orderedSidebarItems = overviewMode ? [{ key: "home", icon: BarChart3, label: "Hub Overview" }] : sortByNavOrder(sidebarItems);
 
   return (
     <LanguageContext.Provider value={{ lang, setLang, t }}>
@@ -18691,10 +18698,10 @@ export default function SafetyHubPrototype() {
       {/* Main content column */}
       <div className="flex-1 flex flex-col min-h-screen min-w-0">
         <div className="md:hidden">
-          <TopBar title={titles[screen]} onBack={screen !== "home" ? () => setScreen("home") : null} onBadge={handleBadgeTap} badgeLabel={user ? "Badge" : "Get Badge"} onProjectTap={() => setShowProjectSwitcher(true)} user={user} />
+          <TopBar title={overviewMode ? "Hub Overview" : titles[screen]} onBack={screen !== "home" ? () => setScreen("home") : null} onBadge={handleBadgeTap} badgeLabel={user ? "Badge" : "Get Badge"} onProjectTap={() => setShowProjectSwitcher(true)} user={user} />
         </div>
         <div className="hidden md:flex items-center justify-between px-8 py-4 border-b flex-shrink-0" style={{ borderColor: "#E4E2DA", background: "white" }}>
-          <div className="text-[18px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600, color: INK }}>{titles[screen]}</div>
+          <div className="text-[18px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600, color: INK }}>{overviewMode ? "Hub Overview" : titles[screen]}</div>
           <div className="flex items-center gap-3">
           <button
             onClick={() => go("training")}
@@ -18716,7 +18723,9 @@ export default function SafetyHubPrototype() {
 
         <div className="flex-1 overflow-y-auto">
           <div className={`md:mx-auto md:w-full ${screen === "home" ? "md:max-w-6xl" : "md:max-w-3xl"}`}>
-            {isAdminOnlyScreen(screen) && (!user || !(user.canAddPersonnel || (STAFF_VIEW_SCREENS.includes(screen) && isStaffViewer(user, activeProjectId)))) ? (
+            {overviewMode ? (
+              <HubOverviewScreen user={user} />
+            ) : isAdminOnlyScreen(screen) && (!user || !(user.canAddPersonnel || (STAFF_VIEW_SCREENS.includes(screen) && isStaffViewer(user, activeProjectId)))) ? (
               <div className="px-4 pt-16 text-center">
                 <Lock size={28} color={STEEL} className="mx-auto mb-3" />
                 <div className="text-[14px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>Admins Only</div>
@@ -18735,7 +18744,6 @@ export default function SafetyHubPrototype() {
             {screen === "safetyplan" && <SafetyPlanScreen />}
             {screen === "toolbox" && <ToolboxScreen user={user} go={go} activeProjectId={activeProjectId} />}
             {screen === "managetoolbox" && <ManageToolboxScreen user={user} />}
-            {screen === "huboverview" && user && user.isHubAdmin && <HubOverviewScreen user={user} />}
             {screen === "meetings" && <MeetingsScreen user={user} activeProjectId={activeProjectId} initialOpenId={openMeetingId} />}
             {screen === "safetyreports" && <SafetyReportsScreen user={user} activeProjectId={activeProjectId} onOpenMeeting={(id) => { setOpenMeetingId(id); setScreen("meetings"); }} />}
             {screen === "meetingsignin" && <MeetingSignInScreen />}
