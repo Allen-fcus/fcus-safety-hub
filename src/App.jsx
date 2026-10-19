@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo, createContext, useContext } from "react";
 import Papa from "papaparse";
-import { Wallet, Home, BookOpen, PlayCircle, ClipboardCheck, FileText, ChevronRight, Download, CheckCircle2, Circle, X, Play, ShieldAlert, Clock, Eraser, Send, PenLine, Users, Eye, BadgeCheck, LogOut, Loader2, CalendarDays, MapPin, Megaphone, Pin, ExternalLink, Lock, AlertTriangle, Camera, Phone, MessageSquare, ImagePlus, Volume2, VolumeX, Pause, Truck } from "lucide-react";
+import { Wallet, Home, BookOpen, PlayCircle, ClipboardCheck, FileText, ChevronRight, Download, CheckCircle2, Circle, X, Play, ShieldAlert, Clock, Eraser, Send, PenLine, Users, Eye, BadgeCheck, LogOut, Loader2, CalendarDays, MapPin, Megaphone, Pin, ExternalLink, Lock, AlertTriangle, Camera, Phone, MessageSquare, ImagePlus, Volume2, VolumeX, Pause, Truck, BarChart3 } from "lucide-react";
 import { supabase, loadProjectMap, projectIdForSlug, projectSlugForId } from "./supabaseClient.js";
 import { PDFDocument } from "pdf-lib";
 import QRCode from "qrcode";
@@ -886,7 +886,7 @@ function canSeeSafetyReports(user) {
 function isStaffViewer(user, projectId) { return !!(user && user.canViewMeetings && projectId === "nti-sylvania"); }
 function useStaffViewer(user) { const ctx = useContext(ProjectContext) || {}; return isStaffViewer(user, ctx.id); }
 const STAFF_VIEW_SCREENS = ["managesubmittedforms", "managequarterlysubmissions", "summaryreview"];
-const NAV_ORDER = ["home", "orientation", "forms", "hsstandards", "safetyplan", "workplans", "preconstruction", "safetyreports", "meetings", "reports", "toolbox", "quarterlymonthly", "training", "laborlaws", "trafficcontrol", "concern", "truckdriver", "emergency", "personnel"];
+const NAV_ORDER = ["home", "huboverview", "orientation", "forms", "hsstandards", "safetyplan", "workplans", "preconstruction", "safetyreports", "meetings", "reports", "toolbox", "quarterlymonthly", "training", "laborlaws", "trafficcontrol", "concern", "truckdriver", "emergency", "personnel"];
 const sortByNavOrder = (items) => {
   const rank = (k) => { const i = NAV_ORDER.indexOf(k); return i === -1 ? NAV_ORDER.indexOf("concern") : i; };
   return items.map((it, i) => ({ it, i })).sort((a, b) => rank(a.it.key) - rank(b.it.key) || a.i - b.i).map((x) => x.it);
@@ -913,6 +913,7 @@ function HomeScreen({ go, user, activeProjectId }) {
     ...(TRAFFIC_CONTROL_PROJECTS.includes(activeProjectId) ? [{ key: "trafficcontrol", label: "Traffic Control", desc: "Clear Zone Criteria and other traffic control standards", icon: ShieldAlert, count: "1 document" }] : []),
     ...(canSeeSafetyReports(user) ? [{ key: "safetyreports", label: "Safety Reports", desc: "Incident reports, statements, investigations and classification", icon: ShieldAlert, count: "Incidents" }] : []),
     ...(user && user.canViewMeetings ? [{ key: "meetings", label: "Meetings", desc: "Sign-in sheets with QR code, for GC and Ferrovial staff", icon: Users, count: "Sign-ins" }] : []),
+    ...(user && user.isHubAdmin ? [{ key: "huboverview", label: "Hub Overview", desc: "All projects combined: sign-ins, forms, work plans, toolbox, trucks and training", icon: BarChart3, count: "All projects" }] : []),
     { key: "concern", label: t("reportConcern"), desc: t("reportConcernDesc"), icon: MessageSquare, count: t("alwaysAvailable") },
   ];
   const orderedSections = sortByNavOrder(sections);
@@ -13065,7 +13066,7 @@ function AddPersonScreen({ user, onDone, prefill }) {
     return { url: data && data.publicUrl ? data.publicUrl : null, error: null };
   };
 
-  const generatePin = () => setPin(String(Math.floor(1000 + Math.random() * 9000)));
+  const generatePin = () => setPin(randomPin());
 
   const addQual = () => {
     if (!qualLabel.trim()) return;
@@ -13291,7 +13292,7 @@ function BulkImportPanel({ user, onDone }) {
           name: row.Name || "",
           employee_id: row.EmployeeID || "",
           badge: row.Badge || "",
-          pin: row.PIN || String(Math.floor(1000 + Math.random() * 9000)),
+          pin: row.PIN || randomPin(),
           role: row.Role || "",
           employer: row.Employer || "",
           orientation_date: row.OrientationDate || "",
@@ -13422,8 +13423,8 @@ const isNtiEmployer = (emp) => /\b(nti|north tarrant)\b/i.test(emp || "");
 
 const canonTraining = (label) => {
   const l = String(label || "").trim();
-  if (/osha[\s_-]*30/i.test(l)) return "OSHA 30";
-  if (/osha[\s_-]*10/i.test(l)) return "OSHA 10";
+  if (/osha[\s_-]*30\b/i.test(l)) return "OSHA 30";
+  if (/osha[\s_-]*10\b/i.test(l)) return "OSHA 10";
   if (/mewp/i.test(l)) return "MEWP Training (3B)";
   if (/driving awareness/i.test(l)) return "Driving Awareness";
   if (/(cpr|first[\s-]*aid)/i.test(l)) return "CPR & First Aid";
@@ -13435,6 +13436,9 @@ const canonTraining = (label) => {
   return l;
 };
 // ---------- Live refresh: poll silently while the page is visible, and refetch when the app comes back to the front ----------
+function randomPin() {
+  try { const a = new Uint32Array(1); crypto.getRandomValues(a); return String(1000 + (a[0] % 9000)); } catch (e) { return String(Math.floor(1000 + Math.random() * 9000)); }
+}
 function useLivePoll(fn, ms = 15000, enabled = true) {
   const ref = useRef(fn);
   ref.current = fn;
@@ -13634,6 +13638,271 @@ function TrainingOverview({ employees, onSelect }) {
         ))}
         {catalog.length === 0 && <div className="text-[12px]" style={{ color: STEEL }}>No training recorded yet for this group.</div>}
       </div>
+    </div>
+  );
+}
+
+// ---------- Hub Overview (Safety Hub Admins): every project combined ----------
+const HUB_RANGES = [
+  { key: "week", label: "This week" }, { key: "30", label: "30 days" }, { key: "quarter", label: "This quarter" },
+  { key: "year", label: "This year" }, { key: "all", label: "All time" },
+];
+function hubRangeDates(key) {
+  const now = new Date();
+  const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  if (key === "week") { const d = new Date(now); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return [iso(d), null]; }
+  if (key === "30") { const d = new Date(now); d.setDate(d.getDate() - 30); return [iso(d), null]; }
+  if (key === "quarter") return [iso(new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1)), null];
+  if (key === "year") return [iso(new Date(now.getFullYear(), 0, 1)), null];
+  return [null, null];
+}
+const HUB_PROJECT_COLORS = ["#C9A227", "#3B6EA5", "#2E8B57", "#8E5BA8", "#C0392B"];
+
+function HubBars({ items, color = GOLD, labelW = 110 }) {
+  const max = Math.max(1, ...items.map((i) => i.n));
+  return (
+    <div className="space-y-1">
+      {items.map((i) => (
+        <div key={i.label} className="flex items-center gap-2">
+          <div className="text-[11px] truncate flex-shrink-0" style={{ width: labelW, color: STEEL }} title={i.label}>{i.label}</div>
+          <div className="flex-1 h-4 rounded-sm" style={{ background: "#ECEAE3" }}><div className="h-4 rounded-sm" style={{ width: `${(i.n / max) * 100}%`, background: color }} /></div>
+          <div className="text-[11px] font-bold w-8 text-right">{i.n}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function HubOverviewScreen({ user }) {
+  const mono = { fontFamily: "IBM Plex Mono, monospace" };
+  const [range, setRange] = useState("30");
+  const [proj, setProj] = useState("");
+  const [d, setD] = useState(null);
+  const [state, setState] = useState("loading"); // loading | ok | denied
+  const [subQuery, setSubQuery] = useState("");
+  const [qualPick, setQualPick] = useState("");
+
+  const load = async (silent) => {
+    if (silent !== true) setState("loading");
+    const [from, to] = hubRangeDates(range);
+    const { data, error } = await supabase.rpc("hub_overview", { p_token: user.sessionToken, p_from: from, p_to: to });
+    if (error || !data) { if (silent !== true) setState("denied"); return; }
+    setD(data); setState("ok");
+  };
+  useEffect(() => { load(); }, [range, user?.sessionToken]);
+  useLivePoll(load, 60000, !!user?.sessionToken);
+
+  if (state === "loading" && !d) return <div className="px-4 pt-10 text-center text-[12px]" style={{ color: STEEL }}>Loading overview…</div>;
+  if (!d) return <div className="px-4 pt-10 text-center text-[12px]" style={{ color: STEEL }}>The combined overview is only available to Safety Hub Admins. If you are one, run safety-hub-hub-overview.sql in Supabase.</div>;
+
+  const keep = (r) => !proj || r.project === proj;
+  const sum = (rows) => rows.reduce((n, r) => n + (Number(r.n) || 0), 0);
+  const orient = (d.orientation || []).filter(keep);
+  const formsAll = (d.forms || []).filter(keep);
+  const siteForms = formsAll.filter((r) => r.category === "forms");
+  const quarterly = formsAll.filter((r) => r.category === "quarterly");
+  const orientForms = formsAll.filter((r) => r.category === "orientation");
+  const wplans = (d.workplans || []).filter(keep);
+  const toolbox = (d.toolbox || []).filter(keep);
+  const trucks = (d.trucks || []).filter(keep);
+  const people = (d.personnel || []).filter(keep);
+  const quals = (d.quals || []).filter(keep);
+  const meetings = (d.meetings || []).filter(keep);
+  const projName = (slug) => ((d.projects || []).find((p) => p.slug === slug) || {}).name || slug;
+  const usEmp = (e) => /\b(nti|north tarrant|ferrovial)\b/i.test(e || "");
+
+  const group = (rows, keyFn) => {
+    const m = {};
+    rows.forEach((r) => { const k = keyFn(r); m[k] = (m[k] || 0) + (Number(r.n) || 0); });
+    return Object.entries(m).map(([label, n]) => ({ label, n })).sort((a, b) => b.n - a.n || a.label.localeCompare(b.label));
+  };
+
+  // weekly orientation sign-ins
+  const weeks = {};
+  orient.forEach((r) => { weeks[r.week] = (weeks[r.week] || 0) + Number(r.n); });
+  const weekRows = Object.keys(weeks).sort().slice(-12).map((w) => ({ label: "Wk of " + fmtD(w), n: weeks[w] }));
+  const orientUs = sum(orient.filter((r) => usEmp(r.employer)));
+
+  // per-project comparison
+  const slugs = (d.projects || []).map((p) => p.slug).filter((s) => !proj || s === proj);
+  const perProject = slugs.map((s) => ({
+    slug: s,
+    orient: sum((d.orientation || []).filter((r) => r.project === s)),
+    forms: sum((d.forms || []).filter((r) => r.project === s && r.category === "forms")),
+    quarterly: sum((d.forms || []).filter((r) => r.project === s && r.category === "quarterly")),
+    plans: sum((d.workplans || []).filter((r) => r.project === s)),
+    toolbox: sum((d.toolbox || []).filter((r) => r.project === s)),
+    trucks: sum((d.trucks || []).filter((r) => r.project === s)),
+    people: sum((d.personnel || []).filter((r) => r.project === s)),
+  }));
+
+  // per-subcontractor table (employer names matched ignoring case)
+  const sub = {};
+  const touch = (name) => { const k = String(name || "(none)").trim().toLowerCase(); return sub[k] || (sub[k] = { name: String(name || "(none)").trim(), orient: 0, forms: 0, quarterly: 0, plans: 0, toolbox: 0, trucks: 0, people: 0 }); };
+  orient.forEach((r) => { touch(r.employer).orient += Number(r.n); });
+  siteForms.forEach((r) => { touch(r.employer).forms += Number(r.n); });
+  quarterly.forEach((r) => { touch(r.employer).quarterly += Number(r.n); });
+  wplans.forEach((r) => { touch(r.employer).plans += Number(r.n); });
+  toolbox.forEach((r) => { touch(r.employer).toolbox += Number(r.n); });
+  trucks.forEach((r) => { touch(r.employer).trucks += Number(r.n); });
+  people.forEach((r) => { touch(r.employer).people += Number(r.n); });
+  const sq = subQuery.trim().toLowerCase();
+  const subRows = Object.values(sub).filter((r) => !sq || r.name.toLowerCase().includes(sq)).sort((a, b) => (b.orient + b.people) - (a.orient + a.people) || a.name.localeCompare(b.name));
+  const subCols = [["Orient.", "orient"], ["Forms", "forms"], ["Qtr/Mo", "quarterly"], ["Plans", "plans"], ["Toolbox", "toolbox"], ["Trucks", "trucks"], ["People", "people"]];
+
+  // training
+  const qualLabels = group(quals, (r) => r.label);
+  const pickedQual = qualPick || (qualLabels.find((q) => /osha\s*30/i.test(q.label)) || qualLabels[0] || {}).label || "";
+  const qualByStatus = (label) => { const o = { current: 0, expiring: 0, expired: 0 }; quals.filter((r) => r.label === label).forEach((r) => { o[r.status] = (o[r.status] || 0) + Number(r.n); }); return o; };
+  const qualEmployers = {};
+  quals.filter((r) => r.label === pickedQual).forEach((r) => { const e = qualEmployers[r.employer] || (qualEmployers[r.employer] = { name: r.employer, current: 0, expiring: 0, expired: 0 }); e[r.status] += Number(r.n); });
+  const qualEmpRows = Object.values(qualEmployers).sort((a, b) => (b.current + b.expiring + b.expired) - (a.current + a.expiring + a.expired));
+
+  const trucksByStatus = group(trucks, (r) => r.status || "unknown");
+  const meetingsN = sum(meetings.map((m) => ({ n: m.meetings })));
+  const attendeesN = sum(meetings.map((m) => ({ n: m.attendees })));
+
+  const exportSubs = () => exportToCsv(`hub-overview-by-company-${new Date().toISOString().slice(0, 10)}.csv`, subRows, [
+    { label: "Company", get: (r) => r.name }, ...subCols.map(([l, k]) => ({ label: l, get: (r) => r[k] })),
+  ]);
+
+  const Tile = ({ label, value, sub: s }) => (
+    <div className="bg-white rounded-md border p-3" style={{ borderColor: "#E4E2DA" }}>
+      <div className="text-[22px] leading-none" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{value}</div>
+      <div className="text-[10px] uppercase font-bold mt-1.5" style={{ color: STEEL, ...mono }}>{label}</div>
+      {s ? <div className="text-[10px] mt-0.5" style={{ color: STEEL }}>{s}</div> : null}
+    </div>
+  );
+  const Card = ({ title, children, right }) => (
+    <div className="bg-white rounded-md border p-3 mb-3" style={{ borderColor: "#E4E2DA" }}>
+      <div className="flex items-center justify-between mb-2"><div className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{title}</div>{right}</div>
+      {children}
+    </div>
+  );
+  const none = <div className="text-[12px]" style={{ color: STEEL }}>Nothing recorded for this period.</div>;
+
+  return (
+    <div className="px-4 pt-5 pb-8 max-w-3xl mx-auto">
+      <div className="text-[20px] mb-0.5" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>Hub Overview</div>
+      <div className="text-[12px] mb-3" style={{ color: STEEL }}>All projects combined. Counts below follow the period and project you pick.</div>
+
+      <div className="flex gap-1.5 overflow-x-auto pb-1 mb-2">
+        {HUB_RANGES.map((r) => (
+          <button key={r.key} onClick={() => setRange(r.key)} className="text-[10px] font-bold uppercase px-3 py-1.5 rounded-sm flex-shrink-0" style={{ background: range === r.key ? INK : "white", color: range === r.key ? GOLD : STEEL, border: "1px solid #C9C6BC", ...mono }}>{r.label}</button>
+        ))}
+      </div>
+      <div className="flex gap-1.5 overflow-x-auto pb-1 mb-3">
+        {[{ slug: "", name: "All projects" }, ...(d.projects || [])].filter((p) => p.slug !== "nti-golden-triangle").map((p) => (
+          <button key={p.slug} onClick={() => setProj(p.slug)} className="text-[10px] font-bold uppercase px-3 py-1.5 rounded-sm flex-shrink-0" style={{ background: proj === p.slug ? INK : "white", color: proj === p.slug ? GOLD : STEEL, border: "1px solid #C9C6BC", ...mono }}>{p.name}</button>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+        <Tile label="Orientation sign-ins" value={sum(orient)} sub={`${orientUs} NTI/Ferrovial · ${sum(orient) - orientUs} subs`} />
+        <Tile label="Site safety forms" value={sum(siteForms)} sub={`${new Set(siteForms.map((r) => r.title)).size} different forms`} />
+        <Tile label="Quarterly / monthly" value={sum(quarterly)} />
+        <Tile label="Toolbox confirmations" value={sum(toolbox)} />
+        <Tile label="Work plans on file" value={sum(wplans)} sub={`${new Set(wplans.map((r) => r.employer.toLowerCase())).size} companies`} />
+        <Tile label="Truck driver orientations" value={sum(trucks)} />
+        <Tile label="People on file" value={sum(people)} sub={`${sum(people.filter((r) => usEmp(r.employer)))} NTI/Ferrovial`} />
+        <Tile label="Meeting sign-ins" value={attendeesN} sub={`${meetingsN} meetings`} />
+      </div>
+
+      {!proj && (
+        <Card title="By project">
+          <div className="overflow-x-auto">
+            <table className="w-full text-[11px]">
+              <thead><tr style={{ color: STEEL }}>{["Project", "Orient.", "Forms", "Qtr/Mo", "Plans", "Toolbox", "Trucks", "People"].map((h, i) => <th key={h} className={`py-1 ${i ? "text-right px-1.5" : "text-left"} font-bold`} style={mono}>{h}</th>)}</tr></thead>
+              <tbody>{perProject.map((p) => (
+                <tr key={p.slug} className="border-t" style={{ borderColor: "#ECEAE3" }}>
+                  <td className="py-1.5 pr-2">{projName(p.slug)}</td>
+                  {[p.orient, p.forms, p.quarterly, p.plans, p.toolbox, p.trucks, p.people].map((v, i) => <td key={i} className="text-right px-1.5 font-bold">{v}</td>)}
+                </tr>))}</tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      <Card title="Orientation sign-ins per week">
+        {weekRows.length ? <HubBars items={weekRows} labelW={92} /> : none}
+        {orient.length > 0 && <div className="text-[11px] mt-2" style={{ color: STEEL }}>{orientUs} from NTI/Ferrovial employees, {sum(orient) - orientUs} from subcontractors.</div>}
+      </Card>
+
+      <Card title="Orientation sign-ins by company">
+        {orient.length ? <HubBars items={group(orient, (r) => r.employer).slice(0, 15)} /> : none}
+      </Card>
+
+      <Card title="By company" right={<button onClick={exportSubs} className="text-[10px] font-bold uppercase px-2.5 py-1 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, ...mono }}>Export CSV</button>}>
+        <input value={subQuery} onChange={(e) => setSubQuery(e.target.value)} placeholder="Search companies" className="w-full rounded-md border px-3 py-2 text-[13px] mb-2" style={{ borderColor: "#C9C6BC" }} />
+        <div className="overflow-x-auto">
+          <table className="w-full text-[11px]">
+            <thead><tr style={{ color: STEEL }}><th className="text-left py-1 font-bold" style={mono}>Company</th>{subCols.map(([l]) => <th key={l} className="text-right px-1.5 font-bold" style={mono}>{l}</th>)}</tr></thead>
+            <tbody>{subRows.map((r) => (
+              <tr key={r.name} className="border-t" style={{ borderColor: "#ECEAE3" }}>
+                <td className="py-1.5 pr-2 min-w-[110px]">{r.name}</td>
+                {subCols.map(([l, k]) => <td key={l} className="text-right px-1.5" style={{ fontWeight: r[k] ? 700 : 400, color: r[k] ? INK : "#B5B2A8" }}>{r[k]}</td>)}
+              </tr>))}</tbody>
+          </table>
+          {subRows.length === 0 && none}
+        </div>
+      </Card>
+
+      <Card title="Site safety forms submitted">
+        {siteForms.length ? <HubBars items={group(siteForms, (r) => r.title).slice(0, 20)} labelW={150} /> : none}
+      </Card>
+
+      <Card title="Quarterly / monthly inspections">
+        {quarterly.length ? <HubBars items={group(quarterly, (r) => r.title)} labelW={150} /> : none}
+      </Card>
+
+      <Card title="Work plans per company">
+        {wplans.length ? <HubBars items={group(wplans, (r) => r.employer).slice(0, 20)} /> : none}
+      </Card>
+
+      <Card title="Toolbox talk confirmations">
+        {toolbox.length ? (<>
+          <HubBars items={group(toolbox, (r) => r.label).slice(0, 10)} labelW={150} />
+          <div className="text-[11px] font-bold uppercase mt-3 mb-1" style={{ color: STEEL, ...mono }}>By company</div>
+          <HubBars items={group(toolbox, (r) => r.employer).slice(0, 10)} />
+        </>) : none}
+      </Card>
+
+      <Card title="Truck driver orientations">
+        {trucks.length ? (<>
+          <div className="flex flex-wrap gap-1.5 mb-2">{trucksByStatus.map((s) => <span key={s.label} className="text-[10px] font-bold uppercase px-2 py-1 rounded-sm" style={{ background: "#F4F3EF", ...mono }}>{s.label.replace("_", " ")}: {s.n}</span>)}</div>
+          <HubBars items={group(trucks, (r) => r.employer).slice(0, 15)} />
+        </>) : none}
+      </Card>
+
+      <Card title="Training and qualifications on file">
+        {qualLabels.length === 0 ? none : (<>
+          <div className="space-y-1.5 mb-3">
+            {qualLabels.slice(0, 15).map((q) => {
+              const s = qualByStatus(q.label); const tot = s.current + s.expiring + s.expired;
+              return (
+                <button key={q.label} onClick={() => setQualPick(q.label)} className="w-full text-left rounded-md border px-2.5 py-2" style={{ borderColor: pickedQual === q.label ? INK : "#E4E2DA" }}>
+                  <div className="flex justify-between text-[12px]"><span className="truncate">{q.label}</span><span className="font-bold">{tot}</span></div>
+                  <div className="flex h-1.5 rounded-sm overflow-hidden mt-1.5" style={{ background: "#ECEAE3" }}>
+                    {["current", "expiring", "expired"].map((k) => s[k] ? <div key={k} style={{ width: `${(s[k] / tot) * 100}%`, background: TRAIN_STATUS[k].color }} /> : null)}
+                  </div>
+                  <div className="text-[10px] mt-1" style={{ color: STEEL }}>{s.current} current · {s.expiring} expiring · {s.expired} expired</div>
+                </button>
+              );
+            })}
+          </div>
+          <div className="text-[11px] font-bold uppercase mb-1" style={{ color: STEEL, ...mono }}>{pickedQual} by company</div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[11px]">
+              <thead><tr style={{ color: STEEL }}><th className="text-left py-1 font-bold" style={mono}>Company</th>{["current", "expiring", "expired"].map((k) => <th key={k} className="text-right px-1.5 font-bold" style={{ ...mono, color: TRAIN_STATUS[k].color }}>{TRAIN_STATUS[k].label}</th>)}</tr></thead>
+              <tbody>{qualEmpRows.map((r) => (
+                <tr key={r.name} className="border-t" style={{ borderColor: "#ECEAE3" }}>
+                  <td className="py-1.5 pr-2">{r.name}</td>
+                  {["current", "expiring", "expired"].map((k) => <td key={k} className="text-right px-1.5 font-bold">{r[k] || 0}</td>)}
+                </tr>))}</tbody>
+            </table>
+          </div>
+        </>)}
+      </Card>
     </div>
   );
 }
@@ -13980,7 +14249,7 @@ function RosterRow({ person, user, onChanged }) {
   };
 
   const doResetPin = async () => {
-    const newPin = String(Math.floor(1000 + Math.random() * 9000));
+    const newPin = randomPin();
     const { data } = await supabase.rpc("reset_pin", {
       p_token: user.sessionToken,
       p_person_id: person.id,
@@ -18015,7 +18284,7 @@ function TruckDriverVerifyScreen() {
 // reporting, and the Labor Law QR code that anyone can scan).
 const ALWAYS_PUBLIC_SCREENS = ["emergency", "concern", "laborlaws", "trafficcontrol", "meetingsignin", "orientationsignin", "hsstandards", "orientationschedule", "verifybadge", "truckdriver", "verifytruckdriver"];
 // Normally-gated screens for every project.
-const BASE_GATED_SCREENS = ["forms", "safetyplan", "toolbox", "workplans", "mysubmissions", "quarterlymysubmissions", "summarymysubmissions", "preconsubmissions", "preconstruction", "quarterlymonthly", "training", "meetings", "safetyreports"];
+const BASE_GATED_SCREENS = ["forms", "safetyplan", "toolbox", "workplans", "mysubmissions", "quarterlymysubmissions", "summarymysubmissions", "preconsubmissions", "preconstruction", "quarterlymonthly", "training", "meetings", "safetyreports", "huboverview"];
 // Projects where EVERYTHING (except the always-public screens above)
 // requires a badge — including Home itself.
 const FULLY_GATED_PROJECTS = ["sh99-houston"];
@@ -18229,6 +18498,7 @@ export default function SafetyHubPrototype() {
     personnel: t("personnelLookup"),
     orientation: t("orientation"),
     workplans: t("workPlans"),
+    huboverview: "Hub Overview",
     preconstruction: "Pre-Construction",
     quarterlymonthly: "Quarterly/Monthly Inspections",
     quarterlymysubmissions: "My Quarterly/Monthly Submissions",
@@ -18342,6 +18612,7 @@ export default function SafetyHubPrototype() {
     ...(TRAFFIC_CONTROL_PROJECTS.includes(activeProjectId) ? [{ key: "trafficcontrol", icon: ShieldAlert, label: "Traffic Control" }] : []),
     ...(canSeeSafetyReports(user) ? [{ key: "safetyreports", icon: ShieldAlert, label: "Safety Reports" }] : []),
     ...(user && user.canViewMeetings ? [{ key: "meetings", icon: Users, label: "Meetings" }] : []),
+    ...(user && user.isHubAdmin ? [{ key: "huboverview", icon: BarChart3, label: "Hub Overview" }] : []),
   ];
   const orderedSidebarItems = sortByNavOrder(sidebarItems);
 
@@ -18464,6 +18735,7 @@ export default function SafetyHubPrototype() {
             {screen === "safetyplan" && <SafetyPlanScreen />}
             {screen === "toolbox" && <ToolboxScreen user={user} go={go} activeProjectId={activeProjectId} />}
             {screen === "managetoolbox" && <ManageToolboxScreen user={user} />}
+            {screen === "huboverview" && user && user.isHubAdmin && <HubOverviewScreen user={user} />}
             {screen === "meetings" && <MeetingsScreen user={user} activeProjectId={activeProjectId} initialOpenId={openMeetingId} />}
             {screen === "safetyreports" && <SafetyReportsScreen user={user} activeProjectId={activeProjectId} onOpenMeeting={(id) => { setOpenMeetingId(id); setScreen("meetings"); }} />}
             {screen === "meetingsignin" && <MeetingSignInScreen />}
