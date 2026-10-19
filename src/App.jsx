@@ -18253,6 +18253,15 @@ function TruckDriverAdminCard({ d, user, projectSlug, projectName, onChanged }) 
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const [showBadge, setShowBadge] = useState(false);
+  const [confirmDel, setConfirmDel] = useState(false);
+  const [delErr, setDelErr] = useState("");
+  const doDelete = async () => {
+    setBusy(true); setDelErr("");
+    const { data, error } = await supabase.rpc("delete_truck_driver", { p_token: user.sessionToken, p_id: d.id });
+    setBusy(false);
+    if (error || data !== true) { setDelErr("Could not delete. Run safety-hub-delete-truck-driver.sql in Supabase, or check that you are an admin."); return; }
+    setConfirmDel(false); onChanged();
+  };
   const act = async (action, n) => {
     setBusy(true);
     await supabase.rpc("review_truck_driver", { p_token: user.sessionToken, p_id: d.id, p_action: action, p_notes: n || null });
@@ -18320,6 +18329,25 @@ function TruckDriverAdminCard({ d, user, projectSlug, projectName, onChanged }) 
               {showBadge && <div className="mt-3"><TruckDriverBadgeCard driver={d} projectSlug={projectSlug} projectName={projectName} /></div>}
             </>
           )}
+          <div className="mt-3 pt-3 border-t" style={{ borderColor: "#ECEAE3" }}>
+            {!confirmDel ? (
+              <button onClick={() => setConfirmDel(true)} className={`w-full ${btn} border`} style={{ borderColor: ALERT, color: ALERT, ...mono }}>
+                {d.status === "approved" ? "Delete Badge" : "Delete Driver"}
+              </button>
+            ) : (
+              <div className="rounded-md p-3" style={{ background: "#FCEFEF", border: `1px solid ${ALERT}` }}>
+                <div className="text-[12px] font-bold mb-1" style={{ color: ALERT }}>Delete {d.name}{d.badge_number ? ` (${d.badge_number})` : ""}?</div>
+                <div className="text-[11px] mb-2" style={{ color: INK }}>
+                  {d.status === "approved" ? "This permanently removes the driver and their badge. The badge QR code will stop working. " : "This permanently removes this driver's onboarding record, including their progress, photos and signed form. "}This cannot be undone.
+                </div>
+                {delErr && <div className="text-[11px] mb-2" style={{ color: ALERT }}>{delErr}</div>}
+                <div className="flex gap-2">
+                  <button disabled={busy} onClick={doDelete} className={`flex-1 ${btn} disabled:opacity-50`} style={{ background: ALERT, color: "white", ...mono }}>{busy ? "Deleting..." : "Yes, delete"}</button>
+                  <button disabled={busy} onClick={() => { setConfirmDel(false); setDelErr(""); }} className={`flex-1 ${btn} border`} style={{ borderColor: "#C9C6BC", color: STEEL, background: "white", ...mono }}>Cancel</button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
