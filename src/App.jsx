@@ -896,7 +896,6 @@ const sortByNavOrder = (items) => {
 function LifesavingControlsCard() {
   const mono = { fontFamily: "IBM Plex Mono, monospace" };
   const [open, setOpen] = useState(false);
-  const [hz, setHz] = useState("");
   const criteria = [
     ["It does not depend on a person to work.", "Once in place, it functions without human intervention."],
     ["It is effective even when people make mistakes.", ""],
@@ -935,33 +934,11 @@ function LifesavingControlsCard() {
 
           <div className="text-[9px] uppercase font-bold mb-1.5" style={{ color: STEEL, ...mono }}>Three tiers of control</div>
           <div className="text-[12px] mb-2" style={{ color: "#333" }}>Just as not all hazards are created equal, not all control measures are created equal.</div>
-          <div className="space-y-2 mb-4">
+          <div className="space-y-2">
             {tiers.map(([t, name, color, text]) => (
               <div key={t} className="rounded-md border p-2.5" style={{ borderColor: "#E4E2DA", borderLeft: `4px solid ${color}` }}>
                 <div className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{t}: {name}</div>
                 <div className="text-[12px] mt-0.5 leading-snug" style={{ color: "#333" }}>{text}</div>
-              </div>
-            ))}
-          </div>
-
-          <div className="text-[9px] uppercase font-bold mb-1.5" style={{ color: STEEL, ...mono }}>STKY hazards and their lifesaving controls</div>
-          <div className="space-y-1.5">
-            {Object.keys(LIFE_THREATENING).map((h) => (
-              <div key={h} className="rounded-md border" style={{ borderColor: hz === h ? INK : "#E4E2DA" }}>
-                <button onClick={() => setHz(hz === h ? "" : h)} className="w-full flex items-center justify-between px-2.5 py-2 text-left">
-                  <span className="text-[12px] font-bold">{h}</span>
-                  <ChevronRight size={14} color={STEEL} style={{ transform: hz === h ? "rotate(90deg)" : "none", transition: "transform .15s" }} />
-                </button>
-                {hz === h && (
-                  <div className="px-2.5 pb-2.5 space-y-1">
-                    {LIFE_THREATENING[h].map((c, i) => (
-                      <div key={i} className="flex items-start gap-1.5">
-                        <div className="w-1 h-1 rounded-full mt-1.5 flex-shrink-0" style={{ background: "#2E8B57" }} />
-                        <span className="text-[12px] leading-snug" style={{ color: "#333" }}>{c}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
             ))}
           </div>
