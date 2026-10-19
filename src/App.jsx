@@ -17549,6 +17549,7 @@ const TRUCK_DRIVER_DEFAULTS = {
 };
 const TRUCK_DRIVER_PROJECTS = {
   "nti-sylvania": {
+    videoPathEs: "truck-driver-orientation-nti-sylvania-es.mp4", // Spanish version of the orientation video
     formTitle: "Truck Driver Orientation & Drug Screen Verification",
     certify: "I certify that I completed the NTI Truck Driver Orientation and that I understand and will abide by the requirements set forth in the orientation. I further certify that I successfully completed a drug screen within the past 30 days and that the result was negative.",
     terms: "It is understood that these are minimum requirements and do not preclude any driver from compliance with local, federal or state laws. All drivers must have the orientation badge on their person at all times. Any disregard for local, federal, state laws or NTI policies or procedures may result in corrective action up to and including removal from the project.",
@@ -17566,6 +17567,7 @@ function tdConfig(slug, projectName) {
     ...c,
     admin: c.admin(projectName),
     videoPath: (TRUCK_DRIVER_PROJECTS[slug] && TRUCK_DRIVER_PROJECTS[slug].videoPath) || `truck-driver-orientation-${slug}.mp4`,
+    videoPathEs: (TRUCK_DRIVER_PROJECTS[slug] && TRUCK_DRIVER_PROJECTS[slug].videoPathEs) || "",
     form: {
       title: c.formTitle,
       fields: ["Employee Name", "Contractor", "Date", "Certification", "Minimum Requirements", "Administrative Instruction", "Termination Notice"],
@@ -17743,7 +17745,15 @@ function TruckDriverPhotosStep({ driver, onSaved }) {
 }
 
 function TruckDriverVideoStep({ driver, projectSlug, onUpdated }) {
-  const videoUrl = (supabase.storage.from("documents").getPublicUrl(tdConfig(projectSlug).videoPath).data || {}).publicUrl;
+  const cfg = tdConfig(projectSlug);
+  const hasEs = !!cfg.videoPathEs;
+  const langKey = `safetyhub_td_lang_${driver.id}`;
+  const started = (driver.video_seconds || 0) > 5 || !!driver.video_done;
+  // Language is chosen before starting. Once the video has been started it stays in that language so progress stays accurate.
+  const [lang, setLang] = useState(() => { try { const v = localStorage.getItem(langKey); return hasEs && v === "es" ? "es" : "en"; } catch (e) { return "en"; } });
+  const [chosen, setChosen] = useState(() => started || (() => { try { return !!localStorage.getItem(langKey); } catch (e) { return false; } })());
+  const es = lang === "es";
+  const videoUrl = (supabase.storage.from("documents").getPublicUrl(es ? cfg.videoPathEs : cfg.videoPath).data || {}).publicUrl;
   const vref = useRef(null);
   const maxRef = useRef(driver.video_seconds || 0);
   const lastReport = useRef(0);
@@ -17756,14 +17766,28 @@ function TruckDriverVideoStep({ driver, projectSlug, onUpdated }) {
     const { data } = await supabase.rpc("td_video_progress", { p_id: driver.id, p_seconds: Math.floor(maxRef.current), p_duration: Math.floor(v.duration), p_completed: !!completed });
     if (data) { if (data.video_done) setDone(true); onUpdated(data); }
   };
+  if (hasEs && !chosen) {
+    const pick = (l) => { setLang(l); setChosen(true); try { localStorage.setItem(langKey, l); } catch (e) { /* ignore */ } };
+    return (
+      <div>
+        <div className="text-[13px] mb-1" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>Choose your language / Elija su idioma</div>
+        <div className="text-[12px] mb-3" style={{ color: STEEL }}>Which language do you want the orientation video in? / ¿En qué idioma quiere ver el video de orientación?</div>
+        <div className="flex gap-2">
+          <button onClick={() => pick("en")} className="flex-1 rounded-md py-4 text-[14px] font-bold" style={{ background: GOLD, color: INK, fontFamily: "Oswald, sans-serif" }}>English</button>
+          <button onClick={() => pick("es")} className="flex-1 rounded-md py-4 text-[14px] font-bold" style={{ background: GOLD, color: INK, fontFamily: "Oswald, sans-serif" }}>Español</button>
+        </div>
+      </div>
+    );
+  }
   return (
     <div>
-      <div className="text-[12px] mb-2" style={{ color: STEEL }}>Watch the full safety video (about 20 minutes). You cannot skip ahead. If you leave, come back with your resume code and it picks up where you stopped.</div>
+      {hasEs && <div className="text-[10px] font-bold uppercase mb-1.5" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{es ? "Idioma: Español" : "Language: English"}{!started && maxRef.current <= 5 && (<button onClick={() => setChosen(false)} className="ml-2 underline normal-case">{es ? "cambiar / change" : "change / cambiar"}</button>)}</div>}
+      <div className="text-[12px] mb-2" style={{ color: STEEL }}>{es ? "Mire el video completo de seguridad (unos 25 minutos). No puede adelantar. Si sale, regrese con su código y continuará donde se quedó." : "Watch the full safety video (about 20 minutes). You cannot skip ahead. If you leave, come back with your resume code and it picks up where you stopped."}</div>
       {failed ? (
         <div className="rounded-md p-3 text-[12px]" style={{ background: "#FCEFEF", color: ALERT }}>The training video is not available yet. Please check back soon.</div>
       ) : (
         <video
-          ref={vref} src={videoUrl} controls playsInline preload="metadata" controlsList="nodownload noplaybackrate" disablePictureInPicture
+          key={videoUrl} ref={vref} src={videoUrl} controls playsInline preload="metadata" controlsList="nodownload noplaybackrate" disablePictureInPicture
           className="w-full rounded-md bg-black" style={{ aspectRatio: "16 / 9" }}
           onError={() => setFailed(true)}
           onLoadedMetadata={(e) => { const v = e.currentTarget; if (!done && maxRef.current > 5 && maxRef.current < v.duration - 2) v.currentTime = maxRef.current; }}
@@ -17780,7 +17804,7 @@ function TruckDriverVideoStep({ driver, projectSlug, onUpdated }) {
         />
       )}
       <div className="mt-2 h-2 rounded-full overflow-hidden" style={{ background: "#E4E2DA" }}><div style={{ width: `${done ? 100 : pct}%`, height: "100%", background: done ? "#2E7D32" : GOLD }} /></div>
-      <div className="text-[11px] mt-1 font-bold" style={{ color: done ? "#2E7D32" : STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{done ? "Video completed" : `${pct}% watched - watch to the end to finish`}</div>
+      <div className="text-[11px] mt-1 font-bold" style={{ color: done ? "#2E7D32" : STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{done ? (es ? "Video completado" : "Video completed") : (es ? `${pct}% visto - mírelo hasta el final para terminar` : `${pct}% watched - watch to the end to finish`)}</div>
     </div>
   );
 }
@@ -18106,7 +18130,9 @@ function TruckSessionCard({ ss, projectSlug, onConfirm, onCancel, onChanged }) {
   const sel = new Set(att.filter((a) => !a.video_done && !excluded.has(a.id)).map((a) => a.id));
   const [busy, setBusy] = useState(false);
   const mono = { fontFamily: "IBM Plex Mono, monospace" };
-  const videoUrl = (supabase.storage.from("documents").getPublicUrl(tdConfig(projectSlug).videoPath).data || {}).publicUrl;
+  const [roomLang, setRoomLang] = useState("en");
+  const tdc = tdConfig(projectSlug);
+  const videoUrl = (supabase.storage.from("documents").getPublicUrl(roomLang === "es" && tdc.videoPathEs ? tdc.videoPathEs : tdc.videoPath).data || {}).publicUrl;
   const confirm = async () => {
     if (!window.confirm(`Confirm the full orientation video was shown to the room? ${sel.size} driver(s) will be credited with watching it.`)) return;
     setBusy(true);
@@ -18135,7 +18161,12 @@ function TruckSessionCard({ ss, projectSlug, onConfirm, onCancel, onChanged }) {
             <div className="flex gap-2 mt-1 flex-wrap">
               <button onClick={() => { try { navigator.clipboard.writeText(link); } catch (e) { /* ignore */ } }} className="text-[10px] font-bold uppercase px-2 py-1 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, ...mono }}>Copy link</button>
               {qr && <a href={qr} download={`truck-session-${ss.code}.png`} className="text-[10px] font-bold uppercase px-2 py-1 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, ...mono }}>QR</a>}
-              <button onClick={() => window.open(videoUrl, "_blank")} className="text-[10px] font-bold uppercase px-2 py-1 rounded-sm" style={{ background: GOLD, color: INK, ...mono }}>Open video for room</button>
+              {tdc.videoPathEs && (
+                <span className="inline-flex rounded-sm overflow-hidden border" style={{ borderColor: "#C9C6BC" }}>
+                  {[["en", "English"], ["es", "Español"]].map(([k, l]) => <button key={k} onClick={() => setRoomLang(k)} className="text-[10px] font-bold uppercase px-2 py-1" style={{ background: roomLang === k ? INK : "white", color: roomLang === k ? GOLD : STEEL, ...mono }}>{l}</button>)}
+                </span>
+              )}
+              <button onClick={() => window.open(videoUrl, "_blank")} className="text-[10px] font-bold uppercase px-2 py-1 rounded-sm" style={{ background: GOLD, color: INK, ...mono }}>Open video for room{tdc.videoPathEs ? (roomLang === "es" ? " (ES)" : " (EN)") : ""}</button>
             </div>
           </div>
         </div>
