@@ -13655,6 +13655,7 @@ function hubRangeDates(key) {
   if (key === "year") return [iso(new Date(now.getFullYear(), 0, 1)), null];
   return [null, null];
 }
+const HUB_TABS = [["overview", "Overview"], ["orientation", "Orientation"], ["precon", "Pre-Construction"], ["forms", "Site Safety Forms"], ["quarterly", "Quarterly/Monthly"], ["workplans", "Work Plans"], ["toolbox", "Toolbox Talks"], ["trucks", "Truck Drivers"], ["personnel", "Personnel Lookup"], ["meetings", "Meetings"], ["training", "Training Portal"]];
 const HUB_PROJECT_COLORS = ["#C9A227", "#3B6EA5", "#2E8B57", "#8E5BA8", "#C0392B"];
 
 function HubBars({ items, color = GOLD, labelW = 110 }) {
@@ -13680,6 +13681,7 @@ function HubOverviewScreen({ user }) {
   const [state, setState] = useState("loading"); // loading | ok | denied
   const [subQuery, setSubQuery] = useState("");
   const [qualPick, setQualPick] = useState("");
+  const [tab, setTab] = useState("overview");
 
   const load = async (silent) => {
     if (silent !== true) setState("loading");
@@ -13701,6 +13703,9 @@ function HubOverviewScreen({ user }) {
   const siteForms = formsAll.filter((r) => r.category === "forms");
   const quarterly = formsAll.filter((r) => r.category === "quarterly");
   const orientForms = formsAll.filter((r) => r.category === "orientation");
+  const preconForms = formsAll.filter((r) => r.category === "preconstruction" || r.category === "safetysummary");
+  const trAssign = (d.training_assign || []).filter(keep);
+  const trCerts = (d.training_certs || []).filter(keep);
   const wplans = (d.workplans || []).filter(keep);
   const toolbox = (d.toolbox || []).filter(keep);
   const trucks = (d.trucks || []).filter(keep);
@@ -13757,6 +13762,9 @@ function HubOverviewScreen({ user }) {
   quals.filter((r) => r.label === pickedQual).forEach((r) => { const e = qualEmployers[r.employer] || (qualEmployers[r.employer] = { name: r.employer, current: 0, expiring: 0, expired: 0 }); e[r.status] += Number(r.n); });
   const qualEmpRows = Object.values(qualEmployers).sort((a, b) => (b.current + b.expiring + b.expired) - (a.current + a.expiring + a.expired));
 
+  const mergeTr = (keyFn) => { const m = {}; trAssign.forEach((r) => { const k = keyFn(r); const o = m[k] || (m[k] = { title: k, name: k, assigned: 0, completed: 0, in_progress: 0 }); o.assigned += Number(r.n); o.completed += Number(r.completed); o.in_progress += Number(r.in_progress); }); return Object.values(m).sort((a, b) => b.assigned - a.assigned); };
+  const trCourses = mergeTr((r) => r.title);
+  const trCompanies = mergeTr((r) => r.employer);
   const trucksByStatus = group(trucks, (r) => r.status || "unknown");
   const meetingsN = sum(meetings.map((m) => ({ n: m.meetings })));
   const attendeesN = sum(meetings.map((m) => ({ n: m.attendees })));
@@ -13796,112 +13804,201 @@ function HubOverviewScreen({ user }) {
         ))}
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
-        <Tile label="Orientation sign-ins" value={sum(orient)} sub={`${orientUs} NTI/Ferrovial · ${sum(orient) - orientUs} subs`} />
-        <Tile label="Site safety forms" value={sum(siteForms)} sub={`${new Set(siteForms.map((r) => r.title)).size} different forms`} />
-        <Tile label="Quarterly / monthly" value={sum(quarterly)} />
-        <Tile label="Toolbox confirmations" value={sum(toolbox)} />
-        <Tile label="Work plans on file" value={sum(wplans)} sub={`${new Set(wplans.map((r) => r.employer.toLowerCase())).size} companies`} />
-        <Tile label="Truck driver orientations" value={sum(trucks)} />
-        <Tile label="People on file" value={sum(people)} sub={`${sum(people.filter((r) => usEmp(r.employer)))} NTI/Ferrovial`} />
-        <Tile label="Meeting sign-ins" value={attendeesN} sub={`${meetingsN} meetings`} />
+      <div className="flex gap-1.5 overflow-x-auto pb-1 mb-3 border-b" style={{ borderColor: "#E4E2DA" }}>
+        {HUB_TABS.map(([k, l]) => (
+          <button key={k} onClick={() => setTab(k)} className="text-[11px] font-bold uppercase px-3 py-2 flex-shrink-0 whitespace-nowrap" style={{ color: tab === k ? INK : STEEL, borderBottom: tab === k ? `3px solid ${GOLD}` : "3px solid transparent", ...mono }}>{l}</button>
+        ))}
       </div>
 
-      {!proj && (
-        <Card title="By project">
+      {tab === "overview" && (<>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+          <Tile label="Orientation sign-ins" value={sum(orient)} sub={`${orientUs} NTI/Ferrovial · ${sum(orient) - orientUs} subs`} />
+          <Tile label="Site safety forms" value={sum(siteForms)} sub={`${new Set(siteForms.map((r) => r.title)).size} different forms`} />
+          <Tile label="Quarterly / monthly" value={sum(quarterly)} />
+          <Tile label="Toolbox confirmations" value={sum(toolbox)} />
+          <Tile label="Work plans on file" value={sum(wplans)} sub={`${new Set(wplans.map((r) => r.employer.toLowerCase())).size} companies`} />
+          <Tile label="Truck driver orientations" value={sum(trucks)} />
+          <Tile label="People on file" value={sum(people)} sub={`${sum(people.filter((r) => usEmp(r.employer)))} NTI/Ferrovial`} />
+          <Tile label="Meeting sign-ins" value={attendeesN} sub={`${meetingsN} meetings`} />
+        </div>
+        {!proj && (
+          <Card title="By project">
+            <div className="overflow-x-auto">
+              <table className="w-full text-[11px]">
+                <thead><tr style={{ color: STEEL }}>{["Project", "Orient.", "Forms", "Qtr/Mo", "Plans", "Toolbox", "Trucks", "People"].map((h, i) => <th key={h} className={`py-1 ${i ? "text-right px-1.5" : "text-left"} font-bold`} style={mono}>{h}</th>)}</tr></thead>
+                <tbody>{perProject.map((p) => (
+                  <tr key={p.slug} className="border-t" style={{ borderColor: "#ECEAE3" }}>
+                    <td className="py-1.5 pr-2">{projName(p.slug)}</td>
+                    {[p.orient, p.forms, p.quarterly, p.plans, p.toolbox, p.trucks, p.people].map((v, i) => <td key={i} className="text-right px-1.5 font-bold">{v}</td>)}
+                  </tr>))}</tbody>
+              </table>
+            </div>
+          </Card>
+        )}
+        <Card title="By company" right={<button onClick={exportSubs} className="text-[10px] font-bold uppercase px-2.5 py-1 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, ...mono }}>Export CSV</button>}>
+          <input value={subQuery} onChange={(e) => setSubQuery(e.target.value)} placeholder="Search companies" className="w-full rounded-md border px-3 py-2 text-[13px] mb-2" style={{ borderColor: "#C9C6BC" }} />
           <div className="overflow-x-auto">
             <table className="w-full text-[11px]">
-              <thead><tr style={{ color: STEEL }}>{["Project", "Orient.", "Forms", "Qtr/Mo", "Plans", "Toolbox", "Trucks", "People"].map((h, i) => <th key={h} className={`py-1 ${i ? "text-right px-1.5" : "text-left"} font-bold`} style={mono}>{h}</th>)}</tr></thead>
-              <tbody>{perProject.map((p) => (
-                <tr key={p.slug} className="border-t" style={{ borderColor: "#ECEAE3" }}>
-                  <td className="py-1.5 pr-2">{projName(p.slug)}</td>
-                  {[p.orient, p.forms, p.quarterly, p.plans, p.toolbox, p.trucks, p.people].map((v, i) => <td key={i} className="text-right px-1.5 font-bold">{v}</td>)}
+              <thead><tr style={{ color: STEEL }}><th className="text-left py-1 font-bold" style={mono}>Company</th>{subCols.map(([l]) => <th key={l} className="text-right px-1.5 font-bold" style={mono}>{l}</th>)}</tr></thead>
+              <tbody>{subRows.map((r) => (
+                <tr key={r.name} className="border-t" style={{ borderColor: "#ECEAE3" }}>
+                  <td className="py-1.5 pr-2 min-w-[110px]">{r.name}</td>
+                  {subCols.map(([l, k]) => <td key={l} className="text-right px-1.5" style={{ fontWeight: r[k] ? 700 : 400, color: r[k] ? INK : "#B5B2A8" }}>{r[k]}</td>)}
                 </tr>))}</tbody>
             </table>
+            {subRows.length === 0 && none}
           </div>
         </Card>
-      )}
+      </>)}
 
-      <Card title="Orientation sign-ins per week">
-        {weekRows.length ? <HubBars items={weekRows} labelW={92} /> : none}
-        {orient.length > 0 && <div className="text-[11px] mt-2" style={{ color: STEEL }}>{orientUs} from NTI/Ferrovial employees, {sum(orient) - orientUs} from subcontractors.</div>}
-      </Card>
-
-      <Card title="Orientation sign-ins by company">
-        {orient.length ? <HubBars items={group(orient, (r) => r.employer).slice(0, 15)} /> : none}
-      </Card>
-
-      <Card title="By company" right={<button onClick={exportSubs} className="text-[10px] font-bold uppercase px-2.5 py-1 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, ...mono }}>Export CSV</button>}>
-        <input value={subQuery} onChange={(e) => setSubQuery(e.target.value)} placeholder="Search companies" className="w-full rounded-md border px-3 py-2 text-[13px] mb-2" style={{ borderColor: "#C9C6BC" }} />
-        <div className="overflow-x-auto">
-          <table className="w-full text-[11px]">
-            <thead><tr style={{ color: STEEL }}><th className="text-left py-1 font-bold" style={mono}>Company</th>{subCols.map(([l]) => <th key={l} className="text-right px-1.5 font-bold" style={mono}>{l}</th>)}</tr></thead>
-            <tbody>{subRows.map((r) => (
-              <tr key={r.name} className="border-t" style={{ borderColor: "#ECEAE3" }}>
-                <td className="py-1.5 pr-2 min-w-[110px]">{r.name}</td>
-                {subCols.map(([l, k]) => <td key={l} className="text-right px-1.5" style={{ fontWeight: r[k] ? 700 : 400, color: r[k] ? INK : "#B5B2A8" }}>{r[k]}</td>)}
-              </tr>))}</tbody>
-          </table>
-          {subRows.length === 0 && none}
+      {tab === "orientation" && (<>
+        <div className="grid grid-cols-3 gap-2 mb-3">
+          <Tile label="Sign-ins" value={sum(orient)} />
+          <Tile label="NTI / Ferrovial" value={orientUs} />
+          <Tile label="Subcontractors" value={sum(orient) - orientUs} />
         </div>
-      </Card>
+        {!proj && <Card title="By project">{orient.length ? <HubBars items={group(orient, (r) => projName(r.project))} /> : none}</Card>}
+        <Card title="Sign-ins per week">{weekRows.length ? <HubBars items={weekRows} labelW={92} /> : none}</Card>
+        <Card title="Sign-ins by company">{orient.length ? <HubBars items={group(orient, (r) => r.employer).slice(0, 20)} /> : none}</Card>
+        <Card title="Orientation forms submitted">{orientForms.length ? <HubBars items={group(orientForms, (r) => r.title).slice(0, 15)} labelW={150} /> : none}</Card>
+      </>)}
 
-      <Card title="Site safety forms submitted">
-        {siteForms.length ? <HubBars items={group(siteForms, (r) => r.title).slice(0, 20)} labelW={150} /> : none}
-      </Card>
+      {tab === "precon" && (<>
+        <Tile label="Submitted" value={sum(preconForms)} />
+        {!proj && <Card title="By project">{preconForms.length ? <HubBars items={group(preconForms, (r) => projName(r.project))} /> : none}</Card>}
+        <Card title="By document">{preconForms.length ? <HubBars items={group(preconForms, (r) => r.title)} labelW={150} /> : none}</Card>
+        <Card title="By company">{preconForms.length ? <HubBars items={group(preconForms, (r) => r.employer).slice(0, 20)} /> : none}</Card>
+      </>)}
 
-      <Card title="Quarterly / monthly inspections">
-        {quarterly.length ? <HubBars items={group(quarterly, (r) => r.title)} labelW={150} /> : none}
-      </Card>
+      {tab === "forms" && (<>
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          <Tile label="Forms submitted" value={sum(siteForms)} />
+          <Tile label="Different forms" value={new Set(siteForms.map((r) => r.title)).size} />
+        </div>
+        {!proj && <Card title="By project">{siteForms.length ? <HubBars items={group(siteForms, (r) => projName(r.project))} /> : none}</Card>}
+        <Card title="How many of each form">{siteForms.length ? <HubBars items={group(siteForms, (r) => r.title).slice(0, 25)} labelW={150} /> : none}</Card>
+        <Card title="By company">{siteForms.length ? <HubBars items={group(siteForms, (r) => r.employer).slice(0, 20)} /> : none}</Card>
+      </>)}
 
-      <Card title="Work plans per company">
-        {wplans.length ? <HubBars items={group(wplans, (r) => r.employer).slice(0, 20)} /> : none}
-      </Card>
+      {tab === "quarterly" && (<>
+        <Tile label="Inspections submitted" value={sum(quarterly)} />
+        {!proj && <Card title="By project">{quarterly.length ? <HubBars items={group(quarterly, (r) => projName(r.project))} /> : none}</Card>}
+        <Card title="By inspection">{quarterly.length ? <HubBars items={group(quarterly, (r) => r.title)} labelW={150} /> : none}</Card>
+        <Card title="By company">{quarterly.length ? <HubBars items={group(quarterly, (r) => r.employer).slice(0, 20)} /> : none}</Card>
+      </>)}
 
-      <Card title="Toolbox talk confirmations">
-        {toolbox.length ? (<>
-          <HubBars items={group(toolbox, (r) => r.label).slice(0, 10)} labelW={150} />
-          <div className="text-[11px] font-bold uppercase mt-3 mb-1" style={{ color: STEEL, ...mono }}>By company</div>
-          <HubBars items={group(toolbox, (r) => r.employer).slice(0, 10)} />
-        </>) : none}
-      </Card>
+      {tab === "workplans" && (<>
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          <Tile label="Work plans on file" value={sum(wplans)} />
+          <Tile label="Companies" value={new Set(wplans.map((r) => r.employer.toLowerCase())).size} />
+        </div>
+        {!proj && <Card title="By project">{wplans.length ? <HubBars items={group(wplans, (r) => projName(r.project))} /> : none}</Card>}
+        <Card title="Work plans per company">{wplans.length ? <HubBars items={group(wplans, (r) => r.employer).slice(0, 30)} /> : none}</Card>
+      </>)}
 
-      <Card title="Truck driver orientations">
-        {trucks.length ? (<>
-          <div className="flex flex-wrap gap-1.5 mb-2">{trucksByStatus.map((s) => <span key={s.label} className="text-[10px] font-bold uppercase px-2 py-1 rounded-sm" style={{ background: "#F4F3EF", ...mono }}>{s.label.replace("_", " ")}: {s.n}</span>)}</div>
-          <HubBars items={group(trucks, (r) => r.employer).slice(0, 15)} />
-        </>) : none}
-      </Card>
+      {tab === "toolbox" && (<>
+        <Tile label="Confirmations" value={sum(toolbox)} />
+        {!proj && <Card title="By project">{toolbox.length ? <HubBars items={group(toolbox, (r) => projName(r.project))} /> : none}</Card>}
+        <Card title="By talk">{toolbox.length ? <HubBars items={group(toolbox, (r) => r.label).slice(0, 15)} labelW={150} /> : none}</Card>
+        <Card title="By company">{toolbox.length ? <HubBars items={group(toolbox, (r) => r.employer).slice(0, 20)} /> : none}</Card>
+      </>)}
 
-      <Card title="Training and qualifications on file">
-        {qualLabels.length === 0 ? none : (<>
-          <div className="space-y-1.5 mb-3">
-            {qualLabels.slice(0, 15).map((q) => {
-              const s = qualByStatus(q.label); const tot = s.current + s.expiring + s.expired;
-              return (
-                <button key={q.label} onClick={() => setQualPick(q.label)} className="w-full text-left rounded-md border px-2.5 py-2" style={{ borderColor: pickedQual === q.label ? INK : "#E4E2DA" }}>
-                  <div className="flex justify-between text-[12px]"><span className="truncate">{q.label}</span><span className="font-bold">{tot}</span></div>
-                  <div className="flex h-1.5 rounded-sm overflow-hidden mt-1.5" style={{ background: "#ECEAE3" }}>
-                    {["current", "expiring", "expired"].map((k) => s[k] ? <div key={k} style={{ width: `${(s[k] / tot) * 100}%`, background: TRAIN_STATUS[k].color }} /> : null)}
-                  </div>
-                  <div className="text-[10px] mt-1" style={{ color: STEEL }}>{s.current} current · {s.expiring} expiring · {s.expired} expired</div>
-                </button>
-              );
-            })}
+      {tab === "trucks" && (<>
+        <Tile label="Truck driver orientations" value={sum(trucks)} />
+        {trucks.length > 0 && <div className="flex flex-wrap gap-1.5 my-3">{trucksByStatus.map((s) => <span key={s.label} className="text-[10px] font-bold uppercase px-2 py-1 rounded-sm" style={{ background: "white", border: "1px solid #E4E2DA", ...mono }}>{s.label.replace("_", " ")}: {s.n}</span>)}</div>}
+        {!proj && <Card title="By project">{trucks.length ? <HubBars items={group(trucks, (r) => projName(r.project))} /> : none}</Card>}
+        <Card title="By company">{trucks.length ? <HubBars items={group(trucks, (r) => r.employer).slice(0, 20)} /> : none}</Card>
+      </>)}
+
+      {tab === "personnel" && (<>
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          <Tile label="People on file" value={sum(people)} />
+          <Tile label="NTI / Ferrovial" value={sum(people.filter((r) => usEmp(r.employer)))} />
+        </div>
+        {!proj && <Card title="People by project">{people.length ? <HubBars items={group(people, (r) => projName(r.project))} /> : none}</Card>}
+        <Card title="People per company">{people.length ? <HubBars items={group(people, (r) => r.employer).slice(0, 25)} /> : none}</Card>
+        <Card title="Training and qualifications on file">
+          {qualLabels.length === 0 ? none : (<>
+            <div className="space-y-1.5 mb-3">
+              {qualLabels.slice(0, 20).map((q) => {
+                const st = qualByStatus(q.label); const tot = st.current + st.expiring + st.expired;
+                return (
+                  <button key={q.label} onClick={() => setQualPick(q.label)} className="w-full text-left rounded-md border px-2.5 py-2" style={{ borderColor: pickedQual === q.label ? INK : "#E4E2DA" }}>
+                    <div className="flex justify-between text-[12px]"><span className="truncate">{q.label}</span><span className="font-bold">{tot}</span></div>
+                    <div className="flex h-1.5 rounded-sm overflow-hidden mt-1.5" style={{ background: "#ECEAE3" }}>
+                      {["current", "expiring", "expired"].map((k) => st[k] ? <div key={k} style={{ width: `${(st[k] / tot) * 100}%`, background: TRAIN_STATUS[k].color }} /> : null)}
+                    </div>
+                    <div className="text-[10px] mt-1" style={{ color: STEEL }}>{st.current} current · {st.expiring} expiring · {st.expired} expired</div>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="text-[11px] font-bold uppercase mb-1" style={{ color: STEEL, ...mono }}>{pickedQual} by company</div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-[11px]">
+                <thead><tr style={{ color: STEEL }}><th className="text-left py-1 font-bold" style={mono}>Company</th>{["current", "expiring", "expired"].map((k) => <th key={k} className="text-right px-1.5 font-bold" style={{ ...mono, color: TRAIN_STATUS[k].color }}>{TRAIN_STATUS[k].label}</th>)}</tr></thead>
+                <tbody>{qualEmpRows.map((r) => (
+                  <tr key={r.name} className="border-t" style={{ borderColor: "#ECEAE3" }}>
+                    <td className="py-1.5 pr-2">{r.name}</td>
+                    {["current", "expiring", "expired"].map((k) => <td key={k} className="text-right px-1.5 font-bold">{r[k] || 0}</td>)}
+                  </tr>))}</tbody>
+              </table>
+            </div>
+          </>)}
+        </Card>
+      </>)}
+
+      {tab === "meetings" && (<>
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          <Tile label="Meetings and trainings" value={meetingsN} />
+          <Tile label="Sign-ins" value={attendeesN} />
+        </div>
+        <Card title="By project and type">
+          {meetings.length ? <HubBars items={meetings.map((m) => ({ label: `${projName(m.project)} · ${m.kind}`, n: Number(m.attendees) }))} labelW={150} /> : none}
+          <div className="text-[11px] mt-2" style={{ color: STEEL }}>Bars show sign-ins; {meetingsN} meetings in this period.</div>
+        </Card>
+      </>)}
+
+      {tab === "training" && (<>
+        <div className="grid grid-cols-3 gap-2 mb-3">
+          <Tile label="Assigned" value={sum(trAssign)} />
+          <Tile label="Completed" value={sum(trAssign.map((r) => ({ n: r.completed })))} />
+          <Tile label="In progress" value={sum(trAssign.map((r) => ({ n: r.in_progress })))} />
+        </div>
+        <Card title="Certificates issued">
+          <div className="grid grid-cols-3 gap-2 mb-2">
+            <Tile label="Total" value={sum(trCerts)} />
+            <Tile label="Current" value={sum(trCerts.filter((r) => r.status === "current"))} />
+            <Tile label="Expired" value={sum(trCerts.filter((r) => r.status === "expired"))} />
           </div>
-          <div className="text-[11px] font-bold uppercase mb-1" style={{ color: STEEL, ...mono }}>{pickedQual} by company</div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-[11px]">
-              <thead><tr style={{ color: STEEL }}><th className="text-left py-1 font-bold" style={mono}>Company</th>{["current", "expiring", "expired"].map((k) => <th key={k} className="text-right px-1.5 font-bold" style={{ ...mono, color: TRAIN_STATUS[k].color }}>{TRAIN_STATUS[k].label}</th>)}</tr></thead>
-              <tbody>{qualEmpRows.map((r) => (
-                <tr key={r.name} className="border-t" style={{ borderColor: "#ECEAE3" }}>
-                  <td className="py-1.5 pr-2">{r.name}</td>
-                  {["current", "expiring", "expired"].map((k) => <td key={k} className="text-right px-1.5 font-bold">{r[k] || 0}</td>)}
+          {trCerts.length ? <HubBars items={group(trCerts, (r) => r.title).slice(0, 15)} labelW={150} /> : none}
+        </Card>
+        {!proj && <Card title="Completed by project">{trAssign.length ? <HubBars items={group(trAssign.map((r) => ({ ...r, n: r.completed })), (r) => projName(r.project))} /> : none}</Card>}
+        <Card title="By course">
+          {trCourses.length === 0 ? none : (
+            <div className="overflow-x-auto"><table className="w-full text-[11px]">
+              <thead><tr style={{ color: STEEL }}><th className="text-left py-1 font-bold" style={mono}>Course</th>{["Assigned", "Done", "In prog."].map((h) => <th key={h} className="text-right px-1.5 font-bold" style={mono}>{h}</th>)}</tr></thead>
+              <tbody>{trCourses.map((c) => (
+                <tr key={c.title} className="border-t" style={{ borderColor: "#ECEAE3" }}>
+                  <td className="py-1.5 pr-2">{c.title}</td>
+                  <td className="text-right px-1.5 font-bold">{c.assigned}</td><td className="text-right px-1.5 font-bold" style={{ color: TRAIN_STATUS.current.color }}>{c.completed}</td><td className="text-right px-1.5 font-bold">{c.in_progress}</td>
                 </tr>))}</tbody>
-            </table>
-          </div>
-        </>)}
-      </Card>
+            </table></div>
+          )}
+        </Card>
+        <Card title="By company">
+          {trCompanies.length === 0 ? none : (
+            <div className="overflow-x-auto"><table className="w-full text-[11px]">
+              <thead><tr style={{ color: STEEL }}><th className="text-left py-1 font-bold" style={mono}>Company</th>{["Assigned", "Done", "In prog."].map((h) => <th key={h} className="text-right px-1.5 font-bold" style={mono}>{h}</th>)}</tr></thead>
+              <tbody>{trCompanies.map((c) => (
+                <tr key={c.name} className="border-t" style={{ borderColor: "#ECEAE3" }}>
+                  <td className="py-1.5 pr-2">{c.name}</td>
+                  <td className="text-right px-1.5 font-bold">{c.assigned}</td><td className="text-right px-1.5 font-bold" style={{ color: TRAIN_STATUS.current.color }}>{c.completed}</td><td className="text-right px-1.5 font-bold">{c.in_progress}</td>
+                </tr>))}</tbody>
+            </table></div>
+          )}
+        </Card>
+      </>)}
     </div>
   );
 }
