@@ -4400,7 +4400,7 @@ function PreOrientationFormStep({ form, projectId, activeProjectId, scheduleId, 
       {form.requiresLogo && (
         <div className="mb-3">
           <label className="text-[10px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>
-            {form.logoOptional ? "Company Logo (optional)" : <>Company Logo or Letterhead <span style={{ color: ALERT }}>*</span></>}
+            {form.logoOptional ? "Company Logo" : <>Company Logo or Letterhead <span style={{ color: ALERT }}>*</span></>}
           </label>
           <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => {
             const f = e.target.files && e.target.files[0];
@@ -4421,7 +4421,6 @@ function PreOrientationFormStep({ form, projectId, activeProjectId, scheduleId, 
             <button onClick={() => logoInputRef.current && logoInputRef.current.click()} className="w-full mt-1 rounded-md border-2 border-dashed py-3 flex flex-col items-center gap-1" style={{ borderColor: "#C9C6BC" }}>
               <ImagePlus size={18} color={STEEL} />
               <span className="text-[11px]" style={{ color: STEEL }}>Upload your company logo</span>
-                  {form.logoOptional && <span className="text-[10px]" style={{ color: STEEL }}>No logo? Your company name and address will be used as the letterhead.</span>}
             </button>
           )}
         </div>
@@ -12125,7 +12124,7 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
           {form.requiresLogo && (
             <div className="mb-4">
               <label className="text-[11px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>
-                {form.logoOptional ? "Company Logo (optional)" : <>Company Logo or Letterhead <span style={{ color: ALERT }}>*</span></>}
+                {form.logoOptional ? "Company Logo" : <>Company Logo or Letterhead <span style={{ color: ALERT }}>*</span></>}
               </label>
               <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => {
                 const f = e.target.files && e.target.files[0];
@@ -12146,7 +12145,6 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
                 <button onClick={() => logoInputRef.current && logoInputRef.current.click()} className="w-full mt-1 rounded-md border-2 border-dashed py-3 flex flex-col items-center gap-1" style={{ borderColor: "#C9C6BC" }}>
                   <ImagePlus size={18} color={STEEL} />
                   <span className="text-[11px]" style={{ color: STEEL }}>Upload your company logo</span>
-                  {form.logoOptional && <span className="text-[10px]" style={{ color: STEEL }}>No logo? Your company name and address will be used as the letterhead.</span>}
                 </button>
               )}
             </div>
