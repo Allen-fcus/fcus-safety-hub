@@ -1846,13 +1846,12 @@ function srRequiredForms(c, forms) {
   const list = [{ type: "incident_report", need: "required", why: "Every event starts with an Incident Report." }];
   const witness = c.injury || c.incident_type === "MVA" || c.incident_type === "Utility Strike" || c.hipo || c.near_miss;
   list.push({ type: "employee_statement", need: witness ? "recommended" : "optional", why: "Complete one for each employee or witness involved. Attach to the Investigation Report." });
-  if (c.near_miss || c.hipo || c.injury) list.push({ type: "cority_entry", need: "required", why: "Near Miss, HiPo and injury events are entered in Cority. This checklist walks through it." });
   list.push({ type: "investigation_report", need: severe ? "required" : "optional",
     why: c.hipo ? "HiPo events need an investigation to be completed." : severe ? "Injury / recordable / SIF events require a completed investigation with corrective actions." : "Complete after the investigation meeting to record root causes and corrective actions." });
   const major = c.hipo || c.sif || c.fatality;
   const notable = major || c.lost_time || c.recordable || c.near_miss;
   list.push({ type: "sir", need: major ? "required" : (c.lost_time || c.recordable ? "recommended" : "optional"),
-    why: major ? "HiPo, SIF and fatality events are reported to Ferrovial on a Significant Incident Report. Attach it to the Cority entry." : "Used for the Ferrovial weekly significant incidents report when the event is serious enough." });
+    why: major ? "HiPo, SIF and fatality events are reported to Ferrovial on a Significant Incident Report." : "Used for the Ferrovial weekly significant incidents report when the event is serious enough." });
   list.push({ type: "eir", need: major ? "required" : (c.lost_time || c.recordable ? "recommended" : "optional"),
     why: "Presented after the investigation is complete: overview, findings and what we are doing differently." });
   list.push({ type: "lesson_learned", need: major ? "required" : (notable ? "recommended" : "optional"),
@@ -2091,7 +2090,7 @@ function srSchemaBase(type, ctx) {
         { k: "lifesavingNote", l: "If yes, indicate the preventive, mitigating or alternative control measure used. If no, indicate the control measures that could allow future fail-safe outcomes.", t: "textarea", full: true },
         { k: "_l", t: "info", l: "Lifesaving controls do not depend on people, are effective when people make mistakes, and prevent or mitigate high energy, life-threatening exposures." },
       ] },
-      { title: "HiPo corrective action (Cority requires at least one per HiPo)", fields: [
+      { title: "HiPo corrective action", fields: [
         { k: "ca1", l: "Category 1", t: "select", opts: SR_SIR.corrective }, { k: "ca2", l: "Category 2", t: "select", opts: SR_SIR.corrective },
         { k: "caText", l: "Describe the corrective action(s)", t: "textarea", full: true },
               ] },
@@ -2928,7 +2927,7 @@ function SrCaseView({ user, activeProjectId, projectName, caseId, onBack, onOpen
   const injuryCase = live.injury || live.incident_type === "MVA" || live.incident_type === "Injury / Illness";
   const sifAlert = live.fatality || live.sif;
   const escalated = !!(live.hipo || live.sif || live.fatality || live.recordable || live.lost_time || live.osha_reportable || live.medical_treatment);
-  const coreTypes = ["incident_report", "employee_statement", "cority_entry"];
+  const coreTypes = ["incident_report", "employee_statement"];
   const primary = required.filter((r) => coreTypes.includes(r.type) || escalated);
   const others = required.filter((r) => !primary.includes(r));
   const stmtCount = (detail.forms || []).filter((f) => f.form_type === "employee_statement").length;
@@ -3020,7 +3019,7 @@ function SrCaseView({ user, activeProjectId, projectName, caseId, onBack, onOpen
       )}
       {live.hipo && !sifAlert && (
         <div className="rounded-md p-3 mb-3 text-[12px] leading-snug" style={{ background: "#FDEBDD", color: "#7A3306", border: "1px solid #EDB98E" }}>
-          <b>HiPo:</b> enter it in Cority, complete the Significant Incident Report / Executive Incident Report / Lesson Learned, and complete the investigation.
+          <b>HiPo:</b> complete the Significant Incident Report / Executive Incident Report / Lesson Learned, and complete the investigation.
         </div>
       )}
       {injuryCase && live.drug_screen !== "Yes" && (
