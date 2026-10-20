@@ -4251,7 +4251,7 @@ function PreOrientationFormStep({ form, projectId, activeProjectId, scheduleId, 
         }
       } else if (form.pdfFillTemplate === "generic-form-pdf") {
         const filledBytes = await buildGenericFormPdf({
-          form, slug: activeProjectId, projectName: projNameCtx || "", standardValues: { subcontractor: defaultSubcontractor, date: todayStr, name: employeeName || defaultSubcontractor },
+          companyLogo: logoPreview, form, slug: activeProjectId, projectName: projNameCtx || "", standardValues: { subcontractor: defaultSubcontractor, date: todayStr, name: employeeName || defaultSubcontractor },
           fieldValues: values, choiceValues, statusValues: effectiveStatusValues, longFields: form.genericPdfLongFields, submittedAt: fmtSubmittedAt(new Date()),
           photos: [], statusRefs: [], mediaCount: 0, linkRef: "", groupSigs: [], acknowledged: ackChecked, contactGroups: [],
           signatures: [
@@ -4331,7 +4331,7 @@ function PreOrientationFormStep({ form, projectId, activeProjectId, scheduleId, 
 
   const canSubmit = !sigEmpty && !(form.requiresTwoSignatures && sig2Empty) && !submitting
     && !(form.requiresProof && form.proofRequired !== false && proofFiles.length === 0)
-    && !(form.requiresLogo && !logoFile)
+    && !(form.requiresLogo && !form.logoOptional && !logoFile)
     && !((form.textBlocks || []).some((b) => b.ackCheck) && !ackChecked);
 
   const blocksAt = (at) => (form.textBlocks || []).filter((b) => (b.at || "before") === at).map((b, bi) => <div key={at + bi} className="mb-3">{renderFormTextBlock(b, "pb" + at + bi, ackChecked, setAckChecked, { company: defaultSubcontractor, phone: values[(form.fields || []).indexOf("Contact Phone")] })}</div>);
@@ -4400,7 +4400,7 @@ function PreOrientationFormStep({ form, projectId, activeProjectId, scheduleId, 
       {form.requiresLogo && (
         <div className="mb-3">
           <label className="text-[10px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>
-            Company Logo or Letterhead <span style={{ color: ALERT }}>*</span>
+            {form.logoOptional ? "Company Logo (optional)" : <>Company Logo or Letterhead <span style={{ color: ALERT }}>*</span></>}
           </label>
           <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => {
             const f = e.target.files && e.target.files[0];
@@ -4421,6 +4421,7 @@ function PreOrientationFormStep({ form, projectId, activeProjectId, scheduleId, 
             <button onClick={() => logoInputRef.current && logoInputRef.current.click()} className="w-full mt-1 rounded-md border-2 border-dashed py-3 flex flex-col items-center gap-1" style={{ borderColor: "#C9C6BC" }}>
               <ImagePlus size={18} color={STEEL} />
               <span className="text-[11px]" style={{ color: STEEL }}>Upload your company logo</span>
+                  {form.logoOptional && <span className="text-[10px]" style={{ color: STEEL }}>No logo? Your company name and address will be used as the letterhead.</span>}
             </button>
           )}
         </div>
@@ -8647,13 +8648,16 @@ const ORIENTATION_FORMS_DEFAULT = [
         requiresTwoSignatures: false,
         signatureLabels: ["Authorized Representative Signature"],
         allFieldsRequired: true,
-        fields: ["Company Address", "Company City, State, ZIP", "Recipient Name", "Employee Names Passing Drug Screen (one per line)", "Contact Name", "Contact Phone"],
+        fields: ["Company Address", "Company City, State, ZIP", "Employee Names Passing Drug Screen (one per line)", "Contact Name", "Contact Phone"],
+        letterhead: true, requiresLogo: true, logoOptional: true,
+        genericPdfHideFields: ["Company Address", "Company City, State, ZIP"],
         genericPdfLongFields: ["Employee Names Passing Drug Screen (one per line)"],
         bigTextFields: ["Employee Names Passing Drug Screen (one per line)"],
         prefillNameFields: ["Contact Name"],
         unlockedNameFields: ["Contact Name"],
         textBlocks: [
-          { at: "top", plain: true, text: "RE: Project: " + cfg.drugProj + " – Drug Screen - Safety/Environment Orientation" },
+          { at: "top", plain: true, text: "RE: Drug Screen Affidavit" },
+          { at: "top", plain: true, text: "To Whom It May Concern:" },
           { at: "top", plain: true, text: "This letter is to confirm that the following {company} employees have successfully passed their drug screen within the past 30 days." },
           { at: "end", plain: true, text: "Please feel free to contact me at {phone} if more information is needed. Sincerely," },
         ],
@@ -10097,7 +10101,7 @@ function flattenBlockItems(items) {
   return out;
 }
 
-async function buildGenericFormPdf({ form, slug, projectName, standardValues, fieldValues, choiceValues, statusValues, signatures, longFields, submittedAt, photos, statusRefs, mediaCount, linkRef, groupSigs, acknowledged, contactGroups }) {
+async function buildGenericFormPdf({ companyLogo, form, slug, projectName, standardValues, fieldValues, choiceValues, statusValues, signatures, longFields, submittedAt, photos, statusRefs, mediaCount, linkRef, groupSigs, acknowledged, contactGroups }) {
   const { StandardFonts, rgb } = await import("pdf-lib");
   const doc = await PDFDocument.create();
   const sans = await doc.embedFont(StandardFonts.Helvetica);
@@ -10158,9 +10162,46 @@ async function buildGenericFormPdf({ form, slug, projectName, standardValues, fi
     }
     return H - bh;
   };
-  const newPage = () => { page = doc.addPage([W, H]); y = band(false) - 16; };
+  const newPage = () => { page = doc.addPage([W, H]); y = form.letterhead ? H - 44 : band(false) - 16; };
   const need = (h) => { if (y - h < 50) newPage(); };
-  y = band(true) - 14;
+  // Letterhead mode (Drug Screen Affidavit): no project branding. The subcontractor's own logo goes top center;
+  // without one, their company name and address are blown up and used as the logo.
+  const letterheadTop = async () => {
+    const co = clean((standardValues && standardValues.subcontractor) || "").trim();
+    const fi = (n) => { const ix = (form.fields || []).indexOf(n); return ix >= 0 ? clean(fieldValues[ix] || "").trim() : ""; };
+    const addr = [fi("Company Address"), fi("Company City, State, ZIP")].filter(Boolean);
+    let img = null;
+    if (companyLogo) {
+      const isPng = companyLogo.startsWith("data:image/png"), isJpg = /^data:image\/jpe?g/.test(companyLogo);
+      if (!isPng && !isJpg) throw new Error("The logo must be a PNG or JPG image. A photo taken on an iPhone is often HEIC, which isn't supported. Pick a PNG or JPG, or remove the logo to use your company name instead.");
+      const bin = atob(companyLogo.split(",")[1]); const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      img = isPng ? await doc.embedPng(bytes) : await doc.embedJpg(bytes);
+    }
+    let ty = H - 40;
+    const center = (t, size, font, color) => page.drawText(t, { x: (W - font.widthOfTextAtSize(t, size)) / 2, y: ty - size, size, font, color });
+    if (img) {
+      const sc = Math.min(260 / img.width, 80 / img.height);
+      const w = img.width * sc, h = img.height * sc;
+      page.drawImage(img, { x: (W - w) / 2, y: ty - h, width: w, height: h });
+      ty -= h + 8;
+      addr.forEach((ln) => { center(ln, 9.5, sans, grey); ty -= 12; });
+    } else {
+      const nameLines = wrap(co || "Company Name", sansB, 28, CW).slice(0, 2);
+      let sz = 28;
+      while (sz > 14 && nameLines.some((ln) => sansB.widthOfTextAtSize(ln, sz) > CW)) sz -= 1;
+      nameLines.forEach((ln) => { center(ln, sz, sansB, ink); ty -= sz + 4; });
+      ty -= 2;
+      addr.forEach((ln) => { center(ln, 13, sans, ink); ty -= 17; });
+    }
+    ty -= 6;
+    page.drawLine({ start: { x: M, y: ty }, end: { x: W - M, y: ty }, thickness: 1, color: ink });
+    ty -= 14;
+    const dt = clean((standardValues && standardValues.date) || "");
+    if (dt) { page.drawText("Date: " + dt, { x: W - M - sans.widthOfTextAtSize("Date: " + dt, 10), y: ty - 10, size: 10, font: sans, color: ink }); ty -= 22; }
+    return ty;
+  };
+  y = form.letterhead ? await letterheadTop() : band(true) - 14;
 
   const kv = (label, value, x, width) => {
     const lines = wrap(value || "-", sansB, 10, width);
@@ -10172,13 +10213,15 @@ async function buildGenericFormPdf({ form, slug, projectName, standardValues, fi
   };
   // header facts
   const colW = (CW - 16) / 2;
-  let h1 = Math.max(kv("Date / Time Submitted", submittedAt || standardValues.date, M, colW), kv("Project", projectName || "", M + colW + 16, colW));
-  y -= h1;
-  let h2 = Math.max(kv("Company", standardValues.subcontractor, M, colW), kv("Prepared by", standardValues.name, M + colW + 16, colW));
-  y -= h2;
-  if (linkRef) { y -= kv("Linked Forms Ref #", `${linkRef}  -  ${form.linkLabel || "linked forms"}`, M, CW); }
-  page.drawLine({ start: { x: M, y: y + 2 }, end: { x: W - M, y: y + 2 }, thickness: 0.6, color: ink });
-  y -= 6;
+  if (!form.letterhead) {
+    let h1 = Math.max(kv("Date / Time Submitted", submittedAt || standardValues.date, M, colW), kv("Project", projectName || "", M + colW + 16, colW));
+    y -= h1;
+    let h2 = Math.max(kv("Company", standardValues.subcontractor, M, colW), kv("Prepared by", standardValues.name, M + colW + 16, colW));
+    y -= h2;
+    if (linkRef) { y -= kv("Linked Forms Ref #", `${linkRef}  -  ${form.linkLabel || "linked forms"}`, M, CW); }
+    page.drawLine({ start: { x: M, y: y + 2 }, end: { x: W - M, y: y + 2 }, thickness: 0.6, color: ink });
+    y -= 6;
+  }
 
   // deficiency banner (any checklist item marked Bad)
   const badItems = [];
@@ -10526,6 +10569,8 @@ async function buildGenericFormPdf({ form, slug, projectName, standardValues, fi
     y -= 6;
   }
 
+  // letter closing goes above the signature on a letterhead form
+  if (form.letterhead) drawBlocks("end");
   // signatures
   const sigs = (signatures || []).filter((x) => x);
   if (sigs.length) {
@@ -10548,7 +10593,7 @@ async function buildGenericFormPdf({ form, slug, projectName, standardValues, fi
     }
   }
   if (sigs.length) y -= 90;
-  drawBlocks("end");
+  if (!form.letterhead) drawBlocks("end");
   const pages = doc.getPages();
   pages.forEach((p, i) => {
     const t = `Page ${i + 1} of ${pages.length}`;
@@ -11453,7 +11498,7 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
       setPdfError("");
       try {
         const filledBytes = await buildGenericFormPdf({
-          form, slug: activeProjectId, projectName: projName, standardValues, fieldValues: values,
+          companyLogo: logoPreview, form, slug: activeProjectId, projectName: projName, standardValues, fieldValues: values,
           choiceValues, statusValues: effectiveStatusValues, longFields: form.genericPdfLongFields, submittedAt, photos: photoBytes, statusRefs, mediaCount: mediaFiles.length, linkRef, groupSigs: groupSigData(), acknowledged: ackChecked, contactGroups: contactData(),
           signatures: [
             { label: (form.signatureLabels && form.signatureLabels[0]) || "Signature", dataUrl: signatureCanvasRef.current ? signatureCanvasRef.current.toDataURL("image/png") : null },
@@ -12080,7 +12125,7 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
           {form.requiresLogo && (
             <div className="mb-4">
               <label className="text-[11px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>
-                Company Logo or Letterhead <span style={{ color: ALERT }}>*</span>
+                {form.logoOptional ? "Company Logo (optional)" : <>Company Logo or Letterhead <span style={{ color: ALERT }}>*</span></>}
               </label>
               <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => {
                 const f = e.target.files && e.target.files[0];
@@ -12101,6 +12146,7 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
                 <button onClick={() => logoInputRef.current && logoInputRef.current.click()} className="w-full mt-1 rounded-md border-2 border-dashed py-3 flex flex-col items-center gap-1" style={{ borderColor: "#C9C6BC" }}>
                   <ImagePlus size={18} color={STEEL} />
                   <span className="text-[11px]" style={{ color: STEEL }}>Upload your company logo</span>
+                  {form.logoOptional && <span className="text-[10px]" style={{ color: STEEL }}>No logo? Your company name and address will be used as the letterhead.</span>}
                 </button>
               )}
             </div>
@@ -12217,7 +12263,7 @@ function FillFormModal({ form, onClose, user, prefillValues, followUpAvailable, 
                 disabled={
                   sigEmpty || (form.requiresTwoSignatures && sig2Empty) || submitting || crewMissing || contactsMissing || ((form.textBlocks || []).some((b) => b.ackCheck) && !ackChecked) ||
                   proofMissing || Object.keys(form.photoFields || {}).some((l) => form.photoFields[l] !== "optional" && (fieldPhotos[l] || []).length === 0) ||
-                  (form.requiresLogo && !logoFile) ||
+                  (form.requiresLogo && !form.logoOptional && !logoFile) ||
                   (form.allFieldsRequired && (form.fields || []).some((label, i) => !/\(if applicable\)/i.test(label) && !(values[i] || "").trim()))
                 }
                 onClick={doSubmit}
