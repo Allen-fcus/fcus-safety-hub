@@ -1847,7 +1847,7 @@ function srRequiredForms(c, forms) {
   const witness = c.injury || c.incident_type === "MVA" || c.incident_type === "Utility Strike" || c.hipo || c.near_miss;
   list.push({ type: "employee_statement", need: witness ? "recommended" : "optional", why: "Complete one for each employee or witness involved. Attach to the Investigation Report." });
   if (c.near_miss || c.hipo || c.injury) list.push({ type: "cority_entry", need: "required", why: "Near Miss, HiPo and injury events are entered in Cority. This checklist walks through it." });
-  list.push({ type: "investigation_report", need: severe ? "required" : (c.near_miss || c.property_damage || c.first_aid ? "recommended" : "optional"),
+  list.push({ type: "investigation_report", need: severe ? "required" : "optional",
     why: c.hipo ? "HiPo events need an investigation to be completed." : severe ? "Injury / recordable / SIF events require a completed investigation with corrective actions." : "Complete after the investigation meeting to record root causes and corrective actions." });
   const major = c.hipo || c.sif || c.fatality;
   const notable = major || c.lost_time || c.recordable || c.near_miss;
@@ -2927,6 +2927,62 @@ function SrCaseView({ user, activeProjectId, projectName, caseId, onBack, onOpen
   const needStyle = { required: { bg: "#FDE7E4", fg: "#8A1C14" }, recommended: { bg: "#FFF3CD", fg: "#7A5B00" }, optional: { bg: "#E4E2DA", fg: "#4A483F" } };
   const injuryCase = live.injury || live.incident_type === "MVA" || live.incident_type === "Injury / Illness";
   const sifAlert = live.fatality || live.sif;
+  const escalated = !!(live.hipo || live.sif || live.fatality || live.recordable || live.lost_time || live.osha_reportable || live.medical_treatment);
+  const coreTypes = ["incident_report", "employee_statement", "cority_entry"];
+  const primary = required.filter((r) => coreTypes.includes(r.type) || escalated);
+  const others = required.filter((r) => !primary.includes(r));
+  const stmtCount = (detail.forms || []).filter((f) => f.form_type === "employee_statement").length;
+  const escSteps = [
+    ["Incident Report", (detail.forms || []).some((f) => f.form_type === "incident_report")],
+    ["Employee Statement" + (stmtCount > 1 ? "s" : ""), stmtCount > 0],
+    ["Sign-in sheet for the investigation", !!detail.meeting_id],
+    ["Incident Investigation Report", (detail.forms || []).some((f) => f.form_type === "investigation_report")],
+  ];
+  const renderForm = (r) => {
+          const mine = (detail.forms || []).filter((f) => f.form_type === r.type);
+          const ns = needStyle[r.need];
+          return (
+            <div key={r.type} className="bg-white rounded-md p-3 border" style={{ borderColor: "#E4E2DA" }}>
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <div className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{SR_FORM_META[r.type].label}</div>
+                  <div className="text-[11px]" style={{ color: STEEL }}>{r.why}</div>
+                </div>
+                <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-sm flex-shrink-0" style={{ background: ns.bg, color: ns.fg, ...SR_MONO }}>{r.need}</span>
+              </div>
+              {mine.map((f) => (
+                <div key={f.id} className="flex items-center gap-2 mt-2 rounded-md border px-2.5 py-1.5" style={{ borderColor: "#E4E2DA" }}>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[12px] truncate">{f.subject || SR_FORM_META[f.form_type].short}</div>
+                    <div className="text-[10px]" style={{ color: f.status === "submitted" ? "#2F6B2A" : "#7A5B00" }}>{f.status === "submitted" ? `Submitted ${fmtDT(f.submitted_at)}` : `Draft · saved ${fmtDT(f.updated_at)}`}{f.created_by_name ? ` · ${f.created_by_name}` : ""}</div>
+                  </div>
+                  <button onClick={() => onOpenForm(detail, f, f.form_type, attendees)} className="text-[10px] font-bold uppercase px-2 py-1 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, ...SR_MONO }}>{f.status === "submitted" ? "View" : "Continue"}</button>
+                  {canDelete && <button onClick={() => removeForm(f)} className="p-1"><X size={14} color={STEEL} /></button>}
+                </div>
+              ))}
+              {(mine.length === 0 || SR_FORM_META[r.type].multiple) && (
+                <button onClick={() => onOpenForm(detail, null, r.type, attendees)} className="w-full mt-2 text-[11px] font-bold uppercase py-2 rounded-sm" style={mine.length ? { border: "1px solid #C9C6BC", color: STEEL, ...SR_MONO } : { background: GOLD, color: INK, ...SR_MONO }}>{mine.length ? "+ Add another" : "Start"}</button>
+              )}
+            </div>
+          );
+  };
+  const meetingCard = (
+      <div className="bg-white rounded-md p-3 border mb-3" style={{ borderColor: "#E4E2DA" }}>
+        <div className="text-[11px] uppercase font-bold mb-1" style={lab}>Investigation meeting</div>
+        <div className="text-[11px] mb-2" style={{ color: STEEL }}>The investigation is completed and corrective actions are decided in a meeting. Use a sign-in sheet so the team is on record. Attendees appear on the Investigation Report.</div>
+        {detail.meeting_id ? (
+          <>
+            <div className="text-[12px] font-bold mb-1">{attendees.length} signed in</div>
+            {attendees.slice(0, 8).map((a) => <div key={a.id} className="text-[11px]" style={{ color: STEEL }}>{a.first_name} {a.last_name}{a.organization ? ` · ${a.organization}` : ""}</div>)}
+            {attendees.length > 8 && <div className="text-[11px]" style={{ color: STEEL }}>+ {attendees.length - 8} more</div>}
+            <button onClick={() => onOpenMeeting(detail.meeting_id)} className="w-full mt-2 text-[11px] font-bold uppercase py-2 rounded-sm" style={{ background: INK, color: "white", ...SR_MONO }}>Open the sign-in sheet</button>
+            <button onClick={load} className="w-full mt-2 text-[10px] font-bold uppercase py-1.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, ...SR_MONO }}>Refresh attendees</button>
+          </>
+        ) : (
+          <button disabled={busy} onClick={createMeeting} className="w-full text-[11px] font-bold uppercase py-2.5 rounded-sm disabled:opacity-50" style={{ background: GOLD, color: INK, ...SR_MONO }}>{busy ? "Creating…" : "Create sign-in sheet for the investigation"}</button>
+        )}
+      </div>
+  );
 
   return (
     <div className="px-4 pt-4 pb-10" style={{ background: "#F4F3EF", minHeight: "100%" }}>
@@ -2970,6 +3026,17 @@ function SrCaseView({ user, activeProjectId, projectName, caseId, onBack, onOpen
       {injuryCase && live.drug_screen !== "Yes" && (
         <div className="rounded-md p-3 mb-3 text-[12px] leading-snug" style={{ background: "#FFF3CD", color: "#5A4300", border: "1px solid #EAD28A" }}>
           <b>Post-accident drug test:</b> required for this type of event. The signed verification letter must go to the Safety Department. Set "Drug screen completed" below when it's done.
+        </div>
+      )}
+
+      {escalated && (
+        <div className="rounded-md p-3 mb-3" style={{ background: "#FDEBDD", border: "1px solid #EDB98E" }}>
+          <div className="text-[11px] uppercase font-bold mb-1.5" style={{ color: "#7A3306", ...SR_MONO }}>Escalated event: complete all of these</div>
+          {escSteps.map(([n, ok]) => (
+            <div key={n} className="flex items-center gap-2 text-[12px] py-0.5" style={{ color: ok ? "#2F6B2A" : "#7A3306" }}>
+              {ok ? <CheckCircle2 size={14} /> : <Circle size={14} />}<span style={ok ? { textDecoration: "line-through" } : {}}>{n}</span>
+            </div>
+          ))}
         </div>
       )}
 
@@ -3025,54 +3092,28 @@ function SrCaseView({ user, activeProjectId, projectName, caseId, onBack, onOpen
       </div>
 
       {/* forms */}
-      <div className="text-[11px] uppercase font-bold mb-2" style={lab}>Forms for this case</div>
+      <div className="text-[11px] uppercase font-bold mb-2" style={lab}>{escalated ? "Required for this event" : "Forms for this event"}</div>
       <div className="space-y-2 mb-3">
-        {required.map((r) => {
-          const mine = (detail.forms || []).filter((f) => f.form_type === r.type);
-          const ns = needStyle[r.need];
-          return (
-            <div key={r.type} className="bg-white rounded-md p-3 border" style={{ borderColor: "#E4E2DA" }}>
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <div className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{SR_FORM_META[r.type].label}</div>
-                  <div className="text-[11px]" style={{ color: STEEL }}>{r.why}</div>
-                </div>
-                <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-sm flex-shrink-0" style={{ background: ns.bg, color: ns.fg, ...SR_MONO }}>{r.need}</span>
-              </div>
-              {mine.map((f) => (
-                <div key={f.id} className="flex items-center gap-2 mt-2 rounded-md border px-2.5 py-1.5" style={{ borderColor: "#E4E2DA" }}>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[12px] truncate">{f.subject || SR_FORM_META[f.form_type].short}</div>
-                    <div className="text-[10px]" style={{ color: f.status === "submitted" ? "#2F6B2A" : "#7A5B00" }}>{f.status === "submitted" ? `Submitted ${fmtDT(f.submitted_at)}` : `Draft · saved ${fmtDT(f.updated_at)}`}{f.created_by_name ? ` · ${f.created_by_name}` : ""}</div>
-                  </div>
-                  <button onClick={() => onOpenForm(detail, f, f.form_type, attendees)} className="text-[10px] font-bold uppercase px-2 py-1 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, ...SR_MONO }}>{f.status === "submitted" ? "View" : "Continue"}</button>
-                  {canDelete && <button onClick={() => removeForm(f)} className="p-1"><X size={14} color={STEEL} /></button>}
-                </div>
-              ))}
-              {(mine.length === 0 || SR_FORM_META[r.type].multiple) && (
-                <button onClick={() => onOpenForm(detail, null, r.type, attendees)} className="w-full mt-2 text-[11px] font-bold uppercase py-2 rounded-sm" style={mine.length ? { border: "1px solid #C9C6BC", color: STEEL, ...SR_MONO } : { background: GOLD, color: INK, ...SR_MONO }}>{mine.length ? "+ Add another" : "Start"}</button>
-              )}
-            </div>
-          );
-        })}
+        {primary.map(renderForm)}
       </div>
+      {!escalated && (
+        <div className="rounded-md p-2.5 mb-3 text-[11px] leading-snug" style={{ background: "#EEF3EA", color: "#2F4A29", border: "1px solid #C5D6BC" }}>
+          <b>Event only:</b> the Incident Report{required.some((r) => r.type === "employee_statement") ? " and any employee statements" : ""} are all that's needed. If this turns out to be a HiPo, SIF, serious, lost-time or recordable event, check it under Classification and save. The Investigation Report, sign-in sheet and the rest unlock automatically.
+        </div>
+      )}
+      {others.length > 0 && (
+        <details className="mb-3 bg-white rounded-md border" style={{ borderColor: "#E4E2DA" }}>
+          <summary className="px-3 py-2.5 text-[11px] uppercase font-bold cursor-pointer" style={lab}>{escalated ? "Other forms (optional)" : "Other forms (only if this escalates)"}</summary>
+          <div className="px-3 pb-3 space-y-2">{others.map(renderForm)}</div>
+        </details>
+      )}
 
-      {/* investigation meeting */}
-      <div className="bg-white rounded-md p-3 border" style={{ borderColor: "#E4E2DA" }}>
-        <div className="text-[11px] uppercase font-bold mb-1" style={lab}>Investigation meeting</div>
-        <div className="text-[11px] mb-2" style={{ color: STEEL }}>The investigation is completed and corrective actions are decided in a meeting. Use a sign-in sheet so the team is on record. Attendees appear on the Investigation Report.</div>
-        {detail.meeting_id ? (
-          <>
-            <div className="text-[12px] font-bold mb-1">{attendees.length} signed in</div>
-            {attendees.slice(0, 8).map((a) => <div key={a.id} className="text-[11px]" style={{ color: STEEL }}>{a.first_name} {a.last_name}{a.organization ? ` · ${a.organization}` : ""}</div>)}
-            {attendees.length > 8 && <div className="text-[11px]" style={{ color: STEEL }}>+ {attendees.length - 8} more</div>}
-            <button onClick={() => onOpenMeeting(detail.meeting_id)} className="w-full mt-2 text-[11px] font-bold uppercase py-2 rounded-sm" style={{ background: INK, color: "white", ...SR_MONO }}>Open the sign-in sheet</button>
-            <button onClick={load} className="w-full mt-2 text-[10px] font-bold uppercase py-1.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, ...SR_MONO }}>Refresh attendees</button>
-          </>
-        ) : (
-          <button disabled={busy} onClick={createMeeting} className="w-full text-[11px] font-bold uppercase py-2.5 rounded-sm disabled:opacity-50" style={{ background: GOLD, color: INK, ...SR_MONO }}>{busy ? "Creating…" : "Create sign-in sheet for the investigation"}</button>
-        )}
-      </div>
+      {escalated ? meetingCard : (
+        <details className="bg-white rounded-md border mb-3" style={{ borderColor: "#E4E2DA" }}>
+          <summary className="px-3 py-2.5 text-[11px] uppercase font-bold cursor-pointer" style={lab}>Investigation meeting sign-in (optional)</summary>
+          <div className="px-3 pb-3">{meetingCard}</div>
+        </details>
+      )}
     </div>
   );
 }
