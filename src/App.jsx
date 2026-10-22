@@ -9351,6 +9351,7 @@ const CERTIFICATION_VALIDITY_YEARS = [
   { re: /\btma\b/i, years: 3 },
   { re: /traffic control maintainer|\btcm\b/i, years: 2 },
   { re: /confined space/i, years: 2 },
+  { re: /\bcpr\b|first aid/i, years: 2 },
 ];
 
 // Standard training names — picking from this list keeps spelling identical so the Training overview can count them.
