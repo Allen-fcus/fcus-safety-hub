@@ -592,8 +592,12 @@ function QuarterlySubmissionsScreen({ user, admin }) {
   );
 }
 
-// ---- Summary of Safety Requirements: submissions + NTI countersignature ----
+// Short organisation name used in wording that would otherwise say "NTI" on every project
+const projectOrgLabel = (slug) => (slug === "nti-sylvania" || slug === "nti-golden-triangle" ? "NTI" : slug === "sh99-houston" ? "FCW99" : slug === "nashville" ? "FCW24" : "Project");
+// ---- Summary of Safety Requirements: submissions + project countersignature ----
 function SummarySubmissionsScreen({ user, admin }) {
+  const projCtx = useContext(ProjectContext) || {};
+  const org = projectOrgLabel(projCtx.id);
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
@@ -641,10 +645,10 @@ function SummarySubmissionsScreen({ user, admin }) {
       page.drawRectangle({ x: 0, y: 792 - 54, width: 612, height: 54, color: ink });
       page.drawText("SUMMARY OF SAFETY REQUIREMENTS", { x: M, y: 792 - 33, size: 14, font: sansB, color: gold });
       page.drawRectangle({ x: M, y: 792 - 104, width: 612 - 2 * M, height: 16, color: gold });
-      page.drawText("NTI REVIEW AND COUNTERSIGNATURE", { x: M + 4, y: 792 - 100, size: 8, font: sansB, color: ink });
+      page.drawText(`${org.toUpperCase()} REVIEW AND COUNTERSIGNATURE`, { x: M + 4, y: 792 - 100, size: 8, font: sansB, color: ink });
       const when = new Date().toLocaleString("en-US", { timeZone: "America/Chicago" });
       const lines = [
-        "The submitted Summary of Safety Requirements, including the contractor acknowledgment and signatures on the preceding pages, has been reviewed and accepted by the NTI Safety Department.",
+        `The submitted Summary of Safety Requirements, including the contractor acknowledgment and signatures on the preceding pages, has been reviewed and accepted by the ${org} Safety Department.`,
       ];
       let y = 792 - 130;
       lines.forEach((t) => {
@@ -653,7 +657,7 @@ function SummarySubmissionsScreen({ user, admin }) {
         if (cur) { page.drawText(cur, { x: M + 4, y, size: 10, font: sans, color: ink }); y -= 14; }
       });
       y -= 30;
-      page.drawText("NTI REPRESENTATIVE SIGNATURE", { x: M, y, size: 7, font: sansB, color: grey });
+      page.drawText(`${org.toUpperCase()} REPRESENTATIVE SIGNATURE`, { x: M, y, size: 7, font: sansB, color: grey });
       const dataUrl = sigRef.current ? sigRef.current.toDataURL("image/png") : null;
       if (dataUrl) {
         const bin = atob(dataUrl.split(",")[1]); const bytes = new Uint8Array(bin.length);
@@ -686,7 +690,7 @@ function SummarySubmissionsScreen({ user, admin }) {
   return (
     <div className="px-4 pt-4 pb-8" style={{ background: "#F4F3EF", minHeight: "100%" }}>
       <div className="text-[12px] mb-3" style={{ color: STEEL }}>
-        {admin ? "Every Summary of Safety Requirements submitted on this project. Review the contractor's signed copy, then countersign for NTI." : "The Summary of Safety Requirements you've submitted, and whether NTI has countersigned it."}
+        {admin ? `Every Summary of Safety Requirements submitted on this project. Review the contractor's signed copy, then countersign for ${org}.` : `The Summary of Safety Requirements you've submitted, and whether ${org} has countersigned it.`}
       </div>
       {admin && (
         <>
@@ -703,7 +707,7 @@ function SummarySubmissionsScreen({ user, admin }) {
         <div key={r.id} className="bg-white rounded-md p-3 border mb-2" style={{ borderColor: "#E4E2DA" }}>
           <div className="flex items-center justify-between gap-2">
             <div className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{admin ? (r.employer || r.submitted_by) : "Summary of Safety Requirements"}</div>
-            <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-sm flex-shrink-0" style={{ background: r.countersigned_at ? "#DFF3E3" : "#FFF3C4", color: r.countersigned_at ? "#1E7A34" : "#7A5B00", ...mono }}>{r.countersigned_at ? "Countersigned" : "Awaiting NTI"}</span>
+            <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-sm flex-shrink-0" style={{ background: r.countersigned_at ? "#DFF3E3" : "#FFF3C4", color: r.countersigned_at ? "#1E7A34" : "#7A5B00", ...mono }}>{r.countersigned_at ? "Countersigned" : `Awaiting ${org}`}</span>
           </div>
           {admin && <div className="text-[11px] mt-0.5" style={{ color: STEEL }}>{r.submitted_by}</div>}
           <div className="text-[10px] mt-0.5" style={{ color: STEEL, ...mono }}>Submitted {fmtDT(r.submitted_at)}</div>
@@ -724,14 +728,14 @@ function SummarySubmissionsScreen({ user, admin }) {
       {signing && (
         <div className="fixed inset-0 z-30 flex items-end sm:items-center justify-center bg-black/70 p-3">
           <div className="bg-white rounded-md w-full max-w-md p-4 max-h-[92vh] overflow-y-auto">
-            <div className="text-[15px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>Countersign for NTI</div>
+            <div className="text-[15px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>Countersign for {org}</div>
             <div className="text-[11px] mt-1" style={{ color: STEEL }}>{signing.employer || signing.submitted_by} - submitted {fmtDT(signing.submitted_at)}</div>
             <button onClick={() => window.open(signing.filled_pdf_url, "_blank")} className="w-full mt-3 text-[11px] font-bold uppercase py-2 rounded-sm border" style={{ borderColor: "#C9C6BC", color: INK, ...mono }}>1. Open the submitted document to review</button>
-            <label className="block mt-3 text-[11px] uppercase font-bold" style={{ color: STEEL, ...mono }}>2. NTI representative name</label>
+            <label className="block mt-3 text-[11px] uppercase font-bold" style={{ color: STEEL, ...mono }}>2. {org} representative name</label>
             <input value={signName} onChange={(e) => { if (!user?.name) setSignName(e.target.value); }} readOnly={!!user?.name} title={user?.name ? "Name is locked to your login" : undefined} className="w-full rounded-md border px-3 py-2 text-[13px] mt-1" style={{ borderColor: "#C9C6BC", ...(user?.name ? { background: "#F1EFE8", color: "#5A574D", cursor: "not-allowed" } : {}) }} />
             <label className="block mt-3 mb-1 text-[11px] uppercase font-bold" style={{ color: STEEL, ...mono }}>3. Signature</label>
             <SignaturePad autoName={signName.trim()} onChange={setSigEmpty} canvasRef={sigRef} />
-            <div className="text-[10px] mt-2" style={{ color: STEEL }}>Signing adds an NTI countersignature page to the end of the submitted PDF and saves it as the countersigned copy.</div>
+            <div className="text-[10px] mt-2" style={{ color: STEEL }}>Signing adds an {org} countersignature page to the end of the submitted PDF and saves it as the countersigned copy.</div>
             {err && <div className="text-[11px] mt-2" style={{ color: ALERT }}>{err}</div>}
             <div className="flex gap-2 mt-3">
               <button onClick={() => setSigning(null)} disabled={busy} className="flex-1 text-[11px] font-bold uppercase py-2 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, ...mono }}>Cancel</button>
@@ -4118,7 +4122,7 @@ function renderFormTextBlock(b, key, ackChecked, setAckChecked, tokens) {
               <div style={{ flex: 2, borderTop: "1px solid #999", paddingTop: 2 }}>Date</div>
             </div>
           ))}
-          <div className="text-[10px]" style={{ color: STEEL }}>Signed on paper / by NTI at the safety orientation - not completed in the app.</div>
+          <div className="text-[10px]" style={{ color: STEEL }}>Signed on paper at the safety orientation - not completed in the app.</div>
         </div>
       )}
     </>
@@ -8788,7 +8792,7 @@ const ORIENTATION_FORMS_DEFAULT = [
           header(true),
           appoint("a “FLAGGER”"),
           { at: "top", plain: true, text: "A “FLAGGER” is defined as one who is qualified to perform flagging duties, that is follow the flagging procedures set forth in the TMUTCD, direct traffic and effectively communicate with the public in a courteous manner AND is independently certified by an approved organization or trained by a Certified Flagging Instructor representing the “CONTRACTOR”." },
-          { at: "after", plain: true, text: "Note: Copy of certificate must be provided to the NTI Safety Department with this form." },
+          { at: "after", plain: true, text: "Note: Copy of certificate must be provided to the " + cfg.dept1 + " with this form." },
           { at: "after", title: "Certified Flagging Instructor representing the “CONTRACTOR”", plain: true, text: "Complete the instructor's name, certifying organization and certification date in the fields above if the flagger was trained by a certified instructor." },
           notify2,
           submitAt(),
@@ -10898,7 +10902,7 @@ const HAZARD_LIBRARY = {
   "Impalement risk must be eliminated or otherwise protected to reduce the hazard (Rebar/Carney Cap)"
  ],
  "Lifting operation": [
-  "All crane(s) have been checked in by NTI Safety Department",
+  "All crane(s) have been checked in by the project Safety Department",
   "All rigging equipment must be inspected by designated competent person",
   "Critical Lift Plan required when lift exceeds 75% of crane capacity",
   "Damage/Defective/shock loaded rigging equipment to be removed from service, report to supervisor",
