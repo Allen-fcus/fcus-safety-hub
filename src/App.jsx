@@ -15393,8 +15393,36 @@ function OrientationScreen({ user, go, activeProjectId }) {
   const [viewingPdf, setViewingPdf] = useState(null);
   const [openForm, setOpenForm] = useState(null);
 
-  const handleDownload = (d, i) => {
+  // Letterhead forms (Drug Screen Affidavit) have no stored blank: draw a blank copy in the current design, so
+  // View / Download always match what the Fill Out form produces (no project name, company letterhead on top).
+  const blankCache = useRef({});
+  const blankBlobFor = async (d) => {
+    if (!blankCache.current[d.title]) {
+      const bytes = await buildGenericFormPdf({
+        form: d, slug: activeProjectId, projectName: "", companyLogo: null,
+        standardValues: { subcontractor: "Company Name", date: "MM/DD/YYYY", name: "" },
+        fieldValues: { 0: "Company Address", 1: "City, State ZIP", 2: "Employee name (one per line)", 3: "", 4: "" },
+        choiceValues: {}, statusValues: {}, longFields: d.genericPdfLongFields, submittedAt: "", photos: {}, statusRefs: [], mediaCount: 0, linkRef: "", groupSigs: [], acknowledged: false, contactGroups: [],
+        signatures: [{ label: (d.signatureLabels && d.signatureLabels[0]) || "Signature", dataUrl: null }],
+      });
+      blankCache.current[d.title] = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+    }
+    return blankCache.current[d.title];
+  };
+  const viewForm = async (d) => {
+    if (!d.letterhead) { setViewingPdf(d); return; }
+    try { setViewingPdf({ ...d, pdfLink: (await blankBlobFor(d)) + "#blank.pdf" }); } catch (e) { setViewingPdf(d); }
+  };
+  const handleDownload = async (d, i) => {
     setDownloaded((s) => ({ ...s, [i]: true }));
+    if (d.letterhead) {
+      try {
+        const a = document.createElement("a");
+        a.href = await blankBlobFor(d); a.download = `${d.title} - blank.pdf`;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        return;
+      } catch (e) { /* fall back to the stored copy */ }
+    }
     if (d.pdfLink) window.open(d.pdfLink, "_blank");
   };
 
@@ -15460,7 +15488,7 @@ function OrientationScreen({ user, go, activeProjectId }) {
               <button onClick={() => setOpenForm(d)} className="flex-1 flex items-center justify-center gap-1 text-[10px] font-bold uppercase px-2 py-1.5 rounded-sm" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>
                 <PenLine size={12} /> Fill Out
               </button>
-              <button onClick={() => setViewingPdf(d)} className="flex-1 flex items-center justify-center gap-1 text-[10px] font-bold uppercase px-2 py-1.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>
+              <button onClick={() => viewForm(d)} className="flex-1 flex items-center justify-center gap-1 text-[10px] font-bold uppercase px-2 py-1.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>
                 <Eye size={12} /> View
               </button>
               <button onClick={() => handleDownload(d, i)} className="flex-1 flex items-center justify-center gap-1 text-[10px] font-bold uppercase px-2 py-1.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>
