@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo, createContext, useContext } from "react";
 import Papa from "papaparse";
-import { Wallet, Home, BookOpen, PlayCircle, ClipboardCheck, FileText, ChevronRight, Download, CheckCircle2, Circle, X, Play, ShieldAlert, Clock, Eraser, Send, PenLine, Users, Eye, BadgeCheck, LogOut, Loader2, CalendarDays, MapPin, Megaphone, Pin, ExternalLink, Lock, AlertTriangle, Camera, Phone, MessageSquare, ImagePlus, Volume2, VolumeX, Pause, Truck, BarChart3 } from "lucide-react";
+import { Wallet, Home, BookOpen, PlayCircle, ClipboardCheck, FileText, ChevronRight, Download, CheckCircle2, Circle, X, Play, ShieldAlert, Clock, Eraser, Send, PenLine, Users, Eye, BadgeCheck, LogOut, Loader2, CalendarDays, MapPin, Megaphone, Pin, ExternalLink, Lock, AlertTriangle, Camera, Phone, MessageSquare, ImagePlus, Volume2, VolumeX, Pause, Truck, BarChart3, Search } from "lucide-react";
 import { supabase, loadProjectMap, projectIdForSlug, projectSlugForId } from "./supabaseClient.js";
 import { PDFDocument } from "pdf-lib";
 import QRCode from "qrcode";
@@ -473,6 +473,12 @@ function QuarterlyMonthlyScreen({ user, go }) {
   const staffViewer = useStaffViewer(user);
   const [openForm, setOpenForm] = useState(null);
   const [viewingPdf, setViewingPdf] = useState(null);
+  useEffect(() => {
+    if (!PENDING_FORM.title) return;
+    const f = QUARTERLY_MONTHLY_FORMS_DEFAULT.find((x) => x.title === PENDING_FORM.title);
+    PENDING_FORM.title = "";
+    if (f) setOpenForm(f);
+  }, []);
 
   return (
     <div className="px-4 pt-4 pb-8" style={{ background: "#F4F3EF", minHeight: "100%" }}>
@@ -953,6 +959,54 @@ function LifesavingControlsCard() {
   );
 }
 
+// Set by Home search so the target screen can open the chosen form straight away
+const PENDING_FORM = { title: "" };
+
+// Search box on the Home screen: finds the forms and documents available on this project and jumps to them.
+function HomeSearch({ go, activeProjectId, sections }) {
+  const [q, setQ] = useState("");
+  const mono = { fontFamily: "IBM Plex Mono, monospace" };
+  const items = useMemo(() => {
+    const out = [];
+    const seen = new Set();
+    const add = (kind, title, desc, screen, openTitle) => { const k = kind + "|" + title; if (seen.has(k)) return; seen.add(k); out.push({ kind, title, desc: desc || "", screen, openTitle }); };
+    FORMS_DEFAULT.filter((f) => !f.projects || f.projects.includes(activeProjectId)).forEach((f) => { const r = resolveFormForProject(f, activeProjectId); add("Site form", r.title, r.description, "forms", r.title); });
+    ORIENTATION_FORMS_DEFAULT.filter((f) => !f.projects || f.projects.includes(activeProjectId)).forEach((f) => add("Orientation", f.title, f.description, "orientation", f.title));
+    PRECONSTRUCTION_DOC_TITLES.forEach((t) => { const f = PRECONSTRUCTION_FILLABLE_FORMS[t]; if (f && f.projects && !f.projects.includes(activeProjectId)) return; add("Pre-Construction", t, PRECONSTRUCTION_DOC_BLURBS[t], "preconstruction", ""); });
+    if (QUARTERLY_MONTHLY_PROJECTS.includes(activeProjectId)) QUARTERLY_MONTHLY_FORMS_DEFAULT.forEach((f) => add("Quarterly / Monthly", f.title, f.description, "quarterlymonthly", f.title));
+    (sections || []).forEach((sec) => add("Section", sec.label, sec.desc, sec.key, ""));
+    return out;
+  }, [activeProjectId, sections]);
+  const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+  const results = words.length ? items.filter((it) => { const hay = (it.title + " " + it.desc + " " + it.kind).toLowerCase(); return words.every((w) => hay.includes(w)); }).slice(0, 8) : [];
+  const open = (it) => { PENDING_FORM.title = it.openTitle || ""; setQ(""); go(it.screen); };
+  return (
+    <div className="mb-4">
+      <div className="relative">
+        <Search size={15} color={STEEL} style={{ position: "absolute", left: 10, top: 11 }} />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search forms and documents" aria-label="Search forms and documents"
+          className="w-full rounded-md border pl-8 pr-8 py-2 text-[13px] bg-white" style={{ borderColor: "#C9C6BC" }} />
+        {q && <button onClick={() => setQ("")} aria-label="Clear search" style={{ position: "absolute", right: 8, top: 8 }}><X size={16} color={STEEL} /></button>}
+      </div>
+      {words.length > 0 && (
+        <div className="mt-1.5 bg-white rounded-md border overflow-hidden" style={{ borderColor: "#E4E2DA" }}>
+          {results.length === 0 && <div className="text-[12px] px-3 py-3" style={{ color: STEEL }}>Nothing found for "{q}".</div>}
+          {results.map((it, i) => (
+            <button key={it.kind + it.title} onClick={() => open(it)} className="w-full text-left px-3 py-2 flex items-start gap-2" style={{ borderTop: i ? "1px solid #EFEDE6" : "none" }}>
+              <FileText size={15} color={GOLD} className="flex-shrink-0 mt-0.5" />
+              <div className="min-w-0 flex-1">
+                <div className="text-[13px] leading-tight" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 500 }}>{it.title}</div>
+                {it.desc && <div className="text-[11px] leading-snug truncate" style={{ color: STEEL }}>{it.desc}</div>}
+              </div>
+              <span className="text-[9px] font-bold uppercase flex-shrink-0 mt-0.5" style={{ color: STEEL, ...mono }}>{it.kind}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function HomeScreen({ go, user, activeProjectId }) {
   const { fallbacks, name: projectName } = useContext(ProjectContext);
   const { t } = useTranslation();
@@ -1095,6 +1149,8 @@ function HomeScreen({ go, user, activeProjectId }) {
           style={{ width: 128, height: "100%" }}
         />
       </div>
+
+      <HomeSearch go={go} activeProjectId={activeProjectId} sections={orderedSections} />
 
       <SiteWeatherCard projectId={activeProjectId} />
 
@@ -12898,6 +12954,12 @@ function FormsScreen({ user, go, activeProjectId }) {
   const forms = formsRaw
     .filter((f) => !f.projects || f.projects.includes(activeProjectId))
     .map((f) => resolveFormForProject(f, activeProjectId));
+  useEffect(() => {
+    if (!PENDING_FORM.title) return;
+    const f = forms.find((x) => x.title === PENDING_FORM.title);
+    PENDING_FORM.title = "";
+    if (f) setOpenForm(f);
+  }, [loading]);
 
   const handleDownload = (f, i) => {
     setDownloaded((d) => ({ ...d, [i]: true }));
@@ -15398,6 +15460,12 @@ function OrientationScreen({ user, go, activeProjectId }) {
   const [downloaded, setDownloaded] = useState({});
   const [viewingPdf, setViewingPdf] = useState(null);
   const [openForm, setOpenForm] = useState(null);
+  useEffect(() => {
+    if (!PENDING_FORM.title) return;
+    const f = ORIENTATION_FORMS_DEFAULT.find((x) => x.title === PENDING_FORM.title && (!x.projects || x.projects.includes(activeProjectId)));
+    PENDING_FORM.title = "";
+    if (f) setOpenForm(f);
+  }, []);
 
   // Letterhead forms (Drug Screen Affidavit) have no stored blank: draw a blank copy in the current design, so
   // View / Download always match what the Fill Out form produces (no project name, company letterhead on top).
