@@ -9342,9 +9342,15 @@ const BADGE_ID_PREFIXES = { "nti-sylvania": "SYL", "nti-golden-triangle": "GT", 
 // When it matches, the expiration date is calculated automatically
 // from the issued date; admins can still override it by hand.
 const CERTIFICATION_VALIDITY_YEARS = [
-  { match: "osha 30", years: 5 },
-  { match: "osha 10", years: 5 },
-  { match: "driving awareness", years: 1 },
+  { re: /\bosha ?30\b/i, years: 5 },
+  { re: /\bosha ?10\b/i, years: 5 },
+  { re: /fall protection/i, years: 2 },
+  { re: /\bmewp\b/i, years: 3 },
+  { re: /excavation/i, years: 2 },
+  { re: /driving awareness/i, years: 1 },
+  { re: /\btma\b/i, years: 3 },
+  { re: /traffic control maintainer|\btcm\b/i, years: 2 },
+  { re: /confined space/i, years: 2 },
 ];
 
 // Standard training names — picking from this list keeps spelling identical so the Training overview can count them.
@@ -9377,13 +9383,13 @@ function TrainingPicker({ value, onChange, onEnter, inputClass = "rounded-md bor
 
 function suggestedExpiryFor(label, issuedDateStr) {
   if (!label || !issuedDateStr) return "";
-  const lower = label.toLowerCase();
-  const rule = CERTIFICATION_VALIDITY_YEARS.find((r) => lower.includes(r.match));
+  const rule = CERTIFICATION_VALIDITY_YEARS.find((r) => r.re.test(label));
   if (!rule) return "";
-  const issued = new Date(issuedDateStr + "T00:00:00");
-  if (isNaN(issued.getTime())) return "";
-  issued.setFullYear(issued.getFullYear() + rule.years);
-  return issued.toISOString().slice(0, 10);
+  const m = String(issuedDateStr).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return "";
+  const y = parseInt(m[1], 10) + rule.years, mo = parseInt(m[2], 10), d = parseInt(m[3], 10);
+  const last = new Date(y, mo, 0).getDate(); // Feb 29 issued dates land on Feb 28 in a non-leap year
+  return `${y}-${String(mo).padStart(2, "0")}-${String(Math.min(d, last)).padStart(2, "0")}`;
 }
 const DRUG_SCREEN_RECIPIENT_BY_PROJECT = { "nti-sylvania": "North Tarrant Infrastructure", "nti-golden-triangle": "North Tarrant Infrastructure", "sh99-houston": "FCW99", "nashville": "FCW24" };
 
@@ -14958,7 +14964,7 @@ function RosterRow({ person, user, onChanged }) {
                   <div className="flex gap-2 mb-1.5">
                     <div className="flex-1">
                       <label className="text-[9px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Issued</label>
-                      <input type="date" value={editIssued} onChange={(e) => setEditIssued(e.target.value)} className="w-full rounded-md border px-2 py-1.5 text-[12px] bg-white" style={{ borderColor: "#C9C6BC" }} />
+                      <input type="date" value={editIssued} onChange={(e) => { const v = e.target.value; const lbl = ((quals.find((x) => x.id === editQualId) || {}).label) || ""; const prev = suggestedExpiryFor(lbl, editIssued); const next = suggestedExpiryFor(lbl, v); if (next && (!editExpires || editExpires === prev)) setEditExpires(next); setEditIssued(v); }} className="w-full rounded-md border px-2 py-1.5 text-[12px] bg-white" style={{ borderColor: "#C9C6BC" }} />
                     </div>
                     <div className="flex-1">
                       <label className="text-[9px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Expires</label>
