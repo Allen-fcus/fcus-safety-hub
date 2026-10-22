@@ -1018,7 +1018,7 @@ function HomeScreen({ go, user, activeProjectId }) {
     ...(QUARTERLY_MONTHLY_PROJECTS.includes(activeProjectId) ? [{ key: "quarterlymonthly", label: "Quarterly/Monthly Inspections", desc: "Quarterly and monthly Competent Person verifications", icon: ClipboardCheck, count: "2 forms" }] : []),
     { key: "forms", label: t("formsTemplates"), desc: t("formsDesc"), icon: FileText, count: `${FORMS_DEFAULT.length} forms` },
     { key: "training", label: "Training", desc: "Courses assigned to you, tracked as you go", icon: Play, count: "Portal" },
-    { key: "reports", label: t("weeklyReport"), desc: t("weeklyReportDesc"), icon: AlertTriangle, count: `${WEEKLY_REPORTS_DEFAULT.length} posted` },
+    ...(canSeeWeeklyReport(user, activeProjectId) ? [{ key: "reports", label: t("weeklyReport"), desc: t("weeklyReportDesc"), icon: AlertTriangle, count: "Weekly" }] : []),
     { key: "toolbox", label: t("toolboxTalks"), desc: t("toolboxDesc"), icon: PlayCircle, count: "12 videos" },
     { key: "workplans", label: t("workPlans"), desc: t("workPlansDesc"), icon: ClipboardCheck, count: `${fallbacks.workPlans.length} plans` },
     { key: "truckdriver", label: "Truck Drivers", desc: "Driver onboarding: drug screen, CDL, safety video, badge", icon: Truck, count: "Onboarding" },
@@ -1475,7 +1475,7 @@ function ManageEmergencyContactsScreen({ user }) {
         Changes here show up immediately for everyone on this project — no login required to see them.
       </div>
 
-      {!showNew && !editingId && (
+      {canShareAcrossProjects(user, activeProjectId) && !showNew && !editingId && (
         <button onClick={() => setShowNew(true)} className="w-full mb-3 text-[12px] font-bold uppercase py-2.5 rounded-md" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>
           + New Contact
         </button>
@@ -6214,7 +6214,9 @@ function ToolboxWeekAckList({ week, user, onClose }) {
   );
 }
 
-function ManageToolboxScreen({ user }) {
+function ManageToolboxScreen({ user, activeProjectId }) {
+  const canShare = canShareAcrossProjects(user, activeProjectId);
+  const [shareNew, setShareNew] = useState(true);
   const [weeks, setWeeks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [newWeekLabel, setNewWeekLabel] = useState("");
@@ -6234,7 +6236,7 @@ function ManageToolboxScreen({ user }) {
   const createWeek = async () => {
     if (!newWeekLabel.trim()) return;
     setAddingWeek(true);
-    await supabase.rpc("add_toolbox_week", { p_token: user.sessionToken, p_week_label: newWeekLabel.trim() });
+    await supabase.rpc("add_toolbox_week", { p_token: user.sessionToken, p_week_label: newWeekLabel.trim(), p_share: canShare && shareNew });
     setAddingWeek(false);
     setNewWeekLabel("");
     load();
@@ -6254,6 +6256,7 @@ function ManageToolboxScreen({ user }) {
     <div className="px-4 pt-4 pb-8" style={{ background: "#F4F3EF", minHeight: "100%" }}>
       <div className="text-[12px] mb-3" style={{ color: STEEL }}>
         Create a new week, then add its documents (e.g. English, Spanish, two Environmental topics). Everyone confirms once per week.
+        {canShare ? " Weeks marked \"All projects\" are shared with every project; add your own project-only weeks by turning that off." : " Weeks shared from Sylvania show up here too. You can also add toolbox weeks that are only for this project."}
       </div>
 
       <div className="bg-white rounded-md p-3 border mb-3" style={{ borderColor: "#E4E2DA" }}>
@@ -6264,6 +6267,9 @@ function ManageToolboxScreen({ user }) {
             {addingWeek ? "…" : "Create"}
           </button>
         </div>
+        {canShare && (
+          <label className="flex items-center gap-2 mt-2 text-[12px]"><input type="checkbox" checked={shareNew} onChange={(e) => setShareNew(e.target.checked)} />Send to all projects</label>
+        )}
       </div>
 
       {loading && <div className="text-[12px] mb-2" style={{ color: STEEL }}>Loading…</div>}
@@ -6272,7 +6278,7 @@ function ManageToolboxScreen({ user }) {
         <div key={w.id} className="bg-white rounded-md p-3 border mb-3" style={{ borderColor: "#E4E2DA" }}>
           <div className="flex items-center justify-between mb-2">
             <div>
-              <div className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{w.week_label}</div>
+              <div className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{w.week_label}{w.shared && <span className="ml-2 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-sm align-middle" style={{ background: INK, color: GOLD, fontFamily: "IBM Plex Mono, monospace" }}>All projects</span>}</div>
               <div className="text-[11px] font-bold" style={{ color: GOLD }}>{w.ack_count} confirmed reviewed</div>
             </div>
             <button onClick={() => setViewingAcks(w)} className="text-[10px] font-bold uppercase px-2 py-1 rounded-sm" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>Who Confirmed</button>
@@ -6282,13 +6288,15 @@ function ManageToolboxScreen({ user }) {
             {w.talks.map((t) => (
               <div key={t.id} className="flex items-center justify-between bg-white rounded-sm px-2.5 py-1.5 border" style={{ borderColor: "#E4E2DA" }}>
                 <span className="text-[12px]">{t.title}</span>
-                <button onClick={() => removeTalk(t.id)}><X size={14} color={STEEL} /></button>
+                {(!w.shared || canShare) && <button onClick={() => removeTalk(t.id)}><X size={14} color={STEEL} /></button>}
               </div>
             ))}
             {w.talks.length === 0 && <div className="text-[11px]" style={{ color: STEEL }}>No documents added yet.</div>}
           </div>
 
-          {addingDocToWeek === w.id ? (
+          {w.shared && !canShare ? (
+            <div className="text-[11px] mb-1" style={{ color: STEEL }}>Shared from Sylvania. Only Sylvania and Safety Hub admins can change it.</div>
+          ) : addingDocToWeek === w.id ? (
             <ToolboxDocEditor weekId={w.id} user={user} onDone={() => { setAddingDocToWeek(null); load(); }} />
           ) : (
             <button onClick={() => setAddingDocToWeek(w.id)} className="w-full text-[11px] font-bold uppercase py-2 rounded-sm border mb-2" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>
@@ -6296,9 +6304,9 @@ function ManageToolboxScreen({ user }) {
             </button>
           )}
 
-          <button onClick={() => removeWeek(w.id)} className="w-full text-[10px] font-bold uppercase py-1.5 rounded-sm border" style={{ borderColor: ALERT, color: ALERT, fontFamily: "IBM Plex Mono, monospace" }}>
+          {(!w.shared || canShare) && <button onClick={() => removeWeek(w.id)} className="w-full text-[10px] font-bold uppercase py-1.5 rounded-sm border" style={{ borderColor: ALERT, color: ALERT, fontFamily: "IBM Plex Mono, monospace" }}>
             Delete This Week
-          </button>
+          </button>}
         </div>
       ))}
       {!loading && weeks.length === 0 && (
@@ -17046,20 +17054,23 @@ function WeeklyReportScreen({ user, go, activeProjectId }) {
     async function load() {
       setLoading(true);
       await loadProjectMap();
-      const projectUuid = projectIdForSlug(activeProjectId);
-      if (!projectUuid) { if (!cancelled) { setReports([]); setLoading(false); } return; }
-      const { data, error } = await supabase
-        .from("weekly_reports")
-        .select("*")
-        .eq("project_id", projectUuid)
-        .order("posted_at", { ascending: false });
+      if (!user || !user.sessionToken) { if (!cancelled) { setReports([]); setLoading(false); } return; }
+      const { data, error } = await supabase.rpc("list_weekly_reports", { p_token: user.sessionToken });
       if (cancelled) return;
       setReports(error || !data ? [] : data);
       setLoading(false);
     }
     load();
     return () => { cancelled = true; };
-  }, [activeProjectId]);
+  }, [activeProjectId, user && user.sessionToken]);
+  if (!canSeeWeeklyReport(user, activeProjectId)) {
+    return (
+      <div className="px-4 pt-8 pb-8 text-center" style={{ background: "#F4F3EF", minHeight: "100%" }}>
+        <div className="text-[14px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>Weekly Report</div>
+        <div className="text-[12px] mt-1" style={{ color: STEEL }}>The Weekly Report is only available to the project owner companies.</div>
+      </div>
+    );
+  }
 
   return (
     <div className="px-4 pt-4 pb-8" style={{ background: "#F4F3EF", minHeight: "100%" }}>
@@ -17067,7 +17078,7 @@ function WeeklyReportScreen({ user, go, activeProjectId }) {
         <div className="text-[12px]" style={{ color: STEEL }}>
           {t("weeklyReportDescLong")}
         </div>
-        {user && user.canAddPersonnel && (
+        {canShareAcrossProjects(user, activeProjectId) && (
           <button onClick={() => go("manageweeklyreport")} className="text-[10px] font-bold uppercase px-2 py-1 rounded-sm flex-shrink-0 ml-2" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>
             {t("manage")}
           </button>
@@ -17231,7 +17242,7 @@ function WeeklyReportEditor({ report, user, onDone }) {
   );
 }
 
-function ManageWeeklyReportScreen({ user }) {
+function ManageWeeklyReportScreen({ user, activeProjectId }) {
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
@@ -17255,8 +17266,9 @@ function ManageWeeklyReportScreen({ user }) {
   return (
     <div className="px-4 pt-4 pb-8" style={{ background: "#F4F3EF", minHeight: "100%" }}>
       <div className="text-[12px] mb-3" style={{ color: STEEL }}>
-        Upload this week's PDF — it becomes the Latest report everyone sees first, and earlier reports are tucked under "Previous reports". No login is required to view.
+        Upload this week's PDF. It is posted to every project at once and becomes the Latest report; earlier reports are tucked under "Previous reports". Only the project owner companies can see it (NTI / Ferrovial / Webber on Sylvania, FCW99 / SH99 / Webber / Ferrovial on SH99, FCW24 / Ferrovial / Webber on FCW24). Editing or deleting a report changes it on every project.
       </div>
+      {!canShareAcrossProjects(user, activeProjectId) && <div className="text-[12px] mb-3" style={{ color: ALERT }}>The Weekly Report is posted from Sylvania or by a Safety Hub admin.</div>}
 
       {!showNew && !editingId && (
         <button onClick={() => setShowNew(true)} className="w-full mb-3 text-[12px] font-bold uppercase py-2.5 rounded-md" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>
@@ -17274,7 +17286,7 @@ function ManageWeeklyReportScreen({ user }) {
         ) : (
           <div key={r.id} className="bg-white rounded-md p-3 border mb-2" style={{ borderColor: "#E4E2DA" }}>
             <div className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{r.title}</div>
-            <div className="text-[11px] mt-0.5" style={{ color: STEEL }}>{fmtD(r.posted_at)}{!r.doc_link ? " · No file uploaded" : ""}</div>
+            <div className="text-[11px] mt-0.5" style={{ color: STEEL }}>{fmtD(r.posted_at)}{r.shared ? " · All projects" : ""}{!r.doc_link ? " · No file uploaded" : ""}</div>
             <div className="flex gap-2 mt-2">
               <button onClick={() => setEditingId(r.id)} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Edit</button>
               <button onClick={() => remove(r.id)} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm border" style={{ borderColor: ALERT, color: ALERT, fontFamily: "IBM Plex Mono, monospace" }}>Delete</button>
@@ -18922,10 +18934,21 @@ function TruckDriverVerifyScreen() {
 // reporting, and the Labor Law QR code that anyone can scan).
 const ALWAYS_PUBLIC_SCREENS = ["emergency", "concern", "laborlaws", "trafficcontrol", "meetingsignin", "orientationsignin", "hsstandards", "orientationschedule", "verifybadge", "truckdriver", "verifytruckdriver"];
 // Normally-gated screens for every project.
-const BASE_GATED_SCREENS = ["forms", "safetyplan", "toolbox", "workplans", "mysubmissions", "quarterlymysubmissions", "summarymysubmissions", "preconsubmissions", "preconstruction", "quarterlymonthly", "training", "meetings", "safetyreports"];
+const BASE_GATED_SCREENS = ["forms", "safetyplan", "toolbox", "reports", "workplans", "mysubmissions", "quarterlymysubmissions", "summarymysubmissions", "preconsubmissions", "preconstruction", "quarterlymonthly", "training", "meetings", "safetyreports"];
 // Projects where EVERYTHING (except the always-public screens above)
 // requires a badge — including Home itself.
 const FULLY_GATED_PROJECTS = ["sh99-houston"];
+
+// Weekly Report is for the owner companies of each project only (the database enforces this too).
+const WEEKLY_REPORT_EMPLOYERS = {
+  "nti-sylvania": /(\bnti\b|north tarrant|ferrovial|webber)/i,
+  "nti-golden-triangle": /(\bnti\b|north tarrant|ferrovial|webber)/i,
+  "sh99-houston": /(fcw ?-?99|\bsh ?-?99\b|ferrovial|webber)/i,
+  "nashville": /(fcw ?-?24|ferrovial|webber)/i,
+};
+const canSeeWeeklyReport = (user, slug) => !!user && (!!user.isHubAdmin || (WEEKLY_REPORT_EMPLOYERS[slug] || /$^/).test(user.employer || ""));
+// Sylvania admins and Safety Hub admins post the Weekly Report and shared Toolbox weeks that go to every project
+const canShareAcrossProjects = (user, slug) => !!user && (!!user.canAddPersonnel || !!user.isHubAdmin) && (slug === "nti-sylvania" || !!user.isHubAdmin);
 
 function isScreenGated(targetScreen, projectId) {
   if (ALWAYS_PUBLIC_SCREENS.includes(targetScreen)) return false;
@@ -19187,7 +19210,7 @@ export default function SafetyHubPrototype() {
     { key: "home", icon: Home, label: t("home") },
     { key: "hsstandards", icon: BookOpen, label: t("hsStandards") },
     { key: "toolbox", icon: PlayCircle, label: t("talks") },
-    { key: "reports", icon: AlertTriangle, label: t("reports") },
+    ...(canSeeWeeklyReport(user, activeProjectId) ? [{ key: "reports", icon: AlertTriangle, label: t("reports") }] : []),
     { key: "forms", icon: FileText, label: t("forms") },
     { key: "personnel", icon: Users, label: t("crew") },
   ];
@@ -19247,7 +19270,7 @@ export default function SafetyHubPrototype() {
     { key: "preconstruction", icon: FileText, label: "Pre-Construction" },
     ...(QUARTERLY_MONTHLY_PROJECTS.includes(activeProjectId) ? [{ key: "quarterlymonthly", icon: ClipboardCheck, label: "Quarterly/Monthly Inspections" }] : []),
     { key: "forms", icon: FileText, label: t("formsTemplates") },
-    { key: "reports", icon: AlertTriangle, label: t("weeklyReport") },
+    ...(canSeeWeeklyReport(user, activeProjectId) ? [{ key: "reports", icon: AlertTriangle, label: t("weeklyReport") }] : []),
     { key: "toolbox", icon: PlayCircle, label: t("toolboxTalks") },
     { key: "workplans", icon: ClipboardCheck, label: t("workPlans") },
     { key: "personnel", icon: Users, label: t("personnelLookup") },
@@ -19381,7 +19404,7 @@ export default function SafetyHubPrototype() {
             {screen === "hsstandards" && <HSStandardsScreen user={user} activeProjectId={activeProjectId} />}
             {screen === "safetyplan" && <SafetyPlanScreen />}
             {screen === "toolbox" && <ToolboxScreen user={user} go={go} activeProjectId={activeProjectId} />}
-            {screen === "managetoolbox" && <ManageToolboxScreen user={user} />}
+            {screen === "managetoolbox" && <ManageToolboxScreen user={user} activeProjectId={activeProjectId} />}
             {screen === "meetings" && <MeetingsScreen user={user} activeProjectId={activeProjectId} initialOpenId={openMeetingId} />}
             {screen === "safetyreports" && <SafetyReportsScreen user={user} activeProjectId={activeProjectId} onOpenMeeting={(id) => { setOpenMeetingId(id); setScreen("meetings"); }} />}
             {screen === "meetingsignin" && <MeetingSignInScreen />}
@@ -19390,7 +19413,7 @@ export default function SafetyHubPrototype() {
             {screen === "laborlaws" && <LaborLawScreen user={user} go={go} activeProjectId={activeProjectId} />}
             {screen === "managelaborlaw" && <ManageLaborLawScreen user={user} activeProjectId={activeProjectId} />}
             {screen === "reports" && <WeeklyReportScreen user={user} go={go} activeProjectId={activeProjectId} />}
-            {screen === "manageweeklyreport" && <ManageWeeklyReportScreen user={user} />}
+            {screen === "manageweeklyreport" && <ManageWeeklyReportScreen user={user} activeProjectId={activeProjectId} />}
             {screen === "forms" && <FormsScreen user={user} go={go} activeProjectId={activeProjectId} />}
             {screen === "training" && <TrainingScreen user={user} go={go} />}
             {screen === "managetraining" && <ManageTrainingScreen user={user} />}
