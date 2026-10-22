@@ -14107,7 +14107,7 @@ function hubRangeDates(key) {
   if (key === "year") return [iso(new Date(now.getFullYear(), 0, 1)), null];
   return [null, null];
 }
-const HUB_TABS = [["overview", "Overview"], ["orientation", "Orientation"], ["precon", "Pre-Construction"], ["forms", "Site Safety Forms"], ["quarterly", "Quarterly/Monthly"], ["workplans", "Work Plans"], ["toolbox", "Toolbox Talks"], ["trucks", "Truck Drivers"], ["personnel", "Personnel Lookup"], ["meetings", "Meetings"], ["training", "Training Portal"]];
+const HUB_TABS = [["overview", "Overview"], ["orientation", "Orientation"], ["precon", "Pre-Construction"], ["forms", "Site Safety Forms"], ["quarterly", "Quarterly/Monthly"], ["workplans", "Work Plans"], ["weekly", "Weekly Report"], ["toolbox", "Toolbox Talks"], ["trucks", "Truck Drivers"], ["personnel", "Personnel Lookup"], ["meetings", "Meetings"], ["training", "Training Portal"]];
 const HUB_PROJECT_COLORS = ["#C9A227", "#3B6EA5", "#2E8B57", "#8E5BA8", "#C0392B"];
 
 function HubBars({ items, color = GOLD, labelW = 110 }) {
@@ -14144,6 +14144,17 @@ function HubOverviewScreen({ user }) {
   };
   useEffect(() => { load(); }, [range, user?.sessionToken]);
   useLivePoll(load, 60000, !!user?.sessionToken);
+  // the Weekly Report and Toolbox weeks themselves (not just counts), for every project
+  const [wr, setWr] = useState(null);
+  const [tbw, setTbw] = useState(null);
+  const [viewReport, setViewReport] = useState(null);
+  useEffect(() => {
+    if (!user?.sessionToken) return;
+    let alive = true;
+    if (tab === "weekly") supabase.rpc("list_weekly_reports_hub", { p_token: user.sessionToken }).then((r) => { if (alive) setWr(r.error || !r.data ? [] : r.data); });
+    if (tab === "toolbox") supabase.rpc("list_toolbox_weeks_hub", { p_token: user.sessionToken }).then((r) => { if (alive) setTbw(r.error || !r.data ? [] : r.data); });
+    return () => { alive = false; };
+  }, [tab, user?.sessionToken]);
 
   if (state === "loading" && !d) return <div className="px-4 pt-10 text-center text-[12px]" style={{ color: STEEL }}>Loading overview…</div>;
   if (!d) return <div className="px-4 pt-10 text-center text-[12px]" style={{ color: STEEL }}>The combined overview is only available to Safety Hub Admins. If you are one, run safety-hub-hub-overview.sql in Supabase.</div>;
@@ -14348,7 +14359,55 @@ function HubOverviewScreen({ user }) {
         <Card title="Work plans per company">{wplans.length ? <HubBars items={group(wplans, (r) => r.employer).slice(0, 30)} /> : none}</Card>
       </>)}
 
+      {tab === "weekly" && (<>
+        <div className="text-[11px] mb-2" style={{ color: STEEL }}>The Weekly Report is posted once and goes to every project. Only the project owner companies see it inside a project; Safety Hub admins see it everywhere.</div>
+        {wr === null && <div className="text-[12px]" style={{ color: STEEL }}>Loading…</div>}
+        {wr && wr.length === 0 && <div className="text-[12px] text-center py-4" style={{ color: STEEL }}>No weekly reports posted yet.</div>}
+        {(wr || []).map((r) => (
+          <div key={r.id} className="bg-white rounded-md p-3 border mb-2" style={{ borderColor: "#E4E2DA" }}>
+            <div className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{r.title}</div>
+            <div className="text-[10px] uppercase font-bold mt-0.5" style={{ color: STEEL, ...mono }}>{fmtD(r.posted_at)} · {r.shared ? "All projects" : r.project}</div>
+            {r.doc_link ? (
+              <div className="flex gap-2 mt-2">
+                <button onClick={() => setViewReport(r)} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm" style={{ background: GOLD, color: INK, ...mono }}>View</button>
+                <button onClick={() => window.open(r.doc_link, "_blank")} className="flex-1 text-[10px] font-bold uppercase py-1.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, ...mono }}>Download</button>
+              </div>
+            ) : <div className="text-[11px] mt-1" style={{ color: STEEL }}>No file uploaded.</div>}
+          </div>
+        ))}
+        {viewReport && (
+          <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/80 px-4">
+            <div className="bg-white rounded-md w-full max-w-sm md:max-w-[98vw] md:w-[96vw] h-[80%] md:h-[95vh] overflow-hidden flex flex-col">
+              <div className="flex items-center justify-between p-3 border-b flex-shrink-0" style={{ borderColor: "#E4E2DA" }}>
+                <div className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{viewReport.title}</div>
+                <button onClick={() => setViewReport(null)}><X size={18} color={STEEL} /></button>
+              </div>
+              <PdfFrame link={viewReport.doc_link} title={viewReport.title} />
+            </div>
+          </div>
+        )}
+      </>)}
+
       {tab === "toolbox" && (<>
+        <Card title="Toolbox weeks posted">
+          {tbw === null && <div className="text-[12px]" style={{ color: STEEL }}>Loading…</div>}
+          {tbw && tbw.length === 0 && <div className="text-[12px]" style={{ color: STEEL }}>No toolbox weeks posted yet.</div>}
+          {(tbw || []).slice(0, 12).map((w) => (
+            <div key={w.id} className="border-t first:border-t-0 py-2" style={{ borderColor: "#ECEAE3" }}>
+              <div className="flex justify-between gap-2"><div className="text-[12px] font-bold">{w.week_label}</div><div className="text-[11px] flex-shrink-0" style={{ color: STEEL }}>{w.ack_count} confirmed</div></div>
+              <div className="text-[10px] uppercase font-bold" style={{ color: STEEL, ...mono }}>{fmtD(w.posted_at)} · {w.shared ? "All projects" : w.project}</div>
+              <div className="mt-1 space-y-1">
+                {(w.talks || []).map((tk, i) => (
+                  <div key={i} className="flex items-center gap-2 text-[12px]">
+                    <span className="flex-1 min-w-0 truncate">{tk.title}</span>
+                    {tk.doc_link && <button onClick={() => window.open(tk.doc_link, "_blank")} className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, ...mono }}>Document</button>}
+                    {tk.video_link && <button onClick={() => window.open(tk.video_link, "_blank")} className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, ...mono }}>Video</button>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </Card>
         <Tile label="Confirmations" value={sum(toolbox)} />
         {!proj && <Card title="By project">{toolbox.length ? <HubBars items={group(toolbox, (r) => projName(r.project))} /> : none}</Card>}
         <Card title="By talk">{toolbox.length ? <HubBars items={group(toolbox, (r) => r.label).slice(0, 15)} labelW={150} /> : none}</Card>
