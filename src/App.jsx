@@ -6521,32 +6521,33 @@ function CoursePlayer({ course, attemptId, initialStepIndex, initialStepsProgres
   // "voiceschanged" event). Prefer a higher-quality online/natural English
   // voice over the default robotic one when the device has one installed.
   const narrationVoiceRef = useRef(null);
+  const [voiceChoices, setVoiceChoices] = useState([]);
+  const [voiceName, setVoiceName] = useState(() => {
+    try { return localStorage.getItem("safetyhub_training_voice") || ""; } catch (e) { return ""; }
+  });
   useEffect(() => {
     if (!speechSupported) return;
     const pickVoice = () => {
       const voices = window.speechSynthesis.getVoices();
       if (!voices.length) return;
-      const find = (pred) => voices.find(pred);
+      const english = voices.filter((v) => /^en([-_]|$)/i.test(v.lang));
+      const ranked = [...english].sort((a, b) => scoreNarrationVoice(b) - scoreNarrationVoice(a));
+      setVoiceChoices(ranked.slice(0, 8));
       narrationVoiceRef.current =
-        find((v) => /en-US|en_US/.test(v.lang) && /natural/i.test(v.name)) ||
-        find((v) => /en-US|en_US/.test(v.lang) && /online|neural/i.test(v.name)) ||
-        find((v) => /en-US|en_US/.test(v.lang) && /google/i.test(v.name)) ||
-        find((v) => v.lang.startsWith("en") && v.localService === false) ||
-        find((v) => v.lang.startsWith("en")) ||
-        voices[0];
+        (voiceName && voices.find((v) => v.name === voiceName)) || ranked[0] || voices[0];
     };
     pickVoice();
     window.speechSynthesis.addEventListener("voiceschanged", pickVoice);
     return () => window.speechSynthesis.removeEventListener("voiceschanged", pickVoice);
-  }, [speechSupported]);
+  }, [speechSupported, voiceName]);
 
   // Narration reads one sentence/bullet at a time, with a short pause
   // between each, instead of running every bullet together as one long
   // utterance -- that's what makes it sound like it's actually pausing
   // where the script pauses, rather than racing through everything flat.
   const narrationRunRef = useRef(0);
-  const SEGMENT_PAUSE_MS = 1000; // script [pause]
-  const SENTENCE_PAUSE_MS = 250;
+  const SEGMENT_PAUSE_MS = 650; // script [pause]
+  const SAME_SEGMENT_GAP_MS = 60; // between pieces of one paragraph -- keeps it flowing
   const [narrationDone, setNarrationDone] = useState(false);
   const [wrongPicks, setWrongPicks] = useState([]);
   const [imgFailed, setImgFailed] = useState(false);
@@ -6557,21 +6558,22 @@ function CoursePlayer({ course, attemptId, initialStepIndex, initialStepsProgres
       // Narration comes straight from the authored script. Each script
       // segment (split at [pause]) gets a long pause after it; sentences
       // inside a segment get a short beat.
+      // Each script segment is read as flowing paragraphs: sentences are
+      // packed together up to a safe length (browsers cut off very long
+      // utterances) instead of being spoken one at a time.
       const out = [];
       (st.narration || []).forEach((seg) => {
-        const sentences = String(seg).match(/[^.!?]+[.!?]+["')\]]*|[^.!?]+$/g) || [String(seg)];
-        sentences.map((x) => x.trim()).filter(Boolean).forEach((x, i, arr) => {
-          out.push({ t: x, gap: i === arr.length - 1 ? SEGMENT_PAUSE_MS : SENTENCE_PAUSE_MS });
-        });
+        const pieces = packSpeech(spokenText(seg), 200);
+        pieces.forEach((x, i) => out.push({ t: x, gap: i === pieces.length - 1 ? SEGMENT_PAUSE_MS : SAME_SEGMENT_GAP_MS }));
       });
       return out;
     }
-    if (st.type === "content") return [st.title, ...(st.bullets || [])].filter(Boolean);
+    if (st.type === "content") return [st.title, ...(st.bullets || [])].filter(Boolean).map(spokenText);
     if (st.type === "quiz") {
       const opts = (st.options || []).map((o, i) => `Option ${i + 1}: ${o}`);
-      return ["Quick check.", st.question, ...opts];
+      return ["Quick check.", st.question, ...opts].map(spokenText);
     }
-    if (st.type === "video") return [st.title].filter(Boolean);
+    if (st.type === "video") return [st.title].filter(Boolean).map(spokenText);
     return [];
   };
 
@@ -6595,7 +6597,7 @@ function CoursePlayer({ course, attemptId, initialStepIndex, initialStepsProgres
       const text = typeof chunk === "string" ? chunk : chunk.t;
       const gap = typeof chunk === "string" ? PAUSE_BETWEEN_CHUNKS_MS : chunk.gap;
       const utter = new SpeechSynthesisUtterance(text);
-      utter.rate = 1.1;
+      utter.rate = 1.0;
       utter.pitch = 1;
       if (narrationVoiceRef.current) utter.voice = narrationVoiceRef.current;
       utter.onend = () => {
@@ -6630,7 +6632,7 @@ function CoursePlayer({ course, attemptId, initialStepIndex, initialStepsProgres
   useEffect(() => {
     if (autoNarrate && answered && step.type === "quiz" && step.explanation) {
       const isCorrect = selected === step.correct;
-      const t = setTimeout(() => speakChunks([isCorrect ? "Correct." : "Not quite.", step.explanation]), 400);
+      const t = setTimeout(() => speakChunks([isCorrect ? "Correct." : "Not quite.", ...packSpeech(spokenText(step.explanation), 200)]), 400);
       return () => clearTimeout(t);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -6955,8 +6957,28 @@ function CoursePlayer({ course, attemptId, initialStepIndex, initialStepsProgres
                     </div>
                   )}
                   {narrating && (
-                    <div className="text-[11px] mb-2" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>
-                      {isSpeaking ? "Narration playing…" : narrationDone ? "Narration complete." : "Narration paused — tap the speaker to play."}
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <div className="text-[11px]" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>
+                        {isSpeaking ? "Narration playing…" : narrationDone ? "Narration complete." : "Narration paused — tap the speaker to play."}
+                      </div>
+                      {voiceChoices.length > 1 && (
+                        <select
+                          value={narrationVoiceRef.current ? narrationVoiceRef.current.name : ""}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            try { localStorage.setItem("safetyhub_training_voice", v); } catch (err) { /* ignore */ }
+                            setVoiceName(v);
+                            stopSpeaking();
+                          }}
+                          className="text-[10px] rounded border px-1 py-0.5 max-w-[45%]"
+                          style={{ borderColor: "#C9C6BC", color: STEEL, background: "white" }}
+                          title="Choose the narrator's voice"
+                        >
+                          {voiceChoices.map((v) => (
+                            <option key={v.name} value={v.name}>{v.name.replace(/^(Microsoft|Google)\s+/i, "").replace(/\s*\(.*?\)/, "")}</option>
+                          ))}
+                        </select>
+                      )}
                     </div>
                   )}
                   {!dwellSatisfied && (
@@ -9341,6 +9363,90 @@ const BADGE_ID_PREFIXES = { "nti-sylvania": "SYL", "nti-golden-triangle": "GT", 
 // entered label contains any of these keywords (case-insensitive).
 // When it matches, the expiration date is calculated automatically
 // from the issued date; admins can still override it by hand.
+// ---- Narration helpers: make the browser voice read the script naturally ----
+const NARRATION_BAD_VOICES = /compact|espeak|albert|bad news|bahh|bells|boing|bubbles|cellos|deranged|good news|hysterical|jester|organ|superstar|trinoids|whisper|wobble|zarvox|fred|junior|ralph|kathy|agnes|grandma|grandpa|rocko|shelley|flo|eddy|reed|sandy/i;
+function scoreNarrationVoice(v) {
+  const n = v.name || "";
+  let sc = 0;
+  if (/^en[-_]US/i.test(v.lang)) sc += 20; else if (/^en/i.test(v.lang)) sc += 5;
+  if (/natural/i.test(n)) sc += 100;
+  else if (/neural|online/i.test(n)) sc += 90;
+  else if (/google/i.test(n)) sc += 80;
+  else if (/premium|enhanced/i.test(n)) sc += 75;
+  else if (/\b(samantha|ava|allison|evan|nathan|zoe|tom|joelle|susan|aaron|nicky)\b/i.test(n)) sc += 60;
+  if (v.localService === false) sc += 10;
+  if (NARRATION_BAD_VOICES.test(n)) sc -= 100;
+  return sc;
+}
+const SMALL_NUMS = ["zero","one","two","three","four","five","six","seven","eight","nine","ten","eleven","twelve","thirteen","fourteen","fifteen","sixteen","seventeen","eighteen","nineteen"];
+const TENS_WORDS = ["","","twenty","thirty","forty","fifty","sixty","seventy","eighty","ninety"];
+function numberWords(n) {
+  if (n < 20) return SMALL_NUMS[n];
+  if (n < 100) return TENS_WORDS[Math.floor(n / 10)] + (n % 10 ? "-" + SMALL_NUMS[n % 10] : "");
+  if (n < 1000) return SMALL_NUMS[Math.floor(n / 100)] + " hundred" + (n % 100 ? " " + numberWords(n % 100) : "");
+  if (n < 1000000) return numberWords(Math.floor(n / 1000)) + " thousand" + (n % 1000 ? " " + numberWords(n % 1000) : "");
+  return String(n);
+}
+function yearWords(n) {
+  if (n === 2000) return "two thousand";
+  if (n > 2000 && n < 2010) return "two thousand " + SMALL_NUMS[n - 2000];
+  const a = Math.floor(n / 100), b = n % 100;
+  return numberWords(a) + " " + (b === 0 ? "hundred" : b < 10 ? "oh " + SMALL_NUMS[b] : numberWords(b));
+}
+function ordinalWords(n) {
+  const w = numberWords(n);
+  const irregular = { one: "first", two: "second", three: "third", five: "fifth", eight: "eighth", nine: "ninth", twelve: "twelfth" };
+  const m = w.match(/^(.*?)([a-z]+)$/);
+  const last = m[2];
+  if (irregular[last]) return m[1] + irregular[last];
+  if (/y$/.test(last)) return m[1] + last.slice(0, -1) + "ieth";
+  return m[1] + last + "th";
+}
+const SPOKEN_WORDS = [
+  [/\bMEWPs\b/g, "mewps"], [/\bMEWP\b/g, "mewp"],
+  [/\bH&S\b/g, "H and S"], [/\bHiPo\b/g, "high po"], [/\bTxDOT\b/g, "Tex-dot"],
+  [/\bDOT\b/g, "D O T"], [/\bGPS\b/g, "G P S"], [/\bFMCSA\b/g, "F M C S A"], [/\bCDL\b/g, "C D L"],
+  [/\bPPE\b/g, "P P E"], [/\bJHA\b/g, "J H A"], [/\bSRLs\b/g, "S R Ls"], [/\bSRL\b/g, "S R L"],
+  [/\bTMA\b/g, "T M A"], [/\bAEB\b/g, "A E B"], [/\bSUVs\b/g, "S U Vs"], [/\bSUV\b/g, "S U V"], [/\bDWI\b/g, "D W I"],
+  [/\bROPS\b/g, "R O P S"], [/\bNHTSA\b/g, "N H T S A"], [/\bBLS\b/g, "B L S"], [/\bETA\b/g, "E T A"],
+];
+// Turns script text into what the voice should actually say.
+function spokenText(raw) {
+  let t = String(raw == null ? "" : raw);
+  // letter-by-letter acronyms written with hyphens (S-R-L, T-M-A, J-H-A): spaces read smoothly, hyphens make every voice stutter
+  t = t.replace(/\b([A-Z])((?:-[A-Z])+)(s?)\b/g, (m, a, rest, pl) => (a + rest.replace(/-/g, " ")) + (pl ? "s" : ""));
+  SPOKEN_WORDS.forEach(([re, to]) => { t = t.replace(re, to); });
+  t = t.replace(/\b(Module \d+)\.\s/g, "$1: ");
+  t = t.replace(/\bZ(\d+)\.(\d+)\b/g, (m, a, b) => "Z " + numberWords(parseInt(a, 10)) + " point " + b.split("").map((d) => SMALL_NUMS[+d]).join(" "));
+  t = t.replace(/\b911\b/g, "nine one one");
+  t = t.replace(/\b(\d)-D\b/g, (m, d) => SMALL_NUMS[+d] + " D");
+  t = t.replace(/\b(January|February|March|April|May|June|July|August|September|October|November|December) (\d{1,2}),? (\d{4})\b/g, (m, mo, d, y) => mo + " " + ordinalWords(+d) + ", " + yearWords(+y));
+  t = t.replace(/\b(19|20)\d{2}\b/g, (m) => yearWords(parseInt(m, 10)));
+  t = t.replace(/\b(\d{1,3}(?:,\d{3})+|\d+)\b/g, (m) => numberWords(parseInt(m.replace(/,/g, ""), 10)));
+  t = t.replace(/%/g, " percent").replace(/&/g, " and ");
+  return t.replace(/\s{2,}/g, " ").trim();
+}
+// Packs sentences into pieces of at most `max` characters, never splitting a sentence unless it is very long (then at a comma/semicolon/colon).
+function packSpeech(text, max) {
+  const sentences = String(text).match(/[^.!?]+[.!?]+["')\]]*|[^.!?]+$/g) || [String(text)];
+  const parts = [];
+  sentences.map((x) => x.trim()).filter(Boolean).forEach((x) => {
+    if (x.length <= max) { parts.push(x); return; }
+    let cur = "";
+    x.split(/(?<=[,;:])\s+/).forEach((c) => {
+      if (cur && (cur + " " + c).length > max) { parts.push(cur); cur = c; } else cur = cur ? cur + " " + c : c;
+    });
+    if (cur) parts.push(cur);
+  });
+  const out = [];
+  let cur = "";
+  parts.forEach((p) => {
+    if (cur && (cur + " " + p).length > max) { out.push(cur); cur = p; } else cur = cur ? cur + " " + p : p;
+  });
+  if (cur) out.push(cur);
+  return out;
+}
+
 const CERTIFICATION_VALIDITY_YEARS = [
   { re: /\bosha ?30\b/i, years: 5 },
   { re: /\bosha ?10\b/i, years: 5 },
