@@ -9517,14 +9517,22 @@ function TrainingPicker({ value, onChange, onEnter, inputClass = "rounded-md bor
   );
 }
 
+// The project the user is currently working in (set by the app root) -- a few trainings have project-specific validity.
+let ACTIVE_PROJECT_SLUG = "";
+function trainingMonthsFor(label, years) {
+  // Driving Awareness is good for 18 months on the Sylvania project only (1 year everywhere else)
+  if (ACTIVE_PROJECT_SLUG === "nti-sylvania" && /driving awareness|driver awareness/i.test(label || "")) return 18;
+  return years * 12;
+}
 function suggestedExpiryFor(label, issuedDateStr) {
   if (!label || !issuedDateStr) return "";
   const rule = CERTIFICATION_VALIDITY_YEARS.find((r) => r.re.test(label) && !(r.not && r.not.test(label)));
   if (!rule) return "";
   const m = String(issuedDateStr).match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (!m) return "";
-  const y = parseInt(m[1], 10) + rule.years, mo = parseInt(m[2], 10), d = parseInt(m[3], 10);
-  const last = new Date(y, mo, 0).getDate(); // Feb 29 issued dates land on Feb 28 in a non-leap year
+  const total = parseInt(m[1], 10) * 12 + (parseInt(m[2], 10) - 1) + trainingMonthsFor(label, rule.years);
+  const y = Math.floor(total / 12), mo = (total % 12) + 1, d = parseInt(m[3], 10);
+  const last = new Date(y, mo, 0).getDate(); // Feb 29 / the 31st land on the last day of a shorter month
   return `${y}-${String(mo).padStart(2, "0")}-${String(Math.min(d, last)).padStart(2, "0")}`;
 }
 const DRUG_SCREEN_RECIPIENT_BY_PROJECT = { "nti-sylvania": "North Tarrant Infrastructure", "nti-golden-triangle": "North Tarrant Infrastructure", "sh99-houston": "FCW99", "nashville": "FCW24" };
@@ -19222,6 +19230,7 @@ function getInitialScreenFromUrl() {
 
 export default function SafetyHubPrototype() {
   const [activeProjectId, setActiveProjectId] = useState(getInitialProjectFromUrl);
+  ACTIVE_PROJECT_SLUG = activeProjectId;
   const [lang, setLangState] = useState(() => {
     try { return localStorage.getItem("safetyhub_lang") || "en"; } catch (e) { return "en"; }
   });
