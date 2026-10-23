@@ -13520,10 +13520,18 @@ function AddPersonScreen({ user, onDone, prefill }) {
 
   const generatePin = () => setPin(randomPin());
 
+  // issued date + auto-calculated expiry for the training being added (same rules as editing a badge)
+  const [qualIssued, setQualIssued] = useState("");
+  const [qualExpires, setQualExpires] = useState("");
+  const [qualExpTouched, setQualExpTouched] = useState(false);
+  useEffect(() => {
+    if (qualExpTouched) return;
+    setQualExpires(suggestedExpiryFor(qualLabel, qualIssued));
+  }, [qualLabel, qualIssued, qualExpTouched]);
   const addQual = () => {
     if (!qualLabel.trim()) return;
-    setQuals((q) => [...q, { label: qualLabel.trim(), status: "current" }]);
-    setQualLabel("");
+    setQuals((q) => [...q, { label: qualLabel.trim(), status: "current", issued: qualIssued, expires: qualExpires }]);
+    setQualLabel(""); setQualIssued(""); setQualExpires(""); setQualExpTouched(false);
   };
   const removeQual = (i) => setQuals((q) => q.filter((_, idx) => idx !== i));
 
@@ -13548,7 +13556,7 @@ function AddPersonScreen({ user, onDone, prefill }) {
       p_employer: employer,
       p_orientation_date: orientationDate,
       p_training_access: trainingAccess,
-      p_qualifications: quals,
+      p_qualifications: [],
       p_photo_url: photoUrl,
     });
     setSubmitting(false);
@@ -13560,11 +13568,18 @@ function AddPersonScreen({ user, onDone, prefill }) {
       setError(data.error || "Couldn't add this person.");
       return;
     }
+    let qualWarn = "";
+    if (quals.length && data.id) {
+      for (const q of quals) {
+        const r = await supabase.rpc("add_qualification", { p_token: user.sessionToken, p_person_id: data.id, p_label: q.label, p_issued_at: q.issued || null, p_expires_at: q.expires || null });
+        if (r.error || !r.data) qualWarn = "The person was added, but some trainings could not be saved. Add them from their badge.";
+      }
+    }
     if (contactEmail.trim() || contactPhone.trim()) {
       await supabase.rpc("set_badge_contact", { p_token: user.sessionToken, p_employee_id: employeeId.trim(), p_email: contactEmail.trim(), p_phone: contactPhone.trim() });
     }
     if (prefill && prefill.onCreated) prefill.onCreated();
-    setSuccess({ name: name.trim(), badge: badge.trim(), pin: pin.trim(), phone: contactPhone.trim(), email: contactEmail.trim() });
+    setSuccess({ name: name.trim(), badge: badge.trim(), pin: pin.trim(), phone: contactPhone.trim(), email: contactEmail.trim(), warn: qualWarn });
   };
 
   if (success) {
@@ -13575,6 +13590,7 @@ function AddPersonScreen({ user, onDone, prefill }) {
         <div className="text-[12px] mb-4" style={{ color: STEEL }}>
           Give {success.name} their login info:
         </div>
+        {success.warn && <div className="text-[12px] mb-3" style={{ color: ALERT }}>{success.warn}</div>}
         <div className="bg-white rounded-md p-4 border w-full max-w-xs" style={{ borderColor: "#E4E2DA" }}>
           <div className="text-[10px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Badge Number</div>
           <div className="text-[16px] font-bold mb-2">{success.badge}</div>
@@ -13694,10 +13710,22 @@ function AddPersonScreen({ user, onDone, prefill }) {
         <TrainingPicker value={qualLabel} onChange={setQualLabel} onEnter={addQual} />
         <button onClick={addQual} className="text-[10px] font-bold uppercase px-3 rounded-sm" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>Add</button>
       </div>
+      {qualLabel.trim() && (
+        <div className="flex gap-2 mb-2">
+          <div className="flex-1">
+            <label className="text-[9px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Issued</label>
+            <input type="date" value={qualIssued} onChange={(e) => setQualIssued(e.target.value)} className="w-full rounded-md border px-2 py-1.5 text-[12px]" style={{ borderColor: "#C9C6BC" }} />
+          </div>
+          <div className="flex-1">
+            <label className="text-[9px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Expires</label>
+            <input type="date" value={qualExpires} onChange={(e) => { setQualExpires(e.target.value); setQualExpTouched(true); }} className="w-full rounded-md border px-2 py-1.5 text-[12px]" style={{ borderColor: "#C9C6BC" }} />
+          </div>
+        </div>
+      )}
       <div className="space-y-1.5 mb-4">
         {quals.map((q, i) => (
           <div key={i} className="flex items-center justify-between bg-white rounded-sm px-2.5 py-1.5 border" style={{ borderColor: "#E4E2DA" }}>
-            <span className="text-[12px]">{q.label}</span>
+            <span className="text-[12px]">{q.label}{(q.issued || q.expires) && <span className="text-[10px] ml-1.5" style={{ color: STEEL }}>{q.issued ? "Issued " + fmtD(q.issued) : ""}{q.issued && q.expires ? " · " : ""}{q.expires ? "Expires " + fmtD(q.expires) : ""}</span>}</span>
             <button onClick={() => removeQual(i)}><X size={14} color={STEEL} /></button>
           </div>
         ))}
