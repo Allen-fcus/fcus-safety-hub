@@ -4889,7 +4889,17 @@ function ReviewDesignationPanel({ sub, user, slug, roster, onDone }) {
   const [extra, setExtra] = useState("");
   const [issued, setIssued] = useState(new Date().toISOString().slice(0, 10));
   const [expires, setExpires] = useState("");
+  const [expTouched, setExpTouched] = useState(false);
   const [busy, setBusy] = useState(false);
+  // auto-fill the expiration from the issue date for known certifications (same rules as everywhere else)
+  const autoExpiry = (() => {
+    const names = [...labels.filter((l) => l.on).map((l) => l.text.trim()), extra.trim()].filter(Boolean);
+    const hit = names.find((l) => suggestedExpiryFor(l, issued));
+    return hit ? suggestedExpiryFor(hit, issued) : "";
+  })();
+  useEffect(() => {
+    if (!expTouched) setExpires(autoExpiry || "");
+  }, [autoExpiry, expTouched]);
   const [err, setErr] = useState("");
   const q = search.trim().toLowerCase();
   const matches = (roster || []).filter((r) => q && String(r.name || "").toLowerCase().includes(q)).slice(0, 8);
@@ -4950,7 +4960,7 @@ function ReviewDesignationPanel({ sub, user, slug, roster, onDone }) {
       <input value={extra} onChange={(e) => setExtra(e.target.value)} placeholder="Add another designation (optional)" className="w-full rounded-md border px-2 py-1 text-[12px] mb-2" style={{ borderColor: "#C9C6BC" }} />
       <div className="flex gap-2 mb-2">
         <div className="flex-1"><div className="text-[9px] uppercase font-bold" style={lab}>Issued</div><input type="date" value={issued} onChange={(e) => setIssued(e.target.value)} className="w-full rounded-md border px-2 py-1 text-[12px]" style={{ borderColor: "#C9C6BC" }} /></div>
-        <div className="flex-1"><div className="text-[9px] uppercase font-bold" style={lab}>Expires (optional)</div><input type="date" value={expires} onChange={(e) => setExpires(e.target.value)} className="w-full rounded-md border px-2 py-1 text-[12px]" style={{ borderColor: "#C9C6BC" }} /></div>
+        <div className="flex-1"><div className="text-[9px] uppercase font-bold" style={lab}>Expires (optional)</div><input type="date" value={expires} onChange={(e) => { setExpires(e.target.value); setExpTouched(true); }} className="w-full rounded-md border px-2 py-1 text-[12px]" style={{ borderColor: "#C9C6BC" }} /></div>
       </div>
       {err && <div className="text-[11px] mb-2" style={{ color: ALERT }}>{err}</div>}
       <div className="flex gap-2">
@@ -9447,21 +9457,40 @@ function packSpeech(text, max) {
   return out;
 }
 
-const CERTIFICATION_VALIDITY_YEARS = [
-  { re: /\bosha ?30\b/i, years: 5 },
-  { re: /\bosha ?10\b/i, years: 5 },
-  { re: /fall protection/i, years: 2 },
-  { re: /\bmewp\b/i, years: 3 },
-  { re: /excavation/i, years: 2 },
-  { re: /driving awareness/i, years: 1 },
-  { re: /\btma\b/i, years: 3 },
-  { re: /traffic control maintainer|\btcm\b/i, years: 2 },
-  { re: /confined space/i, years: 2 },
-  { re: /\bcpr\b|first aid/i, years: 2 },
+// ONE list of standard trainings for every project: the name everyone picks, how many years it is good for, and how older/free-typed
+// spellings are recognised. The picker, the auto-expiry and the Training overview all read from this.
+const TRAINING_CATALOG = [
+  { name: "Hazard Communication", years: 1, re: /hazard[\s-]*communication|\bhaz[\s-]*com\b|\bghs\b/i },
+  { name: "OSHA 30", years: 5, re: /osha[\s_-]*30\b/i },
+  { name: "OSHA 10", years: 5, re: /osha[\s_-]*10\b/i },
+  { name: "Driving Awareness", years: 1, re: /driving awareness|driver awareness/i },
+  { name: "CPR & First Aid", years: 2, re: /\bcpr\b|first[\s-]*aid/i },
+  { name: "Fall Protection Training", years: 2, re: /fall protection/i, not: /competent|qualified|rescue/i },
+  { name: "MEWP Training (3B)", years: 3, re: /mewp|man[\s-]*lift/i },
+  { name: "Excavation Training", years: 3, re: /excavation/i, not: /competent|qualified/i },
+  { name: "Confined Space", years: 3, re: /confined space/i, not: /competent|attendant|supervisor/i },
+  { name: "Rigging and Signaling", years: 5, re: /rigging|signaling|signalperson/i },
+  { name: "Traffic Control Maintainer (Level 1)", years: 4, re: /(traffic control|\btcm\b).*(level|lvl)[\s.]*(1|i|one)\b/i },
+  { name: "Traffic Control Maintainer (Level 2)", years: 4, re: /(traffic control|\btcm\b).*(level|lvl)[\s.]*(2|ii|two)\b/i },
+  { name: "Traffic Control Maintainer (Level 3)", years: 4, re: /(traffic control|\btcm\b).*(level|lvl)[\s.]*(3|iii|three)\b/i },
+  { name: "Flagging", years: 4, re: /flagging|flagger[\s-]*(training|certification|cert\b|card)/i },
+  { name: "TMA Operator Training", years: 1, re: /\btma\b/i },
+  { name: "Lock Out Tag Out", years: 1, re: /lock[\s-]*out|\bloto\b|tag[\s-]*out/i },
+  { name: "Telehandler Operator Training", years: 3, re: /telehandler|skytrak/i },
 ];
+// A Traffic Control Maintainer entered with no level keeps its own name but is still good for 4 years.
+const TCM_ANY = /traffic control maintainer|\btcm\b/i;
+const catalogEntryFor = (label) => {
+  const l = String(label || "").trim();
+  if (!l) return null;
+  return TRAINING_CATALOG.find((c) => c.re.test(l) && !(c.not && c.not.test(l))) || null;
+};
+const CERTIFICATION_VALIDITY_YEARS = [
+  ...TRAINING_CATALOG.map((c) => ({ re: c.re, not: c.not, years: c.years })),
+  { re: TCM_ANY, years: 4 },
+];
+const STANDARD_TRAININGS = TRAINING_CATALOG.map((c) => c.name);
 
-// Standard training names — picking from this list keeps spelling identical so the Training overview can count them.
-const STANDARD_TRAININGS = ["OSHA 30", "OSHA 10", "Fall Protection Training", "MEWP Training (3B)", "Excavation Training", "Driving Awareness", "CPR & First Aid", "TMA Operator Training", "Traffic Control Maintainer (Level 2)", "Confined Space"];
 function TrainingPicker({ value, onChange, onEnter, inputClass = "rounded-md border px-2.5 py-1.5 text-[13px]" }) {
   const isStd = STANDARD_TRAININGS.includes(value);
   const [other, setOther] = useState(false);
@@ -9490,7 +9519,7 @@ function TrainingPicker({ value, onChange, onEnter, inputClass = "rounded-md bor
 
 function suggestedExpiryFor(label, issuedDateStr) {
   if (!label || !issuedDateStr) return "";
-  const rule = CERTIFICATION_VALIDITY_YEARS.find((r) => r.re.test(label));
+  const rule = CERTIFICATION_VALIDITY_YEARS.find((r) => r.re.test(label) && !(r.not && r.not.test(label)));
   if (!rule) return "";
   const m = String(issuedDateStr).match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (!m) return "";
@@ -14009,17 +14038,8 @@ const isNtiEmployer = (emp) => /\b(nti|north tarrant)\b/i.test(emp || "");
 
 const canonTraining = (label) => {
   const l = String(label || "").trim();
-  if (/osha[\s_-]*30\b/i.test(l)) return "OSHA 30";
-  if (/osha[\s_-]*10\b/i.test(l)) return "OSHA 10";
-  if (/mewp/i.test(l)) return "MEWP Training (3B)";
-  if (/driving awareness/i.test(l)) return "Driving Awareness";
-  if (/(cpr|first[\s-]*aid)/i.test(l)) return "CPR & First Aid";
-  if (/\btma\b/i.test(l)) return "TMA Operator Training";
-  if (/traffic control/i.test(l) && /(maintainer|level\s*2)/i.test(l)) return "Traffic Control Maintainer (Level 2)";
-  if (/confined space/i.test(l) && !/(competent|attendant|supervisor)/i.test(l)) return "Confined Space";
-  if (/excavation/i.test(l) && !/(competent|qualified)/i.test(l)) return "Excavation Training";
-  if (/fall protection/i.test(l) && !/(competent|qualified|rescue)/i.test(l)) return "Fall Protection Training";
-  return l;
+  const c = catalogEntryFor(l);
+  return c ? c.name : l;
 };
 // ---------- Live refresh: poll silently while the page is visible, and refetch when the app comes back to the front ----------
 function randomPin() {
@@ -14907,8 +14927,7 @@ function RosterRow({ person, user, onChanged }) {
   // has already typed their own expiration date by hand.
   useEffect(() => {
     if (expiryTouched) return;
-    const suggested = suggestedExpiryFor(newQualLabel, newQualIssued);
-    if (suggested) setNewQualExpiry(suggested);
+    setNewQualExpiry(suggestedExpiryFor(newQualLabel, newQualIssued) || "");
   }, [newQualLabel, newQualIssued, expiryTouched]);
 
   const addQual = async () => {
