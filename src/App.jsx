@@ -8006,6 +8006,10 @@ function CourseDonut({ assigned, completed }) {
 
 // ---- Training notice emails (mailto, sent from the admin's own email app) ----
 const isCompanyEmployer = (employer) => /\b(nti|fcw\s*-?\d*|ferrovial)\b/i.test(employer || "");
+const EXPIRY_NOTICE_DAYS = 30;  // remind this many days before a certification expires
+const DUE_NOTICE_DAYS = 7;      // remind this many days before an assigned training's due date
+const RENOTICE_COOLDOWN_DAYS = 7; // don't offer the same notice again for this long after it was sent
+const daysUntil = (iso) => Math.round((new Date(iso + "T12:00:00") - new Date()) / 86400000);
 const dueDateFrom = (n, unit) => {
   const d = new Date(); const k = Math.max(1, parseInt(n, 10) || 0);
   if (unit === "months") d.setMonth(d.getMonth() + k); else d.setDate(d.getDate() + k * (unit === "weeks" ? 7 : 1));
@@ -8023,6 +8027,12 @@ function trainingMailto({ person, contact, course, kind, dueISO, expiresISO, adm
     lines = [`Hi ${first},`, "", `You have been assigned "${course}" on ${projectName || "the project"}.`,
       dueISO ? `Please complete it by ${prettyDate(dueISO)}.` : "Please complete it as soon as you can.",
       "", "Log in to the Safety Hub with your badge number and PIN to start."];
+  } else if (kind === "due_soon" || kind === "overdue") {
+    subject = `${kind === "overdue" ? "OVERDUE" : "Reminder"}: ${course} training`;
+    lines = [`Hi ${first},`, "", kind === "overdue"
+      ? `Your assigned training "${course}" was due ${dueISO ? "on " + prettyDate(dueISO) : "already"} and has not been completed.`
+      : `Your assigned training "${course}" is due ${dueISO ? "on " + prettyDate(dueISO) : "soon"} and has not been completed yet.`,
+      "Please complete it as soon as possible.", "", "Log in to the Safety Hub with your badge number and PIN to continue."];
   } else if (kind === "expired") {
     subject = `Training EXPIRED: ${course}`;
     lines = [`Hi ${first},`, "", `Your "${course}" training expired${expiresISO ? " on " + prettyDate(expiresISO) : ""}.`,
@@ -8059,6 +8069,8 @@ function ManageTrainingScreen({ user }) {
   const [dueUnit, setDueUnit] = useState("weeks");
   const [notices, setNotices] = useState([]);
   const [contactsById, setContactsById] = useState({});
+  const [openAssigns, setOpenAssigns] = useState([]);
+  const [noticeLog, setNoticeLog] = useState([]);
 
   const load = async () => {
     setLoading(true);
@@ -8067,6 +8079,10 @@ function ManageTrainingScreen({ user }) {
     const cRes = await supabase.rpc("list_badge_contacts", { p_token: user.sessionToken });
     const cb = {}; (Array.isArray(cRes.data) ? cRes.data : []).forEach((c) => { cb[c.personnel_id] = c; });
     setContactsById(cb);
+    const oRes = await supabase.rpc("list_open_assignments_admin", { p_token: user.sessionToken });
+    setOpenAssigns(Array.isArray(oRes.data) ? oRes.data : []);
+    const lRes = await supabase.rpc("list_training_notice_log", { p_token: user.sessionToken });
+    setNoticeLog(Array.isArray(lRes.data) ? lRes.data : []);
     const { data, error } = await supabase.rpc("list_training_courses_admin", { p_token: user.sessionToken });
     setCourses(error || !data ? [] : data);
     setLoading(false);
@@ -8197,7 +8213,7 @@ function ManageTrainingScreen({ user }) {
                         {!emp ? "Subcontractor – no notice" : !n.contact.email ? "No email on file" : n.contact.manager_email ? `CC ${n.contact.manager_name || n.contact.manager_email}` : "No manager on file"}
                       </div>
                     </div>
-                    {href ? <a href={href} className="flex-shrink-0 text-[11px] font-bold uppercase px-3 py-1.5 rounded-sm" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>Email</a> : null}
+                    {href ? <a href={href} onClick={() => supabase.rpc("log_training_notice", { p_token: user.sessionToken, p_personnel_id: n.person.id, p_course_title: n.course, p_kind: "assigned" })} className="flex-shrink-0 text-[11px] font-bold uppercase px-3 py-1.5 rounded-sm" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>Email</a> : null}
                   </div>
                 );
               })}
@@ -8257,29 +8273,43 @@ function ManageTrainingScreen({ user }) {
 
       {(() => {
         const seen = new Set();
-        const due = allCerts.filter((c) => {
+        const items = [];
+        allCerts.forEach((c) => {
           const k = `${c.personnel_id}|${c.course_title}`;
-          if (seen.has(k)) return false; seen.add(k);
-          return (c.status === "expired" || c.status === "expiring") && isCompanyEmployer(c.employer);
+          if (seen.has(k)) return; seen.add(k);
+          if (!isCompanyEmployer(c.employer) || !c.expires_at) return;
+          const d = daysUntil(c.expires_at);
+          if (d < 0) items.push({ kind: "expired", pid: c.personnel_id, name: c.person_name, course: c.course_title, iso: c.expires_at, d });
+          else if (d <= EXPIRY_NOTICE_DAYS) items.push({ kind: "expiring", pid: c.personnel_id, name: c.person_name, course: c.course_title, iso: c.expires_at, d });
         });
+        openAssigns.forEach((a) => {
+          if (!isCompanyEmployer(a.employer) || !a.due_at) return;
+          const d = daysUntil(a.due_at);
+          if (d < 0) items.push({ kind: "overdue", pid: a.personnel_id, name: a.person_name, course: a.course_title, iso: a.due_at, d });
+          else if (d <= DUE_NOTICE_DAYS) items.push({ kind: "due_soon", pid: a.personnel_id, name: a.person_name, course: a.course_title, iso: a.due_at, d });
+        });
+        const recent = (it) => noticeLog.some((l) => l.personnel_id === it.pid && l.course_title === it.course && l.kind === it.kind && (Date.now() - new Date(l.sent_at)) < RENOTICE_COOLDOWN_DAYS * 86400000);
+        const due = items.filter((it) => !recent(it)).sort((x, y) => x.d - y.d);
         if (due.length === 0) return null;
+        const label = { expired: "Expired", expiring: "Expires", overdue: "Overdue since", due_soon: "Due" };
         return (
           <div className="bg-white rounded-md border p-3 mt-5" style={{ borderColor: GOLD }}>
             <div className="text-[11px] uppercase font-bold mb-1" style={{ color: INK, fontFamily: "IBM Plex Mono, monospace" }}>Needs a notice ({due.length})</div>
-            <div className="text-[11px] mb-2" style={{ color: STEEL }}>Company employees with expired or expiring training. Opens your email ready to send: To employee, CC manager.</div>
+            <div className="text-[11px] mb-2" style={{ color: STEEL }}>Company employees only. Expiring within {EXPIRY_NOTICE_DAYS} days, expired, due within {DUE_NOTICE_DAYS} days, or overdue. Email opens ready to send: To employee, CC manager. Once you tap Email it drops off this list for {RENOTICE_COOLDOWN_DAYS} days.</div>
             <div className="space-y-1.5">
-              {due.map((c) => {
-                const ct = contactsById[c.personnel_id] || {};
-                const href = ct.email ? trainingMailto({ person: { name: c.person_name }, contact: ct, course: c.course_title, kind: c.status, expiresISO: c.expires_at, adminName: user?.name, projectName }) : null;
+              {due.map((it) => {
+                const ct = contactsById[it.pid] || {};
+                const href = ct.email ? trainingMailto({ person: { name: it.name }, contact: ct, course: it.course, kind: it.kind, expiresISO: it.iso, dueISO: it.iso, adminName: user?.name, projectName }) : null;
+                const bad = it.kind === "expired" || it.kind === "overdue";
                 return (
-                  <div key={c.id} className="flex items-center justify-between gap-2 text-[13px]">
+                  <div key={`${it.pid}|${it.course}|${it.kind}`} className="flex items-center justify-between gap-2 text-[13px]">
                     <div className="min-w-0">
-                      <div className="truncate">{c.person_name} · {c.course_title}</div>
-                      <div className="text-[10px]" style={{ color: c.status === "expired" ? ALERT : STEEL }}>
-                        {c.status === "expired" ? "Expired" : "Expires"} {c.expires_at}{!ct.email ? " · no email on file" : !ct.manager_email ? " · no manager on file" : ""}
+                      <div className="truncate">{it.name} · {it.course}</div>
+                      <div className="text-[10px]" style={{ color: bad ? ALERT : STEEL }}>
+                        {label[it.kind]} {it.iso}{!ct.email ? " · no email on file" : !ct.manager_email ? " · no manager on file" : ""}
                       </div>
                     </div>
-                    {href ? <a href={href} className="flex-shrink-0 text-[11px] font-bold uppercase px-3 py-1.5 rounded-sm" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>Email</a> : null}
+                    {href ? <a href={href} onClick={async () => { await supabase.rpc("log_training_notice", { p_token: user.sessionToken, p_personnel_id: it.pid, p_course_title: it.course, p_kind: it.kind }); setNoticeLog((l) => [...l, { personnel_id: it.pid, course_title: it.course, kind: it.kind, sent_at: new Date().toISOString() }]); }} className="flex-shrink-0 text-[11px] font-bold uppercase px-3 py-1.5 rounded-sm" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>Email</a> : null}
                   </div>
                 );
               })}
