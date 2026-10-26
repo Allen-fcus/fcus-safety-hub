@@ -8004,7 +8004,45 @@ function CourseDonut({ assigned, completed }) {
   );
 }
 
+// ---- Training notice emails (mailto, sent from the admin's own email app) ----
+const isCompanyEmployer = (employer) => /\b(nti|fcw\s*-?\d*|ferrovial)\b/i.test(employer || "");
+const dueDateFrom = (n, unit) => {
+  const d = new Date(); const k = Math.max(1, parseInt(n, 10) || 0);
+  if (unit === "months") d.setMonth(d.getMonth() + k); else d.setDate(d.getDate() + k * (unit === "weeks" ? 7 : 1));
+  return d.toISOString().slice(0, 10);
+};
+const prettyDate = (iso) => { try { return new Date(iso + "T12:00:00").toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }); } catch (e) { return iso; } };
+function trainingMailto({ person, contact, course, kind, dueISO, expiresISO, adminName, projectName }) {
+  const to = (contact && contact.email) || "";
+  const cc = (contact && contact.manager_email) || "";
+  const first = (person.name || "").split(" ")[0] || "there";
+  const mgr = (contact && contact.manager_name) || "";
+  let subject, lines;
+  if (kind === "assigned") {
+    subject = `Training assigned: ${course}`;
+    lines = [`Hi ${first},`, "", `You have been assigned "${course}" on ${projectName || "the project"}.`,
+      dueISO ? `Please complete it by ${prettyDate(dueISO)}.` : "Please complete it as soon as you can.",
+      "", "Log in to the Safety Hub with your badge number and PIN to start."];
+  } else if (kind === "expired") {
+    subject = `Training EXPIRED: ${course}`;
+    lines = [`Hi ${first},`, "", `Your "${course}" training expired${expiresISO ? " on " + prettyDate(expiresISO) : ""}.`,
+      dueISO ? `Please complete the refresher by ${prettyDate(dueISO)}.` : "Please complete the refresher as soon as possible.",
+      "", "Log in to the Safety Hub with your badge number and PIN to start."];
+  } else {
+    subject = `Training expiring soon: ${course}`;
+    lines = [`Hi ${first},`, "", `Your "${course}" training expires${expiresISO ? " on " + prettyDate(expiresISO) : " soon"}.`,
+      dueISO ? `Please complete the refresher by ${prettyDate(dueISO)}.` : "Please schedule your refresher before it expires.",
+      "", "Log in to the Safety Hub with your badge number and PIN to start."];
+  }
+  if (mgr) lines.push("", `${mgr} is copied on this message.`);
+  lines.push("", "Thank you,", adminName || "Safety");
+  const q = [`subject=${encodeURIComponent(subject)}`, `body=${encodeURIComponent(lines.join("\n"))}`];
+  if (cc) q.unshift(`cc=${encodeURIComponent(cc)}`);
+  return `mailto:${to}?${q.join("&")}`;
+}
+
 function ManageTrainingScreen({ user }) {
+  const { name: projectName } = useContext(ProjectContext);
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [openCourseId, setOpenCourseId] = useState(null);
@@ -8017,11 +8055,18 @@ function ManageTrainingScreen({ user }) {
   const [examReviewId, setExamReviewId] = useState(null);
   const [adminMsg, setAdminMsg] = useState("");
   const [certView, setCertView] = useState(null);
+  const [dueN, setDueN] = useState("");
+  const [dueUnit, setDueUnit] = useState("weeks");
+  const [notices, setNotices] = useState([]);
+  const [contactsById, setContactsById] = useState({});
 
   const load = async () => {
     setLoading(true);
     const certRes = await supabase.rpc("list_training_certificates_admin", { p_token: user.sessionToken });
     setAllCerts(certRes.error || !certRes.data ? [] : certRes.data.map((c) => ({ ...c, showName: true })));
+    const cRes = await supabase.rpc("list_badge_contacts", { p_token: user.sessionToken });
+    const cb = {}; (Array.isArray(cRes.data) ? cRes.data : []).forEach((c) => { cb[c.personnel_id] = c; });
+    setContactsById(cb);
     const { data, error } = await supabase.rpc("list_training_courses_admin", { p_token: user.sessionToken });
     setCourses(error || !data ? [] : data);
     setLoading(false);
@@ -8050,6 +8095,15 @@ function ManageTrainingScreen({ user }) {
     const ids = Object.keys(checked).filter((id) => checked[id]);
     if (ids.length === 0) { setPicking(false); return; }
     await supabase.rpc("assign_training_course", { p_token: user.sessionToken, p_course_id: openCourseId, p_personnel_ids: ids });
+    const dueISO = dueN ? dueDateFrom(dueN, dueUnit) : "";
+    if (dueISO) await supabase.rpc("set_training_due", { p_token: user.sessionToken, p_course_id: openCourseId, p_personnel_ids: ids, p_due_at: dueISO });
+    const { data: contacts } = await supabase.rpc("list_badge_contacts", { p_token: user.sessionToken });
+    const byId = {};
+    (Array.isArray(contacts) ? contacts : []).forEach((c) => { byId[c.personnel_id] = c; });
+    setNotices(ids.map((id) => {
+      const p = roster.find((r) => String(r.id) === String(id)) || {};
+      return { person: p, contact: byId[id] || {}, dueISO, course: openCourseMeta?.title || "Training" };
+    }));
     setPicking(false);
     await loadAssignees(openCourseId);
     load();
@@ -8109,9 +8163,44 @@ function ManageTrainingScreen({ user }) {
               ))}
               {filteredRoster.length === 0 && <div className="text-[12px] py-2" style={{ color: STEEL }}>No matches.</div>}
             </div>
+            <div className="flex items-center gap-2 mb-3 text-[12px]">
+              <span style={{ color: STEEL }}>Complete within</span>
+              <input type="number" min="1" value={dueN} onChange={(e) => setDueN(e.target.value)} placeholder="–" className="w-16 rounded-md border px-2 py-1.5 text-[13px]" style={{ borderColor: "#C9C6BC" }} />
+              <select value={dueUnit} onChange={(e) => setDueUnit(e.target.value)} className="rounded-md border px-2 py-1.5 text-[13px]" style={{ borderColor: "#C9C6BC" }}>
+                <option value="days">days</option><option value="weeks">weeks</option><option value="months">months</option>
+              </select>
+              {dueN && <span style={{ color: STEEL }}>→ {prettyDate(dueDateFrom(dueN, dueUnit))}</span>}
+            </div>
             <div className="flex gap-2">
               <button onClick={() => setPicking(false)} className="flex-1 text-[11px] font-bold uppercase py-2 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Cancel</button>
               <button onClick={confirmAssign} className="flex-1 text-[11px] font-bold uppercase py-2 rounded-sm" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>Assign Selected</button>
+            </div>
+          </div>
+        )}
+
+        {notices.length > 0 && (
+          <div className="bg-white rounded-md border p-3 mb-4" style={{ borderColor: GOLD }}>
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-[11px] uppercase font-bold" style={{ color: INK, fontFamily: "IBM Plex Mono, monospace" }}>Send notices</div>
+              <button onClick={() => setNotices([])} className="text-[11px]" style={{ color: STEEL }}>Done</button>
+            </div>
+            <div className="text-[11px] mb-2" style={{ color: STEEL }}>Opens your email with the message ready. To: employee, CC: manager. You press Send.</div>
+            <div className="space-y-1.5">
+              {notices.map((n) => {
+                const emp = isCompanyEmployer(n.person.employer);
+                const href = emp && n.contact.email ? trainingMailto({ person: n.person, contact: n.contact, course: n.course, kind: "assigned", dueISO: n.dueISO, adminName: user?.name, projectName }) : null;
+                return (
+                  <div key={n.person.id} className="flex items-center justify-between gap-2 text-[13px]">
+                    <div className="min-w-0">
+                      <div className="truncate">{n.person.name}</div>
+                      <div className="text-[10px]" style={{ color: STEEL }}>
+                        {!emp ? "Subcontractor – no notice" : !n.contact.email ? "No email on file" : n.contact.manager_email ? `CC ${n.contact.manager_name || n.contact.manager_email}` : "No manager on file"}
+                      </div>
+                    </div>
+                    {href ? <a href={href} className="flex-shrink-0 text-[11px] font-bold uppercase px-3 py-1.5 rounded-sm" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>Email</a> : null}
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
@@ -8165,6 +8254,39 @@ function ManageTrainingScreen({ user }) {
           <div className="text-[12px] text-center py-6 col-span-full" style={{ color: STEEL }}>No courses yet.</div>
         )}
       </div>
+
+      {(() => {
+        const seen = new Set();
+        const due = allCerts.filter((c) => {
+          const k = `${c.personnel_id}|${c.course_title}`;
+          if (seen.has(k)) return false; seen.add(k);
+          return (c.status === "expired" || c.status === "expiring") && isCompanyEmployer(c.employer);
+        });
+        if (due.length === 0) return null;
+        return (
+          <div className="bg-white rounded-md border p-3 mt-5" style={{ borderColor: GOLD }}>
+            <div className="text-[11px] uppercase font-bold mb-1" style={{ color: INK, fontFamily: "IBM Plex Mono, monospace" }}>Needs a notice ({due.length})</div>
+            <div className="text-[11px] mb-2" style={{ color: STEEL }}>Company employees with expired or expiring training. Opens your email ready to send: To employee, CC manager.</div>
+            <div className="space-y-1.5">
+              {due.map((c) => {
+                const ct = contactsById[c.personnel_id] || {};
+                const href = ct.email ? trainingMailto({ person: { name: c.person_name }, contact: ct, course: c.course_title, kind: c.status, expiresISO: c.expires_at, adminName: user?.name, projectName }) : null;
+                return (
+                  <div key={c.id} className="flex items-center justify-between gap-2 text-[13px]">
+                    <div className="min-w-0">
+                      <div className="truncate">{c.person_name} · {c.course_title}</div>
+                      <div className="text-[10px]" style={{ color: c.status === "expired" ? ALERT : STEEL }}>
+                        {c.status === "expired" ? "Expired" : "Expires"} {c.expires_at}{!ct.email ? " · no email on file" : !ct.manager_email ? " · no manager on file" : ""}
+                      </div>
+                    </div>
+                    {href ? <a href={href} className="flex-shrink-0 text-[11px] font-bold uppercase px-3 py-1.5 rounded-sm" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>Email</a> : null}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
 
       {allCerts.length > 0 && (
         <>
@@ -14840,6 +14962,8 @@ function RosterRow({ person, user, onChanged }) {
   const [role, setRole] = useState(person.role || "");
   const [contactEmail, setContactEmail] = useState(person.contact_email || "");
   const [contactPhone, setContactPhone] = useState(person.contact_phone || "");
+  const [mgrName, setMgrName] = useState(person.manager_name || "");
+  const [mgrEmail, setMgrEmail] = useState(person.manager_email || "");
   const [employer, setEmployer] = useState(person.employer || "");
   const [trainingAccess, setTrainingAccess] = useState(person.training_access || false);
   const [isAdmin, setIsAdmin] = useState(person.can_add_personnel || false);
@@ -14992,6 +15116,7 @@ function RosterRow({ person, user, onChanged }) {
       p_can_add_personnel: isAdmin,
     });
     await supabase.rpc("set_badge_contact", { p_token: user.sessionToken, p_person_id: person.id, p_email: contactEmail.trim(), p_phone: contactPhone.trim() });
+    await supabase.rpc("set_badge_manager", { p_token: user.sessionToken, p_person_id: person.id, p_manager_name: mgrName.trim(), p_manager_email: mgrEmail.trim() });
     setSaving(false);
     setEditing(false);
     onChanged();
@@ -15085,6 +15210,10 @@ function RosterRow({ person, user, onChanged }) {
           <input type="email" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} className="w-full mt-1 mb-2 rounded-md border px-2.5 py-1.5 text-[13px]" style={{ borderColor: "#C9C6BC" }} />
           <label className="text-[10px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Phone</label>
           <input type="tel" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} className="w-full mt-1 mb-2 rounded-md border px-2.5 py-1.5 text-[13px]" style={{ borderColor: "#C9C6BC" }} />
+          <label className="text-[10px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Manager name (notified on trainings)</label>
+          <input type="text" value={mgrName} onChange={(e) => setMgrName(e.target.value)} className="w-full mt-1 mb-2 rounded-md border px-2.5 py-1.5 text-[13px]" style={{ borderColor: "#C9C6BC" }} />
+          <label className="text-[10px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Manager email</label>
+          <input type="email" value={mgrEmail} onChange={(e) => setMgrEmail(e.target.value)} className="w-full mt-1 mb-2 rounded-md border px-2.5 py-1.5 text-[13px]" style={{ borderColor: "#C9C6BC" }} />
 
           <label className="text-[10px] uppercase font-bold" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Subcontractor</label>
           <select value={employer} onChange={(e) => setEmployer(e.target.value)} className="w-full mt-1 mb-2 rounded-md border px-2.5 py-1.5 text-[13px] bg-white" style={{ borderColor: "#C9C6BC" }}>
@@ -15418,7 +15547,7 @@ function ManageRosterScreen({ user, onSwitchProject }) {
     const { data: contacts } = await supabase.rpc("list_badge_contacts", { p_token: user.sessionToken });
     const byId = {};
     (Array.isArray(contacts) ? contacts : []).forEach((c) => { byId[c.personnel_id] = c; });
-    setPeople(error || !data ? [] : data.map((p) => ({ ...p, contact_email: (byId[p.id] || {}).email || "", contact_phone: (byId[p.id] || {}).phone || "" })));
+    setPeople(error || !data ? [] : data.map((p) => ({ ...p, contact_email: (byId[p.id] || {}).email || "", contact_phone: (byId[p.id] || {}).phone || "", manager_name: (byId[p.id] || {}).manager_name || "", manager_email: (byId[p.id] || {}).manager_email || "" })));
     setLoading(false);
   };
 
