@@ -2278,6 +2278,7 @@ function srSchema(type, ctx) {
       { k: "paper", l: "Paper statement (photos or PDF)", t: "files", accept: "any" },
     ] }] };
   }
+  if (type === "investigation_report") return sc;
   return { ...sc, sections: [...sc.sections, { title: "Photos and videos", fields: [
     { k: "photos", l: "Photos of the scene, damage or equipment", t: "files", accept: "image" },
     { k: "videos", l: "Videos of the scene, damage or equipment", t: "files", accept: "video", hint: `Up to ${SR_VIDEO_MAX_MB} MB per video. Videos are linked in the PDF.` },
@@ -2965,6 +2966,7 @@ function SrCaseView({ user, activeProjectId, projectName, caseId, onBack, onOpen
   const [saved, setSaved] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const [upBusy, setUpBusy] = useState(false);
   const areas = SR_AREAS[activeProjectId] || ["On Site", "Off Site"];
 
   const load = async () => {
@@ -3033,6 +3035,39 @@ function SrCaseView({ user, activeProjectId, projectName, caseId, onBack, onOpen
     setBusy(false);
   };
 
+  // Paper sign-in sheet: scan/photo/PDF uploaded instead of (or as well as) the in-app sign-in sheet.
+  const signinForm = (detail.forms || []).find((f) => f.form_type === "signin_upload");
+  const signinFiles = (signinForm && signinForm.data && Array.isArray(signinForm.data.files)) ? signinForm.data.files : [];
+  const saveSignin = async (files) => {
+    const { data: res } = await supabase.rpc("save_incident_form", {
+      p_token: token, p_case_id: caseId, p_form_id: signinForm ? signinForm.id : null, p_form_type: "signin_upload",
+      p_subject: "Paper sign-in sheet", p_data: { files }, p_submit: true, p_pdf_url: null,
+    });
+    if (!res) setErr("Couldn't save the sign-in sheet. Please try again.");
+    await load();
+  };
+  const uploadSignin = async (e) => {
+    const picked = Array.from(e.target.files || []);
+    e.target.value = "";
+    if (!picked.length) return;
+    setUpBusy(true); setErr("");
+    const added = [];
+    for (const file of picked) {
+      const { blob, type } = await srPrepareUpload(file);
+      const base = file.name.replace(/[^a-zA-Z0-9.\-_]/g, "_");
+      const path = `incident-signin-${caseId}-${Date.now()}-${base}`;
+      const up = await supabase.storage.from("documents").upload(path, blob, { contentType: type });
+      if (up.error) { setErr("Upload failed: " + (up.error.message || "unknown error")); continue; }
+      added.push({ url: (supabase.storage.from("documents").getPublicUrl(path).data || {}).publicUrl || "", name: file.name, type });
+    }
+    if (added.length) await saveSignin([...signinFiles, ...added]);
+    setUpBusy(false);
+  };
+  const removeSignin = async (idx) => {
+    if (!window.confirm("Remove this uploaded sign-in sheet?")) return;
+    await saveSignin(signinFiles.filter((_, k) => k !== idx));
+  };
+
   const lab = { color: STEEL, ...SR_MONO };
   const bd = { borderColor: "#C9C6BC" };
   const inp = "w-full mt-1 rounded-md border px-2.5 py-1.5 text-[13px] bg-white";
@@ -3051,7 +3086,7 @@ function SrCaseView({ user, activeProjectId, projectName, caseId, onBack, onOpen
   const escSteps = [
     ["Incident Report", (detail.forms || []).some((f) => f.form_type === "incident_report")],
     ["Employee Statement" + (stmtCount > 1 ? "s" : ""), stmtCount > 0],
-    ["Sign-in sheet for the investigation", !!detail.meeting_id],
+    ["Sign-in sheet for the investigation", !!detail.meeting_id || signinFiles.length > 0],
     ["Incident Investigation Report", (detail.forms || []).some((f) => f.form_type === "investigation_report")],
   ];
   const renderForm = (r) => {
@@ -3097,6 +3132,23 @@ function SrCaseView({ user, activeProjectId, projectName, caseId, onBack, onOpen
         ) : (
           <button disabled={busy} onClick={createMeeting} className="w-full text-[11px] font-bold uppercase py-2.5 rounded-sm disabled:opacity-50" style={{ background: GOLD, color: INK, ...SR_MONO }}>{busy ? "Creating…" : "Create sign-in sheet for the investigation"}</button>
         )}
+        <div className="mt-3 pt-3 border-t" style={{ borderColor: "#E4E2DA" }}>
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-[11px] uppercase font-bold" style={lab}>Paper sign-in sheet</div>
+            {signinFiles.length > 0 && <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-sm" style={{ background: "#E3F1DF", color: "#2F6B2A", ...SR_MONO }}>Complete · {signinFiles.length} file{signinFiles.length === 1 ? "" : "s"} uploaded</span>}
+          </div>
+          <div className="text-[11px] mt-1" style={{ color: STEEL }}>Did the team sign in on paper instead? Upload the signed sheet here (PDF, scan or photo). It counts as the sign-in sheet for this case.</div>
+          {signinFiles.map((fl, idx) => (
+            <div key={fl.url} className="flex items-center gap-2 mt-2 rounded-md border px-2.5 py-1.5" style={{ borderColor: "#E4E2DA" }}>
+              <a href={fl.url} target="_blank" rel="noreferrer" className="flex-1 min-w-0 text-[12px] truncate underline">{fl.name || "Sign-in sheet"}</a>
+              <button type="button" onClick={() => removeSignin(idx)} className="p-1"><X size={14} color={STEEL} /></button>
+            </div>
+          ))}
+          <label className="inline-block mt-2 text-[10px] font-bold uppercase px-2.5 py-1.5 rounded-sm border cursor-pointer" style={{ borderColor: "#C9C6BC", color: INK, ...SR_MONO }}>
+            {upBusy ? "Uploading…" : signinFiles.length ? "+ Add another file" : "+ Upload signed sheet"}
+            <input type="file" hidden disabled={upBusy} accept="application/pdf,image/*" onChange={uploadSignin} />
+          </label>
+        </div>
       </div>
   );
 
