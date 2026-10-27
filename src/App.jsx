@@ -2568,7 +2568,15 @@ async function buildIncidentFormPdf({ schema, data, caseRow, projectName, extraS
             try {
               const bytes = new Uint8Array(await (await fetch(it.url)).arrayBuffer());
               const png = /png/i.test(it.type || "") || /\.png$/i.test(it.name || "");
-              const im = png ? await doc.embedPng(bytes) : await doc.embedJpg(bytes);
+              let im;
+              try { im = png ? await doc.embedPng(bytes) : await doc.embedJpg(bytes); }
+              catch (e0) { // any other image format: redraw as JPEG and embed that
+                const bmp = await createImageBitmap(new Blob([bytes]));
+                const cv = document.createElement("canvas"); cv.width = bmp.width; cv.height = bmp.height;
+                const cx2 = cv.getContext("2d"); cx2.fillStyle = "#fff"; cx2.fillRect(0, 0, cv.width, cv.height); cx2.drawImage(bmp, 0, 0);
+                const jb = await new Promise((r) => cv.toBlob(r, "image/jpeg", 0.85));
+                im = await doc.embedJpg(new Uint8Array(await jb.arrayBuffer()));
+              }
               const maxW = CW, maxH = 330;
               const sc = Math.min(maxW / im.width, maxH / im.height, 1);
               const w = im.width * sc, h = im.height * sc;
@@ -2579,8 +2587,14 @@ async function buildIncidentFormPdf({ schema, data, caseRow, projectName, extraS
             } catch (e) { /* shown as a note below */ }
           } else if (isVideo) {
             need(30);
-            page.drawText(clean("Video attached: " + (it.name || "")).slice(0, 110), { x: M, y: y - 9, size: 9, font: sans, color: ink });
-            page.drawText(clean(it.url || "").slice(0, 150), { x: M, y: y - 20, size: 6.5, font: sans, color: grey });
+            page.drawText(clean("Video (tap to watch): " + (it.name || "")).slice(0, 110), { x: M, y: y - 9, size: 9, font: sans, color: rgb(0.05, 0.25, 0.7) });
+            page.drawText(clean(it.url || "").slice(0, 150), { x: M, y: y - 20, size: 6.5, font: sans, color: rgb(0.05, 0.25, 0.7) });
+            try {
+              const { PDFName, PDFString } = await import("pdf-lib");
+              const ann = doc.context.obj({ Type: "Annot", Subtype: "Link", Rect: [M, y - 24, W - M, y + 1], Border: [0, 0, 0],
+                A: { Type: "Action", S: "URI", URI: PDFString.of(String(it.url || "")) } });
+              page.node.addAnnot(doc.context.register(ann));
+            } catch (e) { /* link stays as printed text */ }
             y -= 28; done = true;
           } else if (isPdf) {
             attachPdfs.push(it);
