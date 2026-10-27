@@ -2086,7 +2086,10 @@ function srSchemaBase(type, ctx) {
     title: "Incident Investigation Report", pdfTitle: "INCIDENT INVESTIGATION REPORT",
     sections: [
       { title: "Project", fields: [
-        { k: "projectName", l: "Project name", t: "text" }, { k: "client", l: "Client", t: "text" },
+        /^nti-/.test((ctx && ctx.slug) || "")
+          ? { k: "projectName", l: "Project name", t: "select", opts: [...new Set([ctx.projectName, "NTI- Seg. 1&2 CO - Fort Worth"].filter(Boolean))] }
+          : { k: "projectName", l: "Project name", t: "text" },
+        { k: "client", l: "Client", t: "text" },
         { k: "location", l: "Location", t: "text" },
         { k: "incidentTypes", l: "Type of incident", t: "checks", opts: ["Near miss", "Non-lost time", "Lost time", "Serious", "Recordable"], full: true },
         { k: "date", l: "Incident date", t: "date", req: true }, { k: "time", l: "Time of the incident", t: "time" },
