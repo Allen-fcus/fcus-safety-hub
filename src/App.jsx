@@ -1895,6 +1895,7 @@ function srScrollToTop() {
     document.querySelectorAll("div, main, section").forEach((el) => { if (el.scrollTop > 0) el.scrollTop = 0; });
   } catch (e) { /* ignore */ }
 }
+const SR_VIDEO_MAX_MB = 50; // Supabase Storage per-file limit on the standard plan
 const SR_TYPES = [...SR_L.type, "Near Miss - HiPo", "HiPo", "Injury / Illness", "Property Damage", "Other"];
 // Picking an event type turns on the matching classification flag, so the right warnings and forms show up right away.
 const srFlagsForType = (t) => ({
@@ -2086,7 +2087,7 @@ function srSchemaBase(type, ctx) {
     sections: [
       { title: "Project", fields: [
         { k: "projectName", l: "Project name", t: "text" }, { k: "client", l: "Client", t: "text" },
-        { k: "location", l: "Location", t: "text" }, { k: "projectDescription", l: "Project description", t: "text" },
+        { k: "location", l: "Location", t: "text" },
         { k: "incidentTypes", l: "Type of incident", t: "checks", opts: ["Near miss", "Non-lost time", "Lost time", "Serious", "Recordable"], full: true },
         { k: "date", l: "Incident date", t: "date", req: true }, { k: "time", l: "Time of the incident", t: "time" },
         { k: "brief", l: "Brief description of incident", t: "textarea", req: true, full: true },
@@ -2280,11 +2281,26 @@ function srSchema(type, ctx) {
       { k: "paper", l: "Paper statement (photos or PDF)", t: "files", accept: "any" },
     ] }] };
   }
-  return { ...sc, sections: [...sc.sections, { title: "Photos", fields: [{ k: "photos", l: "Photos of the scene, damage or equipment", t: "files", accept: "image" }] }] };
+  return { ...sc, sections: [...sc.sections, { title: "Photos and videos", fields: [
+    { k: "photos", l: "Photos of the scene, damage or equipment", t: "files", accept: "image" },
+    { k: "videos", l: "Videos of the scene, damage or equipment", t: "files", accept: "video", hint: `Up to ${SR_VIDEO_MAX_MB} MB per video. Videos are linked in the PDF.` },
+  ] }] };
 }
 
 // starting values for a new form, taken from the case
+// The description typed on the Incident Report carries over to the other forms (each form has its own field name for it).
+function srDescKey(type) { return type === "incident_report" || type === "employee_statement" ? null : type === "sir" ? "description" : type === "eir" ? "overview" : "brief"; }
+function srIncidentDescription(caseRow) {
+  const f = ((caseRow && caseRow.forms) || []).find((x) => x.form_type === "incident_report" && x.data && String(x.data.description || "").trim());
+  return f ? String(f.data.description).trim() : "";
+}
 function srDefaults(type, ctx) {
+  const d = srDefaultsBase(type, ctx);
+  const k = srDescKey(type);
+  if (k && !String(d[k] || "").trim()) { const t = srIncidentDescription(ctx.caseRow); if (t) d[k] = t; }
+  return d;
+}
+function srDefaultsBase(type, ctx) {
   const c = ctx.caseRow || {};
   const yesNo = (v) => (v === true ? "Yes" : v === false ? "No" : "");
   if (type === "incident_report") return {
@@ -2537,6 +2553,7 @@ async function buildIncidentFormPdf({ schema, data, caseRow, projectName, extraS
         for (const it of items) {
           const isImg = /^image\//.test(it.type || "") || /\.(jpe?g|png)$/i.test(it.name || "");
           const isPdf = /pdf/i.test(it.type || "") || /\.pdf$/i.test(it.name || "");
+          const isVideo = /^video\//.test(it.type || "") || /\.(mp4|mov|m4v|webm)$/i.test(it.name || "");
           let done = false;
           if (isImg) {
             try {
@@ -2551,6 +2568,11 @@ async function buildIncidentFormPdf({ schema, data, caseRow, projectName, extraS
               page.drawText(clean(it.name || "").slice(0, 90), { x: M, y: y - h - 10, size: 7, font: sans, color: grey });
               y -= h + 20; done = true;
             } catch (e) { /* shown as a note below */ }
+          } else if (isVideo) {
+            need(30);
+            page.drawText(clean("Video attached: " + (it.name || "")).slice(0, 110), { x: M, y: y - 9, size: 9, font: sans, color: ink });
+            page.drawText(clean(it.url || "").slice(0, 150), { x: M, y: y - 20, size: 6.5, font: sans, color: grey });
+            y -= 28; done = true;
           } else if (isPdf) {
             attachPdfs.push(it);
             need(16);
@@ -2591,6 +2613,7 @@ function SrFilesField({ f, value, readOnly, onChange, Lbl }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const anyType = f.accept === "any";
+  const videoOnly = f.accept === "video";
   const pick = async (e) => {
     const files = Array.from(e.target.files || []);
     e.target.value = "";
@@ -2598,6 +2621,10 @@ function SrFilesField({ f, value, readOnly, onChange, Lbl }) {
     setBusy(true); setErr("");
     const added = [];
     for (const file of files) {
+      if (videoOnly && file.size > SR_VIDEO_MAX_MB * 1024 * 1024) {
+        setErr(`"${file.name}" is ${Math.round(file.size / 1048576)} MB. The limit is ${SR_VIDEO_MAX_MB} MB per video. Trim it, or record at a lower quality (720p), then add it again.`);
+        continue;
+      }
       const { blob, type } = await srPrepareUpload(file);
       const ext = type === "image/jpeg" ? ".jpg" : "";
       const base = file.name.replace(/[^a-zA-Z0-9.\-_]/g, "_").replace(/\.(heic|heif|jpe?g)$/i, "");
@@ -2617,10 +2644,11 @@ function SrFilesField({ f, value, readOnly, onChange, Lbl }) {
       <div className="mt-1 grid grid-cols-3 sm:grid-cols-4 gap-2">
         {items.map((it, i) => {
           const isImg = /^image\//.test(it.type || "");
+          const isVid = /^video\//.test(it.type || "") || /\.(mp4|mov|m4v|webm)$/i.test(it.name || "");
           return (
             <div key={it.url} className="relative rounded-md border overflow-hidden bg-white" style={{ borderColor: "#C9C6BC" }}>
               <a href={it.url} target="_blank" rel="noreferrer" className="block">
-                {isImg ? <img src={it.url} alt={it.name} className="w-full h-20 object-cover" /> : <div className="h-20 flex items-center justify-center text-[10px] font-bold px-1 text-center" style={{ color: STEEL, ...SR_MONO }}>PDF</div>}
+                {isImg ? <img src={it.url} alt={it.name} className="w-full h-20 object-cover" /> : isVid ? <video src={it.url + "#t=0.5"} preload="metadata" muted playsInline className="w-full h-20 object-cover bg-black" /> : <div className="h-20 flex items-center justify-center text-[10px] font-bold px-1 text-center" style={{ color: STEEL, ...SR_MONO }}>PDF</div>}
                 <div className="text-[9px] px-1 py-0.5 truncate" style={{ color: STEEL }}>{it.name}</div>
               </a>
               {!readOnly && <button type="button" onClick={() => remove(i)} className="absolute top-1 right-1 bg-white/90 rounded-full p-0.5"><X size={12} color={STEEL} /></button>}
@@ -2631,8 +2659,8 @@ function SrFilesField({ f, value, readOnly, onChange, Lbl }) {
       </div>
       {!readOnly && (
         <label className="inline-block mt-2 text-[10px] font-bold uppercase px-2.5 py-1.5 rounded-sm border cursor-pointer" style={{ borderColor: "#C9C6BC", color: INK, ...SR_MONO }}>
-          {busy ? "Uploading…" : anyType ? "+ Add photo or PDF" : "+ Add photos"}
-          <input type="file" multiple hidden disabled={busy} accept={anyType ? "image/*,application/pdf" : "image/*"} onChange={pick} />
+          {busy ? "Uploading…" : videoOnly ? "+ Add video" : anyType ? "+ Add photo or PDF" : "+ Add photos"}
+          <input type="file" multiple hidden disabled={busy} accept={videoOnly ? "video/*" : anyType ? "image/*,application/pdf" : "image/*"} onChange={pick} />
         </label>
       )}
       {err && <div className="text-[11px] mt-1" style={{ color: ALERT }}>{err}</div>}
@@ -2754,7 +2782,14 @@ function SrFormView({ user, activeProjectId, projectName, detail, form, type, at
   const token = user.sessionToken;
   const ctx = { slug: activeProjectId, projectName, caseRow: detail, userName: user.name };
   const schema = useMemo(() => srSchema(type, ctx), [type, activeProjectId]);
-  const [data, setData] = useState(() => (form ? { ...form.data } : srDefaults(type, ctx)));
+  const [data, setData] = useState(() => {
+    if (!form) return srDefaults(type, ctx);
+    const d = { ...form.data };
+    // a draft started before the incident description existed picks it up when still empty
+    const k = srDescKey(type);
+    if (form.status !== "submitted" && k && !String(d[k] || "").trim()) { const t = srIncidentDescription(detail); if (t) d[k] = t; }
+    return d;
+  });
   const [formId, setFormId] = useState(form ? form.id : null);
   const [status, setStatus] = useState(form ? form.status : "draft");
   const [pdfUrl, setPdfUrl] = useState(form ? form.pdf_url : null);
