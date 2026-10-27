@@ -8044,7 +8044,8 @@ const dueDateFrom = (n, unit) => {
   return d.toISOString().slice(0, 10);
 };
 const prettyDate = (iso) => { try { return new Date(iso + "T12:00:00").toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }); } catch (e) { return iso; } };
-function trainingMailto({ person, contact, course, kind, dueISO, expiresISO, adminName, projectName }) {
+function trainingMailto({ person, contact, course, kind, dueISO, expiresISO, adminName, projectName, slug }) {
+  const link = `${window.location.origin}${window.location.pathname}?project=${slug}&screen=training`;
   const to = (contact && contact.email) || "";
   const cc = (contact && contact.manager_email) || "";
   const first = (person.name || "").split(" ")[0] || "there";
@@ -8054,23 +8055,23 @@ function trainingMailto({ person, contact, course, kind, dueISO, expiresISO, adm
     subject = `Training assigned: ${course}`;
     lines = [`Hi ${first},`, "", `You have been assigned "${course}" on ${projectName || "the project"}.`,
       dueISO ? `Please complete it by ${prettyDate(dueISO)}.` : "Please complete it as soon as you can.",
-      "", "Log in to the Safety Hub with your badge number and PIN to start."];
+      "", "Open the training portal and log in with your badge number and PIN:", link];
   } else if (kind === "due_soon" || kind === "overdue") {
     subject = `${kind === "overdue" ? "OVERDUE" : "Reminder"}: ${course} training`;
     lines = [`Hi ${first},`, "", kind === "overdue"
       ? `Your assigned training "${course}" was due ${dueISO ? "on " + prettyDate(dueISO) : "already"} and has not been completed.`
       : `Your assigned training "${course}" is due ${dueISO ? "on " + prettyDate(dueISO) : "soon"} and has not been completed yet.`,
-      "Please complete it as soon as possible.", "", "Log in to the Safety Hub with your badge number and PIN to continue."];
+      "Please complete it as soon as possible.", "", "Open the training portal and log in with your badge number and PIN:", link];
   } else if (kind === "expired") {
     subject = `Training EXPIRED: ${course}`;
     lines = [`Hi ${first},`, "", `Your "${course}" training expired${expiresISO ? " on " + prettyDate(expiresISO) : ""}.`,
       dueISO ? `Please complete the refresher by ${prettyDate(dueISO)}.` : "Please complete the refresher as soon as possible.",
-      "", "Log in to the Safety Hub with your badge number and PIN to start."];
+      "", "Open the training portal and log in with your badge number and PIN:", link];
   } else {
     subject = `Training expiring soon: ${course}`;
     lines = [`Hi ${first},`, "", `Your "${course}" training expires${expiresISO ? " on " + prettyDate(expiresISO) : " soon"}.`,
       dueISO ? `Please complete the refresher by ${prettyDate(dueISO)}.` : "Please schedule your refresher before it expires.",
-      "", "Log in to the Safety Hub with your badge number and PIN to start."];
+      "", "Open the training portal and log in with your badge number and PIN:", link];
   }
   if (mgr) lines.push("", `${mgr} is copied on this message.`);
   lines.push("", "Thank you,", adminName || "Safety");
@@ -8080,7 +8081,7 @@ function trainingMailto({ person, contact, course, kind, dueISO, expiresISO, adm
 }
 
 function ManageTrainingScreen({ user }) {
-  const { name: projectName } = useContext(ProjectContext);
+  const { id: projectSlug, name: projectName } = useContext(ProjectContext);
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [openCourseId, setOpenCourseId] = useState(null);
@@ -8232,7 +8233,7 @@ function ManageTrainingScreen({ user }) {
             <div className="space-y-1.5">
               {notices.map((n) => {
                 const emp = isCompanyEmployer(n.person.employer);
-                const href = emp && n.contact.email ? trainingMailto({ person: n.person, contact: n.contact, course: n.course, kind: "assigned", dueISO: n.dueISO, adminName: user?.name, projectName }) : null;
+                const href = emp && n.contact.email ? trainingMailto({ person: n.person, contact: n.contact, course: n.course, kind: "assigned", dueISO: n.dueISO, adminName: user?.name, projectName, slug: projectSlug }) : null;
                 return (
                   <div key={n.person.id} className="flex items-center justify-between gap-2 text-[13px]">
                     <div className="min-w-0">
@@ -8327,7 +8328,7 @@ function ManageTrainingScreen({ user }) {
             <div className="space-y-1.5">
               {due.map((it) => {
                 const ct = contactsById[it.pid] || {};
-                const href = ct.email ? trainingMailto({ person: { name: it.name }, contact: ct, course: it.course, kind: it.kind, expiresISO: it.iso, dueISO: it.iso, adminName: user?.name, projectName }) : null;
+                const href = ct.email ? trainingMailto({ person: { name: it.name }, contact: ct, course: it.course, kind: it.kind, expiresISO: it.iso, dueISO: it.iso, adminName: user?.name, projectName, slug: projectSlug }) : null;
                 const bad = it.kind === "expired" || it.kind === "overdue";
                 return (
                   <div key={`${it.pid}|${it.course}|${it.kind}`} className="flex items-center justify-between gap-2 text-[13px]">
