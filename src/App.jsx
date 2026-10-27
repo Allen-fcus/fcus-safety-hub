@@ -1887,11 +1887,19 @@ function srReg(slug) {
 }
 const SR_AREAS = { "nti-sylvania": SR_L.area, "nti-golden-triangle": SR_L.area, "sh99-houston": ["FCW99", "Off Site"], "nashville": ["FCW24", "Off Site"] };
 const SR_COORDINATORS = { "nti-sylvania": SR_L.coordinator };
-const SR_TYPES = [...SR_L.type, "HiPo", "Injury / Illness", "Property Damage", "Other"];
+const SR_RISK_CLASS = ["Minor (Not worthy but with less consequences)", "Moderate (Potential for event that cause short-term harm)", "Serious (Intense harm or loss with disabling and/or long-term consequences)", "Potential Fatal (Life threatening and deadly condition)"];
+// Opening a report or form should always start at the top, not where the last screen was scrolled to.
+function srScrollToTop() {
+  try {
+    window.scrollTo(0, 0);
+    document.querySelectorAll("div, main, section").forEach((el) => { if (el.scrollTop > 0) el.scrollTop = 0; });
+  } catch (e) { /* ignore */ }
+}
+const SR_TYPES = [...SR_L.type, "Near Miss - HiPo", "HiPo", "Injury / Illness", "Property Damage", "Other"];
 // Picking an event type turns on the matching classification flag, so the right warnings and forms show up right away.
 const srFlagsForType = (t) => ({
-  ...(t === "Near Miss" ? { near_miss: true } : {}),
-  ...(t === "HiPo" ? { hipo: true } : {}),
+  ...(t === "Near Miss" || t === "Near Miss - HiPo" ? { near_miss: true } : {}),
+  ...(t === "HiPo" || t === "Near Miss - HiPo" ? { hipo: true } : {}),
   ...(t === "Injury / Illness" ? { injury: true } : {}),
   ...(t === "Property Damage" ? { property_damage: true } : {}),
 });
@@ -1913,6 +1921,13 @@ function srRequiredForms(c, forms) {
   const has = (t) => (forms || []).some((f) => f.form_type === t);
   const severe = c.hipo || c.sif || c.fatality || c.recordable || c.lost_time || c.osha_reportable || c.medical_treatment;
   const list = [{ type: "incident_report", need: "required", why: "Every event starts with an Incident Report." }];
+  // A plain near miss (not a HiPo, no injury) only needs the Incident Report and any statements.
+  if (c.near_miss && !severe && !c.injury && !c.property_damage) {
+    list.push({ type: "employee_statement", need: "optional", why: "Add a statement from anyone involved or who saw it, if it helps." });
+    // never hide a form someone has already started on this case
+    (forms || []).forEach((f) => { if (!list.some((r) => r.type === f.form_type) && SR_FORM_META[f.form_type]) list.push({ type: f.form_type, need: "optional", why: "Already started on this case." }); });
+    return list.map((r) => ({ ...r, done: has(r.type) }));
+  }
   const witness = c.injury || c.incident_type === "MVA" || c.incident_type === "Utility Strike" || c.hipo || c.near_miss;
   list.push({ type: "employee_statement", need: witness ? "recommended" : "optional", why: "Complete one for each employee or witness involved. Attach to the Investigation Report." });
   list.push({ type: "investigation_report", need: severe ? "required" : "optional",
@@ -1931,6 +1946,7 @@ function srRequiredForms(c, forms) {
 function srClassLabel(c) {
   if (c.fatality) return "Fatality";
   if (c.sif) return "SIF (Serious Injury / Fatality)";
+  if (c.hipo && c.near_miss) return "Near Miss - HiPo";
   if (c.hipo) return "HiPo (High Potential)";
   if (c.lost_time) return "Lost Time";
   if (c.recordable) return "Recordable";
@@ -2031,7 +2047,7 @@ function srSchemaBase(type, ctx) {
         { k: "drugScreen", l: "Drug screen completed", t: "select", opts: SR_L.drug }, { k: "policeReport", l: "Police report #", t: "text" },
       ] },
       { title: "Classification", fields: [
-        { k: "riskClass", l: "Classification of risk", t: "text" },
+        { k: "riskClass", l: "Classification of risk", t: "select", opts: SR_RISK_CLASS, full: true },
         { k: "activity", l: "Activity", t: "select", opts: SR_L.activity, full: true },
         { k: "standard", l: "H&S minimum standard", t: "select", opts: SR_L.standard, full: true },
         { k: "causation", l: "Incident causation", t: "select", opts: SR_L.causation, full: true },
@@ -2274,7 +2290,7 @@ function srDefaults(type, ctx) {
   if (type === "incident_report") return {
     date: c.incident_date ? String(c.incident_date).slice(0, 10) : todayISO(), time: c.incident_time || "", where: c.area || "", type: c.incident_type || "",
     company: c.company_involved || "", location: c.location_detail || "", injuries: c.injury ? "Yes" : "", propertyDamage: c.property_damage ? "Yes" : "",
-    drugScreen: c.drug_screen || "", policeReport: c.police_report || "", riskClass: c.risk_class || "", lifesaving: c.lifesaving_control === "yes" ? "Yes" : c.lifesaving_control === "no" ? "No" : "",
+    drugScreen: c.drug_screen || "", policeReport: c.police_report || "", riskClass: SR_RISK_CLASS.find((o) => o.split(" ")[0] === String(c.risk_class || "").split(" ")[0]) || "", lifesaving: c.lifesaving_control === "yes" ? "Yes" : c.lifesaving_control === "no" ? "No" : "",
     description: "",
   };
   const loc = [c.area, c.location_detail].filter(Boolean).join(" - ");
@@ -3177,7 +3193,7 @@ function SrCaseView({ user, activeProjectId, projectName, caseId, onBack, onOpen
         </details>
       )}
 
-      {escalated ? meetingCard : (
+      {escalated ? meetingCard : live.near_miss && !live.injury && !live.property_damage ? null : (
         <details className="bg-white rounded-md border mb-3" style={{ borderColor: "#E4E2DA" }}>
           <summary className="px-3 py-2.5 text-[11px] uppercase font-bold cursor-pointer" style={lab}>Investigation meeting sign-in (optional)</summary>
           <div className="px-3 pb-3">{meetingCard}</div>
@@ -3203,6 +3219,7 @@ function SafetyReportsPanel({ user, activeProjectId, onOpenMeeting }) {
   const [creating, setCreating] = useState(false);
   const [err, setErr] = useState("");
   const areas = SR_AREAS[activeProjectId] || ["On Site", "Off Site"];
+  useEffect(() => { srScrollToTop(); const t = setTimeout(srScrollToTop, 60); return () => clearTimeout(t); }, [route.name, route.id, route.type, route.form && route.form.id]);
 
   const loadList = async () => {
     setLoading(true);
