@@ -2787,6 +2787,63 @@ function SrFormFields({ schema, data, setData, readOnly }) {
 }
 
 // ---------- one form on a case ----------
+// After an Incident Report is submitted: open the user's own email app with everything filled in
+// (To = the four standing recipients + the managers named on the report), and share the PDF / photos / videos as real attachments from a phone.
+function SrEmailPanel({ detail, data, pdfUrl, projectName, notifyEmail, userName, makePdf }) {
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState("");
+  const seen = new Set();
+  const to = [...SR_INCIDENT_RECIPIENTS, data.segmentMgrEmail, data.projectMgrEmail, notifyEmail]
+    .map((x) => String(x || "").trim()).filter((x) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x))
+    .filter((x) => { const k = x.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
+  const media = [...(Array.isArray(data.photos) ? data.photos : []), ...(Array.isArray(data.videos) ? data.videos : [])];
+  const subject = `Incident Report - ${detail.case_number}${detail.title ? " - " + detail.title : ""}`;
+  const desc = String(data.description || "").trim();
+  const lines = [
+    "Incident Report", projectName ? `Project: ${projectName}` : "",
+    `Case: ${detail.case_number}`, `Event: ${data.type || "-"}`, `Date / time: ${[data.date, data.time].filter(Boolean).join(" ") || "-"}`,
+    `Where: ${[data.where, data.location].filter(Boolean).join(" - ") || "-"}`,
+    data.segmentMgr ? `Segment manager: ${data.segmentMgr}` : "", data.projectMgr ? `Project manager: ${data.projectMgr}` : "",
+    `Injuries: ${data.injuries || "-"}   Property damage: ${data.propertyDamage || "-"}`,
+    data.riskClass ? `Classification of risk: ${data.riskClass}` : "", "",
+    desc ? "Description: " + (desc.length > 600 ? desc.slice(0, 600) + "..." : desc) : "", "",
+    pdfUrl ? `Incident Report (PDF): ${pdfUrl}` : "The Incident Report PDF is attached.",
+    ...media.map((p, i) => `${/^video\//.test(p.type || "") || /\.(mp4|mov|m4v|webm)$/i.test(p.name || "") ? "Video" : "Photo"} ${i + 1}: ${p.url}`),
+    "", "Thank you,", userName || "",
+  ].filter((l, i, arr) => !(l === "" && arr[i - 1] === ""));
+  const href = `mailto:${to.join(",")}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.join("\n"))}`;
+  const fetchFile = async (url, name, type) => new File([await (await fetch(url)).blob()], name, { type });
+  const share = async () => {
+    setBusy(true); setNote("");
+    try {
+      const pdf = pdfUrl ? await fetchFile(pdfUrl, `${safeFile(detail.case_number)}-incident-report.pdf`, "application/pdf")
+        : new File([await makePdf()], `${safeFile(detail.case_number)}-incident-report.pdf`, { type: "application/pdf" });
+      let files = [pdf];
+      for (const [i, p] of media.entries()) { try { files.push(await fetchFile(p.url, p.name || `media-${i + 1}`, p.type || "application/octet-stream")); } catch (e) { /* skip */ } }
+      if (!(navigator.canShare && navigator.canShare({ files }))) files = [pdf];
+      if (!(navigator.canShare && navigator.canShare({ files }))) { setNote("This device can't attach files from here. Use Download PDF and attach it in your email."); setBusy(false); return; }
+      await navigator.share({ files, title: subject, text: `${subject}\n\nSend to: ${to.join(", ")}` });
+    } catch (e) { if (!e || e.name !== "AbortError") setNote("Couldn't open the share sheet. Use Download PDF and attach it in your email."); }
+    setBusy(false);
+  };
+  const mono = { fontFamily: "IBM Plex Mono, monospace" };
+  return (
+    <div className="mt-4 rounded-md border p-3" style={{ borderColor: GOLD, background: "#FFFBEA" }}>
+      <div className="text-[11px] uppercase font-bold mb-1" style={{ color: INK, ...mono }}>Send this report</div>
+      <div className="text-[11px] mb-2" style={{ color: STEEL }}>To: {to.join(", ")}</div>
+      <div className="flex flex-wrap gap-2">
+        <a href={href} className="flex-1 text-center text-[11px] font-bold uppercase py-2.5 rounded-sm" style={{ background: GOLD, color: INK, ...mono }}>Open email</a>
+        <button disabled={busy} onClick={share} className="flex-1 text-[11px] font-bold uppercase py-2.5 rounded-sm border disabled:opacity-50" style={{ borderColor: "#C9C6BC", color: INK, ...mono }}>{busy ? "Preparing…" : "Share PDF + media (attach)"}</button>
+      </div>
+      <div className="text-[10px] mt-2 leading-snug" style={{ color: STEEL }}>
+        "Open email" fills in the recipients, subject and message, with links to the PDF{media.length ? ", photos and videos" : ""}. Email apps can't attach files on their own, so on a phone use "Share PDF + media" to attach them, then choose your email app. On a computer, use Download PDF and attach it.
+      </div>
+      {!(data.segmentMgrEmail || data.projectMgrEmail) && <div className="text-[10px] mt-1" style={{ color: "#7A5B00" }}>No segment or project manager email is on this report, so only the standing recipients are listed. Add them on the form and save to include them.</div>}
+      {note && <div className="text-[11px] mt-1" style={{ color: ALERT }}>{note}</div>}
+    </div>
+  );
+}
+
 function SrFormView({ user, activeProjectId, projectName, detail, form, type, attendees, onBack, onChanged }) {
   const token = user.sessionToken;
   const { notifyEmail } = useContext(ProjectContext) || {};
@@ -2846,29 +2903,7 @@ function SrFormView({ user, activeProjectId, projectName, detail, form, type, at
       setFormId(res.id); setStatus(res.status); if (res.pdf_url) setPdfUrl(res.pdf_url);
       const patch = srCasePatchFromForm(type, data);
       if (Object.keys(patch).length) await supabase.rpc("update_incident_case", { p_token: token, p_case_id: detail.id, p_data: patch });
-      let note = "";
-      if (submit && type === "incident_report") {
-        const seen = new Set();
-        const to = [...SR_INCIDENT_RECIPIENTS, data.segmentMgrEmail, data.projectMgrEmail, notifyEmail]
-          .map((x) => String(x || "").trim()).filter((x) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x))
-          .filter((x) => { const k = x.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
-        const links = (arr, label) => (Array.isArray(arr) ? arr : []).map((p, i) => `${label} ${i + 1}${p.name ? " (" + p.name + ")" : ""}: ${p.url}`);
-        const lines = [
-          `Case: ${detail.case_number}${detail.title ? " - " + detail.title : ""}`,
-          `Event type: ${data.type || "-"}`, `Date / time: ${data.date || "-"} ${data.time || ""}`.trim(),
-          `Where: ${[data.where, data.location].filter(Boolean).join(" - ") || "-"}`,
-          `Company involved: ${data.company || "-"}`,
-          `Segment manager: ${data.segmentMgr || "-"}`, `Project manager: ${data.projectMgr || "-"}`, `Superintendent: ${data.superintendent || "-"}`,
-          `Injuries: ${data.injuries || "-"}${data.injuriesNote ? " (" + data.injuriesNote + ")" : ""}`,
-          `Property damage: ${data.propertyDamage || "-"}${data.propertyNote ? " (" + data.propertyNote + ")" : ""}`,
-          `Classification of risk: ${data.riskClass || "-"}`, "", "Description:", data.description || "-", "",
-          url ? `Incident Report (PDF): ${url}` : "Incident Report PDF: open the case in the Safety Hub to download it.",
-          ...links(data.photos, "Photo"), ...links(data.videos, "Video"),
-        ];
-        const r = await sendFormEmail({ toEmail: to.join(","), formTitle: `Incident Report - ${detail.case_number}`, fieldsText: lines.join("\n"), submittedBy: user.name, projectName });
-        note = r.sent ? ` Emailed to ${to.length} people, with links to the PDF${(Array.isArray(data.photos) && data.photos.length) || (Array.isArray(data.videos) && data.videos.length) ? ", photos and videos" : ""}.` : ` The email did not go out (${r.reason || "unknown reason"}). Copy the PDF link from the case and send it yourself.`;
-      }
-      setMsg(submit ? "Submitted and filed on this case." + note : "Draft saved.");
+      setMsg(submit ? "Submitted and filed on this case. Use the email buttons below to send it out." : "Draft saved.");
       onChanged && onChanged();
     } catch (e) { setErr("Couldn't save. Please try again."); }
     setBusy(false);
@@ -2910,6 +2945,7 @@ function SrFormView({ user, activeProjectId, projectName, detail, form, type, at
         {readOnly && <button onClick={reopen} className="flex-1 text-[11px] font-bold uppercase py-2.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, ...SR_MONO }}>Reopen to edit</button>}
         <button disabled={busy} onClick={download} className="flex-1 flex items-center justify-center gap-1 text-[11px] font-bold uppercase py-2.5 rounded-sm disabled:opacity-50" style={{ background: INK, color: "white", ...SR_MONO }}><Download size={13} /> PDF</button>
       </div>
+      {type === "incident_report" && status === "submitted" && <SrEmailPanel detail={detail} data={data} pdfUrl={pdfUrl} projectName={projectName} notifyEmail={notifyEmail} userName={user.name} makePdf={makePdf} />}
       {pdfUrl && <a href={pdfUrl} target="_blank" rel="noreferrer" className="block text-center text-[11px] mt-3 underline" style={{ color: STEEL }}>Open the filed copy</a>}
     </div>
   );
