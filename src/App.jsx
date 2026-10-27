@@ -2194,15 +2194,14 @@ function srSchemaBase(type, ctx) {
         { k: "project", l: "Project name", t: "text" }, { k: "client", l: "Client", t: "text" },
         { k: "location", l: "Location", t: "text" }, { k: "injuryType", l: "Incident / injury type", t: "text" },
         { k: "incidentDate", l: "Date of incident", t: "date" },
-        { k: "moderator", l: "EIR moderator", t: "text" }, { k: "presenter", l: "EIR presenter", t: "text" },
-        { k: "shMgr", l: "Regional or Area SH&E Manager", t: "text", full: true },
         { k: "_c", t: "info", l: "Protected from Disclosure by the Attorney-Client Privilege and Work Product Doctrine." },
       ] },
       { title: "1. Incident overview", fields: [
         { k: "date", l: "Date", t: "date" }, { k: "time", l: "Time", t: "time" },
         { k: "siteLocation", l: "Location on site", t: "text" }, { k: "type", l: "Incident type", t: "text" },
         { k: "overview", l: "Brief description of incident (the activity taking place and what happened to the individual as a result)", t: "textarea", req: true, full: true },
-        { k: "overviewMore", l: "Incident overview continued (timeline, photos or sketches to show on the slides)", t: "textarea", full: true },
+        { k: "overviewMore", l: "Incident overview continued (timeline)", t: "textarea", full: true },
+        { k: "overviewPhotos", l: "Incident overview continued: photos (brought over from the Incident Report; add or remove as needed)", t: "files", accept: "image" },
       ] },
       { title: "2. Findings", fields: [
         { k: "findings", l: "As determined from the conclusion of the investigation: root causes and contributing factors", t: "textarea", req: true, full: true, hint: "Consider people, behaviors, management failure and supervision." },
@@ -2306,6 +2305,19 @@ function srDefaults(type, ctx) {
   const d = srDefaultsBase(type, ctx);
   const k = srDescKey(type);
   if (k && !String(d[k] || "").trim()) { const t = srIncidentDescription(ctx.caseRow); if (t) d[k] = t; }
+  if (type === "eir") {
+    const forms = (ctx.caseRow && ctx.caseRow.forms) || [];
+    const fd = (t) => { const l = forms.filter((x) => x.form_type === t && x.data); return (l.find((x) => x.status === "submitted") || l[0] || {}).data || {}; };
+    const inc = fd("incident_report"), inv = fd("investigation_report"), sir = fd("sir"), ll = fd("lesson_learned");
+    const sentence = (t) => { t = String(t || "").trim().replace(/\s+/g, " "); if (!t) return ""; t = t[0].toUpperCase() + t.slice(1); return /[.!?]$/.test(t) ? t : t + "."; };
+    const rows = (r, f) => (Array.isArray(r) ? r : []).map((x) => (f ? f(x || {}) : (x && x.text))).map(sentence).filter(Boolean);
+    if (!Array.isArray(d.overviewPhotos) || !d.overviewPhotos.length) { const ph = (Array.isArray(inc.photos) ? inc.photos : []).filter((p) => p && p.url); if (ph.length) d.overviewPhotos = ph; }
+    if (!String(d.findings || "").trim()) { const t = rows(inv.findings).join(" "); if (t) d.findings = t; }
+    if (!String(d.learning || "").trim()) {
+      const t = [...rows(inv.actions, (r) => (r.text || "") + (r.who ? ` (responsible: ${r.who})` : "")), sentence(sir.caText), ...rows(ll.ensure)].filter(Boolean).join(" ");
+      if (t) d.learning = t;
+    }
+  }
   if (type === "sir") { const inc = srIncidentData(ctx.caseRow); SR_SIR_INHERIT.forEach((x) => { if (inc[x] && !String(d[x] || "").trim()) d[x] = inc[x]; }); }
   return d;
 }
