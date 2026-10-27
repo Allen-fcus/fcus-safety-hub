@@ -8100,6 +8100,8 @@ function ManageTrainingScreen({ user }) {
   const [contactsById, setContactsById] = useState({});
   const [openAssigns, setOpenAssigns] = useState([]);
   const [noticeLog, setNoticeLog] = useState([]);
+  const [expiryWindow, setExpiryWindow] = useState(60); // days ahead to show upcoming retakes
+  const [showDone, setShowDone] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -8253,17 +8255,25 @@ function ManageTrainingScreen({ user }) {
         <div className="text-[11px] uppercase font-bold mb-2" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Assigned</div>
         <div className="space-y-2">
           {adminMsg && <div className="text-[12px] rounded-md px-3 py-2" style={{ background: "#F4F3EF" }}>{adminMsg}</div>}
-          {assignees.map((a) => (
-            <AssigneeCard
-              key={a.personnel_id}
-              a={a}
-              onUnassign={unassign}
-              onUnlock={unlockExam}
-              onRetrain={retrainPerson}
-              onViewCert={setCertView}
-              onViewExam={setExamReviewId}
-            />
-          ))}
+          {(() => {
+            const isDone = (a) => a.attempt?.status === "completed" && a.retrain?.due !== true && ((a.certificates || [])[0]?.status === "current" || !(a.certificates || []).length);
+            const active = assignees.filter((a) => !isDone(a));
+            const done = assignees.filter(isDone);
+            const card = (a) => (
+              <AssigneeCard key={a.personnel_id} a={a} onUnassign={unassign} onUnlock={unlockExam} onRetrain={retrainPerson} onViewCert={setCertView} onViewExam={setExamReviewId} />
+            );
+            return (
+              <>
+                {active.map(card)}
+                {done.length > 0 && (
+                  <button onClick={() => setShowDone((v) => !v)} className="w-full text-left text-[11px] font-bold uppercase py-2" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>
+                    {showDone ? "▾" : "▸"} Completed and current ({done.length})
+                  </button>
+                )}
+                {showDone && done.map(card)}
+              </>
+            );
+          })()}
           {assignees.length === 0 && <div className="text-[12px] text-center py-4" style={{ color: STEEL }}>Nobody assigned yet.</div>}
         </div>
         {examReviewId && <ExamReviewModal user={user} examAttemptId={examReviewId} onClose={() => setExamReviewId(null)} />}
@@ -8309,7 +8319,7 @@ function ManageTrainingScreen({ user }) {
           if (!isCompanyEmployer(c.employer) || !c.expires_at) return;
           const d = daysUntil(c.expires_at);
           if (d < 0) items.push({ kind: "expired", pid: c.personnel_id, name: c.person_name, course: c.course_title, iso: c.expires_at, d });
-          else if (d <= EXPIRY_NOTICE_DAYS) items.push({ kind: "expiring", pid: c.personnel_id, name: c.person_name, course: c.course_title, iso: c.expires_at, d });
+          else if (d <= expiryWindow) items.push({ kind: "expiring", pid: c.personnel_id, name: c.person_name, course: c.course_title, iso: c.expires_at, d });
         });
         openAssigns.forEach((a) => {
           if (!isCompanyEmployer(a.employer) || !a.due_at) return;
@@ -8317,28 +8327,39 @@ function ManageTrainingScreen({ user }) {
           if (d < 0) items.push({ kind: "overdue", pid: a.personnel_id, name: a.person_name, course: a.course_title, iso: a.due_at, d });
           else if (d <= DUE_NOTICE_DAYS) items.push({ kind: "due_soon", pid: a.personnel_id, name: a.person_name, course: a.course_title, iso: a.due_at, d });
         });
-        const recent = (it) => noticeLog.some((l) => l.personnel_id === it.pid && l.course_title === it.course && l.kind === it.kind && (Date.now() - new Date(l.sent_at)) < RENOTICE_COOLDOWN_DAYS * 86400000);
-        const due = items.filter((it) => !recent(it)).sort((x, y) => x.d - y.d);
-        if (due.length === 0) return null;
+        const lastSent = (it) => {
+          const hit = noticeLog.filter((l) => l.personnel_id === it.pid && l.course_title === it.course && l.kind === it.kind).map((l) => new Date(l.sent_at).getTime());
+          return hit.length ? Math.max(...hit) : 0;
+        };
+        const isRecent = (it) => lastSent(it) && (Date.now() - lastSent(it)) < RENOTICE_COOLDOWN_DAYS * 86400000;
+        const due = items.sort((x, y) => (isRecent(x) ? 1 : 0) - (isRecent(y) ? 1 : 0) || x.d - y.d);
+        if (due.length === 0 && expiryWindow === 60) return null;
         const label = { expired: "Expired", expiring: "Expires", overdue: "Overdue since", due_soon: "Due" };
         return (
           <div className="bg-white rounded-md border p-3 mt-5" style={{ borderColor: GOLD }}>
-            <div className="text-[11px] uppercase font-bold mb-1" style={{ color: INK, fontFamily: "IBM Plex Mono, monospace" }}>Needs a notice ({due.length})</div>
-            <div className="text-[11px] mb-2" style={{ color: STEEL }}>Company employees only. Expiring within {EXPIRY_NOTICE_DAYS} days, expired, due within {DUE_NOTICE_DAYS} days, or overdue. Email opens ready to send: To employee, CC manager. Once you tap Email it drops off this list for {RENOTICE_COOLDOWN_DAYS} days.</div>
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <div className="text-[11px] uppercase font-bold" style={{ color: INK, fontFamily: "IBM Plex Mono, monospace" }}>Retakes &amp; reminders ({due.length})</div>
+              <select value={expiryWindow} onChange={(e) => setExpiryWindow(parseInt(e.target.value, 10))} className="rounded-md border px-2 py-1 text-[11px]" style={{ borderColor: "#C9C6BC" }}>
+                <option value={30}>Expiring in 30 days</option><option value={60}>Expiring in 60 days</option><option value={90}>Expiring in 90 days</option><option value={180}>Expiring in 6 months</option>
+              </select>
+            </div>
+            <div className="text-[11px] mb-2" style={{ color: STEEL }}>Company employees only: expired or expiring retakes, plus assigned trainings due within {DUE_NOTICE_DAYS} days or overdue. Tap Email to open a ready-to-send message (To employee, CC manager). After you send one it shows "Sent" for {RENOTICE_COOLDOWN_DAYS} days, then comes back so you can follow up.</div>
+            {due.length === 0 && <div className="text-[12px] py-2" style={{ color: STEEL }}>Nothing coming up in this window.</div>}
             <div className="space-y-1.5">
               {due.map((it) => {
                 const ct = contactsById[it.pid] || {};
                 const href = ct.email ? trainingMailto({ person: { name: it.name }, contact: ct, course: it.course, kind: it.kind, expiresISO: it.iso, dueISO: it.iso, adminName: user?.name, projectName, slug: projectSlug }) : null;
                 const bad = it.kind === "expired" || it.kind === "overdue";
+                const sentAt = isRecent(it) ? new Date(lastSent(it)).toLocaleDateString("en-US", { month: "numeric", day: "numeric" }) : "";
                 return (
                   <div key={`${it.pid}|${it.course}|${it.kind}`} className="flex items-center justify-between gap-2 text-[13px]">
                     <div className="min-w-0">
                       <div className="truncate">{it.name} · {it.course}</div>
                       <div className="text-[10px]" style={{ color: bad ? ALERT : STEEL }}>
-                        {label[it.kind]} {it.iso}{!ct.email ? " · no email on file" : !ct.manager_email ? " · no manager on file" : ""}
+                        {label[it.kind]} {it.iso}{it.kind === "expiring" || it.kind === "due_soon" ? ` (${it.d} day${it.d === 1 ? "" : "s"})` : ""}{!ct.email ? " · no email on file" : !ct.manager_email ? " · no manager on file" : ""}{sentAt ? ` · Sent ${sentAt}` : ""}
                       </div>
                     </div>
-                    {href ? <a href={href} onClick={async () => { await supabase.rpc("log_training_notice", { p_token: user.sessionToken, p_personnel_id: it.pid, p_course_title: it.course, p_kind: it.kind }); setNoticeLog((l) => [...l, { personnel_id: it.pid, course_title: it.course, kind: it.kind, sent_at: new Date().toISOString() }]); }} className="flex-shrink-0 text-[11px] font-bold uppercase px-3 py-1.5 rounded-sm" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>Email</a> : null}
+                    {href ? <a href={href} onClick={async () => { await supabase.rpc("log_training_notice", { p_token: user.sessionToken, p_personnel_id: it.pid, p_course_title: it.course, p_kind: it.kind }); setNoticeLog((l) => [...l, { personnel_id: it.pid, course_title: it.course, kind: it.kind, sent_at: new Date().toISOString() }]); }} className="flex-shrink-0 text-[11px] font-bold uppercase px-3 py-1.5 rounded-sm" style={sentAt ? { background: "#EEE", color: STEEL, fontFamily: "IBM Plex Mono, monospace" } : { background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>{sentAt ? "Resend" : "Email"}</a> : null}
                   </div>
                 );
               })}
