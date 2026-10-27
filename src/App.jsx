@@ -6492,6 +6492,15 @@ function CoursePlayer({ course, attemptId, initialStepIndex, initialStepsProgres
   const [selected, setSelected] = useState(() => progressByIndex[initialStepIndex]?.selected_option ?? null);
   const [answered, setAnswered] = useState(() => progressByIndex[initialStepIndex]?.completed ?? false);
   const [videoWatchedEnough, setVideoWatchedEnough] = useState(false);
+  // Training videos can't be skipped: maxWatchedRef is the furthest point reached by
+  // actually playing, and any seek past it (plus a little slack) snaps back.
+  const videoRef = useRef(null);
+  const maxWatchedRef = useRef(0);
+  useEffect(() => {
+    const onHide = () => { if (document.hidden && videoRef.current && !videoRef.current.paused) videoRef.current.pause(); };
+    document.addEventListener("visibilitychange", onHide);
+    return () => document.removeEventListener("visibilitychange", onHide);
+  }, []);
   // localProgress mirrors the server-side progress but updates instantly as the
   // learner moves through this session, so stepping back to review an earlier
   // step (desktop sidebar or the Back button) shows the right state without a
@@ -6721,6 +6730,7 @@ function CoursePlayer({ course, attemptId, initialStepIndex, initialStepsProgres
   useEffect(() => {
     setDwellSeconds(0);
     setVideoWatchedEnough(false);
+    maxWatchedRef.current = 0;
     const t = setInterval(() => {
       if (isFocusedRef.current && Date.now() - lastInteractionRef.current < IDLE_TIMEOUT_MS) {
         setDwellSeconds((s) => s + 1);
@@ -7003,19 +7013,37 @@ function CoursePlayer({ course, attemptId, initialStepIndex, initialStepsProgres
                 <div>
                   <div className="text-[15px] md:text-[20px] mb-3" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{step.title}</div>
                   <video
+                    key={step.videoUrl}
+                    ref={videoRef}
                     src={step.videoUrl}
                     controls
+                    playsInline
+                    preload="metadata"
+                    controlsList="nodownload noplaybackrate"
+                    disablePictureInPicture
                     className="w-full rounded-md bg-black"
                     onTimeUpdate={(e) => {
                       lastInteractionRef.current = Date.now();
                       const v = e.currentTarget;
-                      if (v.duration && v.currentTime >= v.duration * 0.95) setVideoWatchedEnough(true);
+                      if (localProgress[stepIndex]?.completed) return; // already finished: free to scrub when reviewing
+                      if (v.seeking) return;
+                      if (v.currentTime > maxWatchedRef.current + 2.5) { v.currentTime = maxWatchedRef.current; return; }
+                      if (v.currentTime > maxWatchedRef.current) maxWatchedRef.current = v.currentTime;
                     }}
-                    onEnded={() => setVideoWatchedEnough(true)}
+                    onSeeking={(e) => {
+                      const v = e.currentTarget;
+                      if (localProgress[stepIndex]?.completed) return;
+                      if (v.currentTime > maxWatchedRef.current + 1) v.currentTime = maxWatchedRef.current;
+                    }}
+                    onRateChange={(e) => { if (!localProgress[stepIndex]?.completed && e.currentTarget.playbackRate !== 1) e.currentTarget.playbackRate = 1; }}
+                    onEnded={(e) => {
+                      const v = e.currentTarget;
+                      if (localProgress[stepIndex]?.completed || maxWatchedRef.current >= (v.duration || 0) - 3) setVideoWatchedEnough(true);
+                    }}
                   />
                   {!videoWatchedEnough && !localProgress[stepIndex]?.completed && (
                     <div className="mt-2 text-[11px]" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>
-                      Watch to the end to continue — skipping ahead doesn't count.
+                      Watch the whole video to continue. You can go back and replay, but you can't skip ahead.
                     </div>
                   )}
                 </div>
