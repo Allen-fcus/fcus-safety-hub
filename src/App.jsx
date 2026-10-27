@@ -2461,13 +2461,13 @@ async function buildIncidentFormPdf({ schema, data, caseRow, projectName, extraS
   };
   const kv = (label, value, x, width) => {
     const lbl = wrap(String(label || "").toUpperCase(), sansB, 6.5, width);
-    const lines = wrap(value || "-", sansB, 10, width);
+    const lines = wrap(value || "-", sansB, 12, width);
     lbl.forEach((ln, j) => page.drawText(ln, { x, y: y - 8 - j * 8, size: 6.5, font: sansB, color: grey }));
     const extra = (lbl.length - 1) * 8;
-    lines.forEach((ln, i) => page.drawText(ln, { x, y: y - 19 - extra - i * 12, size: 10, font: sansB, color: ink }));
-    return 19 + extra + lines.length * 12 + 4;
+    lines.forEach((ln, i) => page.drawText(ln, { x, y: y - 21 - extra - i * 15, size: 12, font: sansB, color: ink }));
+    return 21 + extra + lines.length * 15 + 4;
   };
-  const kvH = (label, value, width) => 19 + (wrap(String(label || "").toUpperCase(), sansB, 6.5, width).length - 1) * 8 + wrap(value || "-", sansB, 10, width).length * 12 + 4;
+  const kvH = (label, value, width) => 21 + (wrap(String(label || "").toUpperCase(), sansB, 6.5, width).length - 1) * 8 + wrap(value || "-", sansB, 12, width).length * 15 + 4;
   const box = (x, yy, on) => {
     page.drawRectangle({ x, y: yy, width: 8, height: 8, borderColor: ink, borderWidth: 0.8, color: rgb(1, 1, 1) });
     if (on) { page.drawLine({ start: { x: x + 1.5, y: yy + 1.5 }, end: { x: x + 6.5, y: yy + 6.5 }, thickness: 1.2, color: ink }); page.drawLine({ start: { x: x + 1.5, y: yy + 6.5 }, end: { x: x + 6.5, y: yy + 1.5 }, thickness: 1.2, color: ink }); }
@@ -2495,16 +2495,16 @@ async function buildIncidentFormPdf({ schema, data, caseRow, projectName, extraS
       }
       flush();
       if (f.t === "info") {
-        const ls = wrap(f.l, sans, 8.5, CW);
-        need(ls.length * 11 + 6);
-        ls.forEach((ln, i) => page.drawText(ln, { x: M, y: y - 9 - i * 11, size: 8.5, font: sans, color: grey }));
-        y -= ls.length * 11 + 6;
+        const ls = wrap(f.l, sans, 12, CW);
+        need(ls.length * 15 + 6);
+        ls.forEach((ln, i) => page.drawText(ln, { x: M, y: y - 11 - i * 15, size: 12, font: sans, color: grey }));
+        y -= ls.length * 15 + 6;
       } else if (f.t === "check") {
-        const ls = wrap(f.l, sans, 9.5, CW - 16);
-        need(ls.length * 12 + 6);
-        box(M, y - 9, !!data[f.k]);
-        ls.forEach((ln, i) => page.drawText(ln, { x: M + 14, y: y - 9 - i * 12, size: 9.5, font: sans, color: ink }));
-        y -= ls.length * 12 + 6;
+        const ls = wrap(f.l, sans, 12, CW - 16);
+        need(ls.length * 15 + 6);
+        box(M, y - 10, !!data[f.k]);
+        ls.forEach((ln, i) => page.drawText(ln, { x: M + 14, y: y - 11 - i * 15, size: 12, font: sans, color: ink }));
+        y -= ls.length * 15 + 6;
       } else if (f.t === "checks") {
         const sel = Array.isArray(data[f.k]) ? data[f.k] : [];
         need(26);
@@ -2513,21 +2513,21 @@ async function buildIncidentFormPdf({ schema, data, caseRow, projectName, extraS
         const inline = f.opts.every((o) => o.length < 28) && f.opts.length <= 7;
         if (inline) {
           let x = M;
-          need(16);
+          need(19);
           f.opts.forEach((o) => {
-            const w = sans.widthOfTextAtSize(clean(o), 9.5) + 26;
-            if (x + w > W - M) { x = M; y -= 14; need(16); }
-            box(x, y - 8, sel.includes(o)); page.drawText(clean(o), { x: x + 13, y: y - 8, size: 9.5, font: sans, color: ink });
+            const w = sans.widthOfTextAtSize(clean(o), 12) + 28;
+            if (x + w > W - M) { x = M; y -= 17; need(19); }
+            box(x, y - 9, sel.includes(o)); page.drawText(clean(o), { x: x + 13, y: y - 9, size: 12, font: sans, color: ink });
             x += w + 8;
           });
-          y -= 18;
+          y -= 21;
         } else {
           f.opts.forEach((o) => {
-            const ls = wrap(o, sans, 8.5, CW - 16);
-            need(ls.length * 10.5 + 3);
-            box(M, y - 8, sel.includes(o));
-            ls.forEach((ln, i) => page.drawText(ln, { x: M + 13, y: y - 8 - i * 10.5, size: 8.5, font: sel.includes(o) ? sansB : sans, color: ink }));
-            y -= ls.length * 10.5 + 3;
+            const ls = wrap(o, sans, 12, CW - 16);
+            need(ls.length * 15 + 3);
+            box(M, y - 9, sel.includes(o));
+            ls.forEach((ln, i) => page.drawText(ln, { x: M + 13, y: y - 11 - i * 15, size: 12, font: sel.includes(o) ? sansB : sans, color: ink }));
+            y -= ls.length * 15 + 3;
           });
           y -= 4;
         }
@@ -2545,13 +2545,13 @@ async function buildIncidentFormPdf({ schema, data, caseRow, projectName, extraS
         f.cols.forEach((c, i) => { page.drawText(clean(c.l).toUpperCase(), { x: x0 + 2, y: y - 8, size: 6.5, font: sansB, color: grey }); x0 += cw[i]; });
         y -= 12;
         rows.forEach((r, ri) => {
-          const cells = f.cols.map((c, i) => wrap(c.t === "date" ? fmtD(r[c.k]) : r[c.k] || "", sans, 9, cw[i] - 6));
-          const rh = Math.max(...cells.map((l) => l.length)) * 11 + 6;
+          const cells = f.cols.map((c, i) => wrap(c.t === "date" ? fmtD(r[c.k]) : r[c.k] || "", sans, 12, cw[i] - 6));
+          const rh = Math.max(...cells.map((l) => l.length)) * 15 + 6;
           need(rh);
           page.drawLine({ start: { x: M, y: y }, end: { x: W - M, y: y }, thickness: 0.4, color: line });
-          page.drawText(String(ri + 1) + ".", { x: M + 2, y: y - 11, size: 9, font: sansB, color: ink });
+          page.drawText(String(ri + 1) + ".", { x: M + 2, y: y - 12, size: 12, font: sansB, color: ink });
           let cx = M + 22;
-          cells.forEach((ls, i) => { ls.forEach((ln, j) => page.drawText(ln, { x: cx + 2, y: y - 11 - j * 11, size: 9, font: sans, color: ink })); cx += cw[i]; });
+          cells.forEach((ls, i) => { ls.forEach((ln, j) => page.drawText(ln, { x: cx + 2, y: y - 12 - j * 15, size: 12, font: sans, color: ink })); cx += cw[i]; });
           y -= rh;
         });
         page.drawLine({ start: { x: M, y: y }, end: { x: W - M, y: y }, thickness: 0.4, color: line });
