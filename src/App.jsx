@@ -1887,7 +1887,14 @@ function srReg(slug) {
 }
 const SR_AREAS = { "nti-sylvania": SR_L.area, "nti-golden-triangle": SR_L.area, "sh99-houston": ["FCW99", "Off Site"], "nashville": ["FCW24", "Off Site"] };
 const SR_COORDINATORS = { "nti-sylvania": SR_L.coordinator };
-const SR_TYPES = [...SR_L.type, "Injury / Illness", "Other"];
+const SR_TYPES = [...SR_L.type, "HiPo", "Injury / Illness", "Property Damage", "Other"];
+// Picking an event type turns on the matching classification flag, so the right warnings and forms show up right away.
+const srFlagsForType = (t) => ({
+  ...(t === "Near Miss" ? { near_miss: true } : {}),
+  ...(t === "HiPo" ? { hipo: true } : {}),
+  ...(t === "Injury / Illness" ? { injury: true } : {}),
+  ...(t === "Property Damage" ? { property_damage: true } : {}),
+});
 const SR_MONO = { fontFamily: "IBM Plex Mono, monospace" };
 const SR_DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
@@ -3063,6 +3070,7 @@ function SrCaseView({ user, activeProjectId, projectName, caseId, onBack, onOpen
           {["open", "investigating", "closed"].map((s) => (
             <button key={s} onClick={() => setStatus(s)} className="text-[10px] font-bold uppercase px-2.5 py-1.5 rounded-sm border" style={detail.status === s ? { background: INK, color: GOLD, borderColor: INK, ...SR_MONO } : { borderColor: "#C9C6BC", color: STEEL, ...SR_MONO }}>{s}</button>
           ))}
+          <button onClick={() => { const el = document.getElementById("sr-classification"); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }} className="text-[10px] font-bold uppercase px-2.5 py-1.5 rounded-sm border" style={{ borderColor: GOLD, color: INK, ...SR_MONO }}>Edit details</button>
           {canDelete && <button onClick={remove} className="text-[10px] font-bold uppercase px-2.5 py-1.5 rounded-sm border ml-auto" style={{ borderColor: ALERT, color: ALERT, ...SR_MONO }}>Delete case</button>}
         </div>
       </div>
@@ -3102,8 +3110,8 @@ function SrCaseView({ user, activeProjectId, projectName, caseId, onBack, onOpen
       )}
 
       {/* classification */}
-      <div className="bg-white rounded-md p-3 border mb-3" style={{ borderColor: "#E4E2DA" }}>
-        <div className="text-[11px] uppercase font-bold mb-2" style={lab}>Classification</div>
+      <div id="sr-classification" className="bg-white rounded-md p-3 border mb-3" style={{ borderColor: "#E4E2DA" }}>
+        <div className="text-[11px] uppercase font-bold mb-2" style={lab}>Event details &amp; classification (edit here)</div>
         <label className="text-[10px] uppercase font-bold" style={lab}>Short title</label>
         <input value={cls.title || ""} onChange={(e) => setCls({ ...cls, title: e.target.value })} placeholder="For example: Struck by TMA hit" className={inp} style={bd} />
         <div className="grid grid-cols-2 gap-2 mt-2">
@@ -3112,7 +3120,7 @@ function SrCaseView({ user, activeProjectId, projectName, caseId, onBack, onOpen
           <div><label className="text-[10px] uppercase font-bold" style={lab}>Where</label>
             <select value={cls.area || ""} onChange={(e) => setCls({ ...cls, area: e.target.value })} className={inp} style={bd}><option value="">Select…</option>{areas.map((a) => <option key={a} value={a}>{a}</option>)}{cls.area && !areas.includes(cls.area) && <option value={cls.area}>{cls.area}</option>}</select></div>
           <div><label className="text-[10px] uppercase font-bold" style={lab}>Type of incident</label>
-            <select value={cls.incident_type || ""} onChange={(e) => { const v = e.target.value; setCls((c) => ({ ...c, incident_type: v, ...(v === "Near Miss" ? { near_miss: true } : {}) })); }} className={inp} style={bd}><option value="">Select…</option>{SR_TYPES.map((a) => <option key={a} value={a}>{a}</option>)}</select></div>
+            <select value={cls.incident_type || ""} onChange={(e) => { const v = e.target.value; setCls((c) => ({ ...c, incident_type: v, ...srFlagsForType(v) })); }} className={inp} style={bd}><option value="">Select…</option>{SR_TYPES.map((a) => <option key={a} value={a}>{a}</option>)}</select></div>
         </div>
 
         <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-4">
@@ -3207,7 +3215,7 @@ function SafetyReportsPanel({ user, activeProjectId, onOpenMeeting }) {
   const create = async () => {
     setCreating(true); setErr("");
     const { data, error } = await supabase.rpc("create_incident_case", { p_token: token, p_data: {
-      incident_date: nw.date, incident_time: nw.time, area: nw.area, incident_type: nw.type, title: nw.title, near_miss: nw.type === "Near Miss",
+      incident_date: nw.date, incident_time: nw.time, area: nw.area, incident_type: nw.type, title: nw.title, ...srFlagsForType(nw.type),
     } });
     setCreating(false);
     if (error || !data) { setErr("Couldn't start the report. Make sure the Safety Reports SQL has been run."); return; }
@@ -3269,6 +3277,28 @@ function SafetyReportsPanel({ user, activeProjectId, onOpenMeeting }) {
           </div>
           <label className="text-[10px] uppercase font-bold block mt-2" style={lab}>Short title</label>
           <input value={nw.title} onChange={(e) => setNw({ ...nw, title: e.target.value })} placeholder="For example: Struck by TMA hit" className={inp} style={bd} />
+          {nw.type && (() => {
+            const f = { incident_type: nw.type, ...srFlagsForType(nw.type) };
+            const req = srRequiredForms(f, []);
+            const ns = { required: { bg: "#FDE7E4", fg: "#8A1C14" }, recommended: { bg: "#FFF3CD", fg: "#7A5B00" }, optional: { bg: "#E4E2DA", fg: "#4A483F" } };
+            const warn = [];
+            if (f.hipo) warn.push("HiPo: complete the Significant Incident Report / Executive Incident Report / Lesson Learned, and complete the investigation.");
+            if (f.injury || nw.type === "MVA") warn.push("Post-accident drug test is required. The signed verification letter must go to the Safety Department.");
+            if (f.injury) warn.push("If it is a serious injury (SIF), fatality, or in-patient hospitalization, notify the Safety Department and management right away. You can classify it after you start the report.");
+            return (
+              <div className="mt-3 rounded-md border p-2.5" style={{ borderColor: "#E4E2DA", background: "#FAFAF7" }}>
+                {warn.map((w, i) => <div key={i} className="text-[11px] leading-snug mb-1.5 rounded-sm px-2 py-1.5" style={{ background: "#FFF3CD", color: "#5A4300" }}><b>Heads up:</b> {w}</div>)}
+                <div className="text-[10px] uppercase font-bold mb-1" style={lab}>Forms for a {nw.type} event</div>
+                {req.map((r) => (
+                  <div key={r.type} className="flex items-center justify-between gap-2 text-[12px] py-0.5">
+                    <span>{SR_FORM_META[r.type].label}</span>
+                    <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-sm flex-shrink-0" style={{ background: ns[r.need].bg, color: ns[r.need].fg, ...SR_MONO }}>{r.need}</span>
+                  </div>
+                ))}
+                <div className="text-[10px] mt-1" style={{ color: STEEL }}>You can change the type and classification any time after the report is started.</div>
+              </div>
+            );
+          })()}
           {err && <div className="text-[12px] mt-2" style={{ color: ALERT }}>{err}</div>}
           <div className="flex gap-2 mt-3">
             <button disabled={creating || !nw.date || !nw.type} onClick={create} className="flex-1 text-[11px] font-bold uppercase py-2.5 rounded-sm disabled:opacity-40" style={{ background: GOLD, color: INK, ...SR_MONO }}>{creating ? "Starting…" : "Start report"}</button>
