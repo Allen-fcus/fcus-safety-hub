@@ -1876,6 +1876,7 @@ function MeetingFormCard({ initial, onSave, onCancel, saving }) {
 // ============================================================
 const SR_L = {"area": ["3C Sylvania", "3C Golden Triangle", "CI- Seg. 1&2 CO", "Off Site"], "type": ["AL", "GL", "MVA", "Near Miss", "Theft", "Utility Strike"], "yn1": ["Yes", "No"], "yn2": ["Yes", "No"], "drug": ["Yes", "No", "Requested"], "activity": ["ACT-01 Site establishment (Clearance, fencing, welfate, set-up, etc)", "ACT-02 Demolition (Service isolation, restricted areas/zones, asbestos)", "ACT-03 Service Diversions (Overhead cables, underground ducts, substations)", "ACT-04 Excavations and earthworks (Leveling, piling, drainage, trenches, etc.)", "ACT-05 Pavements", "ACT-06 Signaling, Beaconing and defense elements", "ACT-07 Erection of Structures (Steel works, falsework, scaffolding, tower cranes)", "ACT-08 Concrete (In-situ, Precast concrete, structural)", "ACT-09 Tunnels (Hand dig, mechanical, TBM (Open/Close face), sprayed concrete, etc.)", "ACT-10 Railway Assembly", "ACT-11 Building envelope (Blockwork, brickwork, stonework, cladding, window, doors, stairs)", "ACT-12 Roof Works (Fragile surfaces, Bitumen, Felt & Batton, tiled, glazed)", "ACT-13 Partitioning (Block/Brick work, Plasterboard,property systems)", "ACT-14 Installation (Mechanical, Heating & Ventilation, Electrical, Telecoms, Security, Carpentry)", "ACT-15 Finishing works (Cladding, Carpentry, Paint & Decorating, Ceilings, etc.)", "ACT-16 Services (Fire, Fuel, Water, Gas, Electrical mains)", "ACT-17 Landscaping and Ecology", "ACT-18 Testing & Commissioning (Electrical, Mechanical, Telecoms, etc.)", "ACT-19 Maintenance & Operation"], "standard": ["FER-MIN-STD-01 PPE", "FER-MIN-STD-02 Fall Protection", "FER-MIN-STD-03 Opening Protection", "FER-MIN-STD-04 Machinery and Equipment", "FER-MIN-STD-05 Lifting Loads", "FER-MIN-STD-06 Aerial Work Platforms", "FER-MIN-STD-07 Trench and Shaft excavations", "FER-MIN-STD-08 Traffic Control", "FER-MIN-STD-09 Working Platforms", "FER-MIN-STD-10 Ladders", "FER-MIN-STD-11 Electrical Safety", "FER-MIN-STD-12 Illuminations", "FER-MIN-STD-13 Utilities", "FER-MIN-STD-14 Explosives", "FER-MIN-STD-15 Air quality and Confined Space", "FER-MIN-STD-16 Mobile devices", "FER-MIN-STD-17 Sanitation", "FER-MIN-STD-18 Housekeeping", "FER-MIN-STD-19 Manual Handling", "FER-MIN-STD-20 Chemical, biological agents and radiations", "FER-MIN-STD-22 Safety Planning", "FER-MIN-STD-23 Organization and Coordination of activities", "FER-MIN-STD-24 Safety Supervision"], "causation": ["FER-01 Falls from a heights", "FER-02 Slip, trip and fall on the same level", "FER-03 Struck by falling objects", "FER-04 Struck by vehicle/machinery", "FER-05 Being hit by moving objects", "FER-06 Caught in, cut or compressed by equipment or objects", "FER-07 Projection of fragments or particles", "FER-08 Trapping", "FER-09 Overexertion", "FER-10 Other muscular stress", "FER-11 Contact with electricity", "FER-12 Contact or exposure to heat and cold", "FER-13 Vehicle accident", "FER-14 Contact with chemical or substance", "FER-15 Exposure to radiation", "FER-16 Exposure to noise", "FER-17 Exposure to mechanical vibration", "FER-18 Other and multiple mechanism of incident", "FER-19 Fire", "FER-20 Explosion", "FER-21 Assault", "FER-22 Other"], "conditions": ["01-PREM-01 Premises - Access and egress not adequate", "01-PREM-02 Premises - Access and egress points not used", "01-PREM-03 Premises - Hazards of the working area not protected", "01-PREM-04 Premises - Workplace unsuitable for the task in hand", "01-PREM-05 Premises - Insufficient space for the task in hand", "01-PREM-06 Premises - Workplace not used as intended", "01-PREM-07 Premises - People not segregated from hazardous areas/Substances/Machines", "01-PREM-08 Premises - Light, temperature and ventilation not suitable", "01-PREM-09 Premises - The ergonomics of the workstation don't suit the person", "01-PREM-10 Premises - The work area was not clean and tidy", "01-PREM-11 Premises - Weather conditions", "01-PREM-12 Premises - Appropriate warning signs not in place", "01-PREM-13 Premises - Unforeseable hazard (external to the work performed)", "02-PLANT-01 Plant and Equipment - Unsuitable plant and equipment for the job", "02-PLANT-02 Plant and Equipment - Plant and equipment in bad working condition and poorly maintained", "02-PLANT-03 Plant and Equipment - Pland and equipment improperly used", "02-PLANT-04 Plant and Equipment - Inadequate controls or guards for the safe use of the equipment", "02-PLANT-05 Plant and Equipment - Controls or guards improperly used or maintained", "02-PLANT-06 Plant and Equipment - Materials/substances improperly used", "02-PLANT-07 Plant and Equipment - Improper materials/ substances being used", "02-PLANT-08 Plant and Equipment - Materials/ Substances improperly used", "02-PLANT-09 Plant and Equipment - Exposure to hazardous materials and by-products improperly controlled", "02-PLANT-10 Plant and Equipment - Suitable PPE not available", "02-PLANT-11 Plant and Equipment - PPE in poor conditions", "02-PLANT-12 Plant and Equipment - Necessary PPE not used", "02-PLANT-13 Plant and Equipment - Necessary PPE improperly used", "03-WORK-01 Procedures - Inexistence of working procedures and instructions for the task", "03-WORK-02 Procedures - Working procedures and instructions outdated", "03-WORK-03 Procedures - Working procedures and instructions not realistic, accurate or inadequate", "03-WORK-04 Procedures - Working procedures and instructions dont deal with the circumstances of the adverse event", "03-WORK-05 Procedures - Working procedures and instructions not followed", "03-WORK-06 Procedures - Working procedures and instructions not available or provided to those carrying out to work", "03-WORK-07 Procedures - Working procedures and instructions were not supervised", "03-WORK-08 Procedures - Workers were not informed of the working procedures they should adopt", "04-PERS-01 People - People involved not suited for their job (Competence, Physically, Emotionally ...)", "04-PERS-02 People - Fatigue", "04-PERS-03 People - Lack of risk perception", "04-PERS-04 People - Being distracted", "04-PERS-05 People - Horseplay", "04-PERS-06 People - Taking substances such as alcohol, drugs, medicines", "04-PERS-07 People - Violations of working procedures and instructions", "04-PERS-08 People - Taking short cuts"], "coordinator": ["Jim Quinn", "Paul Vares", "Allen Garcia"]};
 // Company / contract suggestions on the SIR. The Ferrovial entity codes below are the NTI list; other projects suggest their own JV.
+const SR_NTI_CONTRACTS = ["NTI-Sylvania- CEC22", "NTI- Seg 1&2- CEC24"];
 const SR_CONTRACTS = { "nashville": ["FCW24 JV"], "sh99-houston": ["FCW99 JV"] };
 const SR_SIR = {"company": ["Alamo NEX CEK50", "NTI SEG 1-2  CEC24", "NPC C5EM", "NDH NTI CEC23", "JFK NTO CCA70", "OTG CAN CEN80"], "workerType": ["Own Employee / Trabajador propio", "Other Worker / Resto de los trabajadores", "Non-Worker / No es Trabajador", "None of the above / Ninguno de los anteriores"], "nature": ["FER-01 Fractures (excluding of vertebral column)", "FER-02 Fracture of vertebral column with or without mention of spinal cord lesion", "FER-03 Dislocations", "FER-04 Sprains and strains of joints and adjacent muscles", "FER-05 Intracranial injuries including concussions", "FER-06 Internal injury of chest, abdomen and pelvis", "FER-07 Traumatic amputation, including ecucleation of eye", "FER-08 Loss of sight", "FER-09 Open wound no including amputation", "FER-10 Superficial injury", "FER-11 Contusion with intact skin surface and crushing injury", "FER-12 Foreign body on external eye, in ear or nose or in respiratory, digestive or reproductive systems", "FER-13 Burns", "FER-14 Injuries to nerves and spinal cord without evidence of spinal bone injury", "FER-15 Poinsoning and toxic effects of substances", "FER-16 Loss of consciousness caused by inhalation, ingestion or absorption of harmful substances or biologic", "FER-17 Effects of weather, exposure, air pressure and other external causes", "FER-18 Multiple Injuries", "FER-19 Drowning and suffocation", "FER-20 Heart attacks, strokes and other non-traumatic pathologies", "FER-21 Other injuries"], "scenario": ["FER-01 Falls from height regardless of any injury outcome or if fall was suitably arrested", "FER-02 Traffic events, in connection with work, that required evasive action", "FER-03 Pedestrian struck by vehicle or mobile equipment", "FER-04 Roll- over or roll-away of mobile equipment", "FER-05 Failure of lifting operation or equipment", "FER-06 Uncontrolled release of hazardous energy", "FER-07 Fire or explosion", "FER-08 Fall of objects from height", "FER-09 Contact with mobile parts of equipment or machinery", "FER-10 Collapse of excavations, structures - including temporary works and scaffold", "FER-11 Event in a confined space or hazardous atmosphere", "FER-12 Event involving aquatic or subaquatic operations", "FER-13 Unintentional contact with utilities - underground and aerial power lines, gas main services", "FER-14 Electrical contact with voltages >50V AC or >120V DC", "FER-15 Exposure to toxic gases or hazardous substances greater than exposure limits", "FER-16 Assault (i.e. a violent bodily act or gesture that attempts or threatens to apply unwanted physical", "FER-17 Any event categorized as Major (Urgent and critical tr", "FER-18 Any event categorized as Catastrophic (Fatality; total"], "injClass": ["US001 Fatality", "US002 Days Away from Work", "US003 Restricted Work", "US004 Job Transfer", "US005 Medical Treatment", "US006 First Aid"], "treatment": ["FER-1 First Aid", "FER-2 Emergency Room", "FER-3 Clinic", "FER-4 Hospitalization under 1 day", "FER-5 Hospitalization over 1 day"], "risk": ["Minor (Not worthy but with low consequence)", "Moderate (Potential for event that cause short-term harm)", "Serious (Intense harm or loss with disabling and/or long-term consequence)", "Potential Fatal (Life threatening and deadly condidtion)"], "corrective": ["CA - Change in Policy", "CA - Change in Procedure", "CA - Change in Training", "CA - Refresher Training", "DA - Work Stoppage", "DA - Suspension/Termination/Removal", "DA - Written Warning"]};
 
@@ -1895,6 +1896,8 @@ function srScrollToTop() {
     document.querySelectorAll("div, main, section").forEach((el) => { if (el.scrollTop > 0) el.scrollTop = 0; });
   } catch (e) { /* ignore */ }
 }
+// These four people always receive every submitted Incident Report, plus the segment and project managers named on it.
+const SR_INCIDENT_RECIPIENTS = ["Pvares@ferrovial.us", "jquinn@ferrovial.us", "agarcia@ferrovial.us", "dherd@ferrovial.us"];
 const SR_VIDEO_MAX_MB = 50; // Supabase Storage per-file limit on the standard plan
 const SR_TYPES = [...SR_L.type, "Near Miss - HiPo", "HiPo", "Injury / Illness", "Property Damage", "Other"];
 // Picking an event type turns on the matching classification flag, so the right warnings and forms show up right away.
@@ -2038,7 +2041,8 @@ function srSchemaBase(type, ctx) {
         { k: "company", l: "Company involved", t: "text" }, { k: "location", l: "Location", t: "text" },
         { k: "driver", l: "Involved company driver / operator", t: "text" }, { k: "otherDriver", l: "Other driver", t: "text" },
         { k: "vehicle", l: "Company year / make / model / VIN / license plate", t: "text" }, { k: "insurance", l: "3rd party insurance and policy number", t: "text" },
-        { k: "segmentMgr", l: "Segment manager", t: "text" }, { k: "projectMgr", l: "Project manager", t: "text" },
+        { k: "segmentMgr", l: "Segment manager", t: "text" }, { k: "segmentMgrEmail", l: "Segment manager email", t: "text", hint: "The submitted report is emailed to this address." },
+        { k: "projectMgr", l: "Project manager", t: "text" }, { k: "projectMgrEmail", l: "Project manager email", t: "text", hint: "The submitted report is emailed to this address." },
         { k: "superintendent", l: "Superintendent", t: "text" },
         { k: "description", l: "Description", t: "textarea", req: true, full: true },
       ] },
@@ -2131,7 +2135,7 @@ function srSchemaBase(type, ctx) {
       { title: "Report", fields: [
         { k: "reportType", l: "Report type", t: "select", opts: ["Injury", "Near Miss - HIPO"], req: true },
         { k: "country", l: "Country", t: "select", opts: ["USA", "Canada"] },
-        { k: "contract", l: "Company - contract", t: "combo", opts: SR_CONTRACTS[ctx.slug] || SR_SIR.company, full: true },
+        { k: "contract", l: "Company - contract", t: "combo", opts: SR_CONTRACTS[ctx.slug] || (/^nti-/.test(ctx.slug || "") ? [...SR_NTI_CONTRACTS, ...SR_SIR.company.filter((x) => !/NTI SEG 1-2/i.test(x))] : SR_SIR.company), full: true },
         { k: "occurred", l: "Has an incident occurred?", t: "yesno", req: true },
         { k: "_n", t: "info", l: "Weekly reports are due before 12 pm CST on Wednesdays. If the English and Spanish versions of the Ferrovial template differ, the English version applies." },
       ] },
@@ -2163,7 +2167,7 @@ function srSchemaBase(type, ctx) {
         { k: "treatment", l: "Type of treatment", t: "select", opts: SR_SIR.treatment, full: true },
       ] },
       { title: "Classification", fields: [
-        { k: "riskClass", l: "Classification of risk", t: "select", opts: SR_SIR.risk, full: true },
+        { k: "riskClass", l: "Classification of risk", t: "select", opts: SR_RISK_CLASS, full: true },
         { k: "activity", l: "Activity", t: "select", opts: SR_L.activity, full: true },
         { k: "standard", l: "Health and Safety minimum standard", t: "select", opts: SR_L.standard, full: true },
         { k: "causation", l: "Incident causation", t: "select", opts: SR_L.causation, full: true },
@@ -2288,6 +2292,12 @@ function srSchema(type, ctx) {
 // starting values for a new form, taken from the case
 // The description typed on the Incident Report carries over to the other forms (each form has its own field name for it).
 function srDescKey(type) { return type === "incident_report" || type === "employee_statement" ? null : type === "sir" ? "description" : type === "eir" ? "overview" : "brief"; }
+// The Incident Report's classification answers carry over to the SIR so they match.
+const SR_SIR_INHERIT = ["riskClass", "activity", "standard", "causation", "conditions", "lifesaving", "lifesavingNote"];
+function srIncidentData(caseRow) {
+  const f = ((caseRow && caseRow.forms) || []).find((x) => x.form_type === "incident_report" && x.data);
+  return f ? f.data : {};
+}
 function srIncidentDescription(caseRow) {
   const f = ((caseRow && caseRow.forms) || []).find((x) => x.form_type === "incident_report" && x.data && String(x.data.description || "").trim());
   return f ? String(f.data.description).trim() : "";
@@ -2296,6 +2306,7 @@ function srDefaults(type, ctx) {
   const d = srDefaultsBase(type, ctx);
   const k = srDescKey(type);
   if (k && !String(d[k] || "").trim()) { const t = srIncidentDescription(ctx.caseRow); if (t) d[k] = t; }
+  if (type === "sir") { const inc = srIncidentData(ctx.caseRow); SR_SIR_INHERIT.forEach((x) => { if (inc[x] && !String(d[x] || "").trim()) d[x] = inc[x]; }); }
   return d;
 }
 function srDefaultsBase(type, ctx) {
@@ -2313,7 +2324,7 @@ function srDefaultsBase(type, ctx) {
     reportType: c.hipo || c.near_miss ? "Near Miss - HIPO" : "Injury", country: "USA", occurred: "Yes", location: loc, date: dt, time: c.incident_time || "",
     companyType: "Ferrovial", incidentLevel: c.fatality ? "Fatal" : c.sif ? "Serious incident according to procedure" : "Other significant incidents",
     nearMiss: c.near_miss && !c.hipo ? "Yes" : c.hipo ? "No" : "", serious: c.sif || c.fatality ? "Yes" : "",
-    riskClass: SR_SIR.risk.find((o) => o.split(" ")[0] === String(c.risk_class || "").split(" ")[0]) || "",
+    riskClass: SR_RISK_CLASS.find((o) => o.split(" ")[0] === String(c.risk_class || "").split(" ")[0]) || "",
     lifesaving: c.lifesaving_control === "yes" ? "Yes" : c.lifesaving_control === "no" ? "No" : "",
     injClass: c.fatality ? SR_SIR.injClass[0] : c.lost_time ? SR_SIR.injClass[1] : c.medical_treatment ? SR_SIR.injClass[4] : c.first_aid ? SR_SIR.injClass[5] : "",
   };
@@ -2778,6 +2789,7 @@ function SrFormFields({ schema, data, setData, readOnly }) {
 // ---------- one form on a case ----------
 function SrFormView({ user, activeProjectId, projectName, detail, form, type, attendees, onBack, onChanged }) {
   const token = user.sessionToken;
+  const { notifyEmail } = useContext(ProjectContext) || {};
   const ctx = { slug: activeProjectId, projectName, caseRow: detail, userName: user.name };
   const schema = useMemo(() => srSchema(type, ctx), [type, activeProjectId]);
   const [data, setData] = useState(() => {
@@ -2786,6 +2798,7 @@ function SrFormView({ user, activeProjectId, projectName, detail, form, type, at
     // a draft started before the incident description existed picks it up when still empty
     const k = srDescKey(type);
     if (form.status !== "submitted" && k && !String(d[k] || "").trim()) { const t = srIncidentDescription(detail); if (t) d[k] = t; }
+    if (form.status !== "submitted" && type === "sir") { const inc = srIncidentData(detail); SR_SIR_INHERIT.forEach((x) => { if (inc[x] && !String(d[x] || "").trim()) d[x] = inc[x]; }); }
     return d;
   });
   const [formId, setFormId] = useState(form ? form.id : null);
@@ -2833,7 +2846,29 @@ function SrFormView({ user, activeProjectId, projectName, detail, form, type, at
       setFormId(res.id); setStatus(res.status); if (res.pdf_url) setPdfUrl(res.pdf_url);
       const patch = srCasePatchFromForm(type, data);
       if (Object.keys(patch).length) await supabase.rpc("update_incident_case", { p_token: token, p_case_id: detail.id, p_data: patch });
-      setMsg(submit ? "Submitted and filed on this case." : "Draft saved.");
+      let note = "";
+      if (submit && type === "incident_report") {
+        const seen = new Set();
+        const to = [...SR_INCIDENT_RECIPIENTS, data.segmentMgrEmail, data.projectMgrEmail, notifyEmail]
+          .map((x) => String(x || "").trim()).filter((x) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x))
+          .filter((x) => { const k = x.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
+        const links = (arr, label) => (Array.isArray(arr) ? arr : []).map((p, i) => `${label} ${i + 1}${p.name ? " (" + p.name + ")" : ""}: ${p.url}`);
+        const lines = [
+          `Case: ${detail.case_number}${detail.title ? " - " + detail.title : ""}`,
+          `Event type: ${data.type || "-"}`, `Date / time: ${data.date || "-"} ${data.time || ""}`.trim(),
+          `Where: ${[data.where, data.location].filter(Boolean).join(" - ") || "-"}`,
+          `Company involved: ${data.company || "-"}`,
+          `Segment manager: ${data.segmentMgr || "-"}`, `Project manager: ${data.projectMgr || "-"}`, `Superintendent: ${data.superintendent || "-"}`,
+          `Injuries: ${data.injuries || "-"}${data.injuriesNote ? " (" + data.injuriesNote + ")" : ""}`,
+          `Property damage: ${data.propertyDamage || "-"}${data.propertyNote ? " (" + data.propertyNote + ")" : ""}`,
+          `Classification of risk: ${data.riskClass || "-"}`, "", "Description:", data.description || "-", "",
+          url ? `Incident Report (PDF): ${url}` : "Incident Report PDF: open the case in the Safety Hub to download it.",
+          ...links(data.photos, "Photo"), ...links(data.videos, "Video"),
+        ];
+        const r = await sendFormEmail({ toEmail: to.join(","), formTitle: `Incident Report - ${detail.case_number}`, fieldsText: lines.join("\n"), submittedBy: user.name, projectName });
+        note = r.sent ? ` Emailed to ${to.length} people, with links to the PDF${(Array.isArray(data.photos) && data.photos.length) || (Array.isArray(data.videos) && data.videos.length) ? ", photos and videos" : ""}.` : ` The email did not go out (${r.reason || "unknown reason"}). Copy the PDF link from the case and send it yourself.`;
+      }
+      setMsg(submit ? "Submitted and filed on this case." + note : "Draft saved.");
       onChanged && onChanged();
     } catch (e) { setErr("Couldn't save. Please try again."); }
     setBusy(false);
