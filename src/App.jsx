@@ -2095,12 +2095,6 @@ function srSchemaBase(type, ctx) {
       { title: "Findings (root cause, as determined from investigation)", fields: [
         { k: "findings", l: "Root causes", t: "rows", cols: [{ k: "text", l: "Finding", t: "text" }], min: 3, max: 10, full: true },
       ] },
-      { title: "Lessons learned (completed by Senior Safety Manager)", fields: [
-        { k: "llPolicy", l: "Change in policy", t: "checks", opts: ["Local", "National"] },
-        { k: "llProcedure", l: "Change in procedure", t: "checks", opts: ["Local", "National"] },
-        { k: "llTraining", l: "Change in training", t: "checks", opts: ["Local", "National"] },
-        { k: "authorization", l: "Authorization required by others", t: "checks", opts: ["Legal", "Client", "Human Resources"] },
-      ] },
       { title: "Corrective actions (re-training, letter of commitment, disciplinary action, etc.)", fields: [
         { k: "actions", l: "Actions", t: "rows", cols: [{ k: "text", l: "Description of action", t: "text", w: 3 }, { k: "who", l: "Responsible", t: "text", w: 1.4 }, { k: "done", l: "Date completed", t: "date", w: 1.2 }], min: 3, max: 8, full: true },
       ] },
