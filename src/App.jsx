@@ -2453,7 +2453,7 @@ async function buildIncidentFormPdf({ schema, data, caseRow, projectName, extraS
     page = doc.addPage([W, H]); pageNo++;
     page.drawRectangle({ x: 0, y: H - 54, width: W, height: 54, color: ink });
     page.drawText(clean(schema.pdfTitle), { x: M, y: H - 34, size: first ? 15 : 11, font: sansB, color: gold });
-    const pn = clean(projectName || "").toUpperCase();
+    const pn = clean(String(projectName || "").split(/\s+-\s+/).pop()).toUpperCase(); // city only, e.g. "NTI - Sylvania - Fort Worth" prints FORT WORTH
     page.drawText(pn, { x: W - M - sansB.widthOfTextAtSize(pn, 8), y: H - 33, size: 8, font: sansB, color: rgb(1, 1, 1) });
     y = H - 54 - 16;
   };
