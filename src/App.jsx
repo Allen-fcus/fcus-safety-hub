@@ -1966,6 +1966,11 @@ function srRequiredForms(c, forms) {
     (forms || []).forEach((f) => { if (!list.some((r) => r.type === f.form_type) && SR_FORM_META[f.form_type]) list.push({ type: f.form_type, need: "optional", why: "Already started on this case." }); });
     return list.map((r) => ({ ...r, done: has(r.type) }));
   }
+  // A motor vehicle accident with no injury or other severe flag only needs the Incident Report.
+  if (c.incident_type === "MVA" && !severe && !c.injury && !c.first_aid) {
+    (forms || []).forEach((f) => { if (!list.some((r) => r.type === f.form_type) && SR_FORM_META[f.form_type]) list.push({ type: f.form_type, need: "optional", why: "Already started on this case." }); });
+    return list.map((r) => ({ ...r, done: has(r.type) }));
+  }
   const witness = c.injury || c.incident_type === "MVA" || c.incident_type === "Utility Strike" || c.hipo || c.near_miss;
   list.push({ type: "employee_statement", need: witness ? "recommended" : "optional", why: "Complete one for each employee or witness involved. Attach to the Investigation Report." });
   list.push({ type: "investigation_report", need: severe ? "required" : "optional",
