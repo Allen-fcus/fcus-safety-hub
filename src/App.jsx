@@ -8209,9 +8209,9 @@ function TrainingScreen({ user, go }) {
               {prac[c.id] && !prac[c.id].passed && (
                 <div className="px-3 py-2 text-[11px] border-t" style={{ borderColor: "#E4E2DA", background: prac[c.id].last_result === "needs_improvement" ? "#FCEFEF" : "#FFF4DC", color: prac[c.id].last_result === "needs_improvement" ? ALERT : "#93650A" }}>
                   <b>Part 2: hands-on evaluation</b>
-                  {!prac[c.id].part1_done ? " · after you finish the online part, the safety department will schedule your hands-on evaluation"
-                    : prac[c.id].last_result === "needs_improvement" ? " · needs improvement. The safety department will evaluate you again"
-                    : " · online part done. Waiting on the safety department to do your evaluation. Your certificate is issued after you pass."}
+                  {!prac[c.id].part1_done ? " · after you finish Part 1 (online), see the safety department to complete Part 2"
+                    : prac[c.id].last_result === "needs_improvement" ? " · needs improvement. See the safety department to be evaluated again"
+                    : " · Part 1 is done. See the safety department to complete Part 2. Your certificate is issued once the safety department confirms you passed."}
                 </div>
               )}
               {status === "completed" && c.has_exam && (!rt || refresherDone) && (
