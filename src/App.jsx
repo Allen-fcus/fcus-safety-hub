@@ -2107,7 +2107,7 @@ function srSchemaBase(type, ctx) {
     sections: [
       { title: "Project", fields: [
         /^nti-/.test((ctx && ctx.slug) || "")
-          ? { k: "projectName", l: "Project name", t: "select", opts: [...new Set([ctx.projectName, "NTI- Seg. 1&2 CO - Fort Worth"].filter(Boolean))] }
+          ? { k: "projectName", l: "Project name", t: "select", opts: [...new Set([ctx.slug === "nti-sylvania" ? "Fort Worth" : ctx.projectName, "NTI- Seg. 1&2 CO - Fort Worth"].filter(Boolean))] }
           : { k: "projectName", l: "Project name", t: "text" },
         { k: "client", l: "Client", t: "text" },
         { k: "location", l: "Location", t: "text" },
@@ -2356,7 +2356,7 @@ function srDefaultsBase(type, ctx) {
     lifesaving: c.lifesaving_control === "yes" ? "Yes" : c.lifesaving_control === "no" ? "No" : "",
     injClass: c.fatality ? SR_SIR.injClass[0] : c.lost_time ? SR_SIR.injClass[1] : c.medical_treatment ? SR_SIR.injClass[4] : c.first_aid ? SR_SIR.injClass[5] : "",
   };
-  if (type === "eir") return { project: ctx.projectName || "", client: ctx.slug === "nti-sylvania" ? "North Tarrant Express Mobility Partners" : "", location: loc, incidentDate: dt, date: dt, time: c.incident_time || "", siteLocation: c.location_detail || "", type: c.incident_type || "", injuryType: srClassLabel(c) };
+  if (type === "eir") return { project: ctx.slug === "nti-sylvania" ? "Fort Worth" : (ctx.projectName || ""), client: ctx.slug === "nti-sylvania" ? "North Tarrant Express Mobility Partners" : "", location: loc, incidentDate: dt, date: dt, time: c.incident_time || "", siteLocation: c.location_detail || "", type: c.incident_type || "", injuryType: srClassLabel(c) };
   if (type === "lesson_learned") return { issueDate: todayISO(), issuedBy: ctx.userName || "" };
   if (type === "employee_statement") return { date: c.incident_date ? String(c.incident_date).slice(0, 10) : "", time: c.incident_time || "", location: [c.area, c.location_detail].filter(Boolean).join(" - "), state: srReg(ctx.slug).state };
   if (type === "investigation_report") {
@@ -2370,7 +2370,7 @@ function srDefaultsBase(type, ctx) {
     let dow = "";
     if (d) { const [y, m, dd] = d.split("-").map(Number); dow = SR_DAYS[(new Date(y, m - 1, dd).getDay() + 6) % 7]; }
     return {
-      projectName: ctx.projectName || "", client: ctx.slug === "nti-sylvania" ? "North Tarrant Express Mobility Partners" : "", location: [c.area, c.location_detail].filter(Boolean).join(" - "),
+      projectName: ctx.slug === "nti-sylvania" ? "Fort Worth" : (ctx.projectName || ""), client: ctx.slug === "nti-sylvania" ? "North Tarrant Express Mobility Partners" : "", location: [c.area, c.location_detail].filter(Boolean).join(" - "),
       incidentTypes: t, date: d, time: c.incident_time || "", dayOfWeek: dow, brief: "", investigatedBy: ctx.userName || "", signDate: todayISO(),
       findings: [{}, {}, {}], actions: [{}, {}, {}],
     };
@@ -2842,7 +2842,7 @@ function SrEmailPanel({ detail, data, pdfUrl, projectName, notifyEmail, userName
   const subject = `Incident Report - ${detail.case_number}${detail.title ? " - " + detail.title : ""}`;
   const desc = String(data.description || "").trim();
   const lines = [
-    "Incident Report", projectName ? `Project: ${projectName}` : "",
+    "Incident Report", projectName ? `Project: ${String(projectName).split(/\s+-\s+/).pop()}` : "",
     `Case: ${detail.case_number}`, `Event: ${data.type || "-"}`, `Date / time: ${[data.date, data.time].filter(Boolean).join(" ") || "-"}`,
     `Where: ${[data.where, data.location].filter(Boolean).join(" - ") || "-"}`,
     data.segmentMgr ? `Segment manager: ${data.segmentMgr}` : "", data.projectMgr ? `Project manager: ${data.projectMgr}` : "",
