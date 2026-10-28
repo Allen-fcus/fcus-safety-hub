@@ -659,8 +659,8 @@ function SummarySubmissionsScreen({ user, admin }) {
       let y = 792 - 130;
       lines.forEach((t) => {
         const words = t.split(" "); let cur = "";
-        words.forEach((w) => { const tr = cur ? cur + " " + w : w; if (sans.widthOfTextAtSize(tr, 10) > 612 - 2 * M - 8) { page.drawText(cur, { x: M + 4, y, size: 10, font: sans, color: ink }); y -= 14; cur = w; } else cur = tr; });
-        if (cur) { page.drawText(cur, { x: M + 4, y, size: 10, font: sans, color: ink }); y -= 14; }
+        words.forEach((w) => { const tr = cur ? cur + " " + w : w; if (sans.widthOfTextAtSize(tr, 12) > 612 - 2 * M - 8) { page.drawText(cur, { x: M + 4, y, size: 12, font: sans, color: ink }); y -= 17; cur = w; } else cur = tr; });
+        if (cur) { page.drawText(cur, { x: M + 4, y, size: 12, font: sans, color: ink }); y -= 17; }
       });
       y -= 30;
       page.drawText(`${org.toUpperCase()} REPRESENTATIVE SIGNATURE`, { x: M, y, size: 7, font: sansB, color: grey });
@@ -674,7 +674,7 @@ function SummarySubmissionsScreen({ user, admin }) {
       }
       y -= 62;
       page.drawLine({ start: { x: M, y }, end: { x: M + 260, y }, thickness: 0.6, color: ink });
-      page.drawText(`${signName.trim().replace(/[^\n -\u00ff]/g, "?")}   ${when}`, { x: M, y: y - 11, size: 8.5, font: sans, color: grey });
+      page.drawText(`${signName.trim().replace(/[^\n -\u00ff]/g, "?")}   ${when}`, { x: M, y: y - 14, size: 12, font: sans, color: ink });
       const pages = doc.getPages();
       pages.forEach((p, i) => {
         if (i === pages.length - 1) {
@@ -1731,10 +1731,25 @@ async function buildMeetingPdf(meeting, attendees, slug) {
   }
 
   const cols = [
-    { k: "#", w: 22 }, { k: "Name", w: 118 }, { k: "Organization", w: 112 }, { k: "Title", w: 90 },
-    { k: "Email", w: 140 }, { k: "Phone", w: 78 }, { k: "Signature", w: 172 },
+    { k: "#", w: 24 }, { k: "Name", w: 118 }, { k: "Organization", w: 112 }, { k: "Title", w: 86 },
+    { k: "Email", w: 150 }, { k: "Phone", w: 92 }, { k: "Signature", w: 150 },
   ];
-  const rowH = 30;
+  const rowH = 38;
+  // wraps a cell at 12pt onto at most two lines (breaking long words such as emails by character)
+  const wrap2 = (text, font, size, max) => {
+    const t = clean(text); if (!t) return [""];
+    const out = []; let cur = "";
+    for (const word of t.split(/\s+/)) {
+      let w = word;
+      const tryAdd = cur ? cur + " " + w : w;
+      if (font.widthOfTextAtSize(tryAdd, size) <= max) { cur = tryAdd; continue; }
+      if (cur) { out.push(cur); cur = ""; }
+      while (font.widthOfTextAtSize(w, size) > max && w.length > 1) { let k = w.length - 1; while (k > 1 && font.widthOfTextAtSize(w.slice(0, k), size) > max) k--; out.push(w.slice(0, k)); w = w.slice(k); }
+      cur = w;
+    }
+    out.push(cur);
+    return out.length > 2 ? [out[0], fit(out.slice(1).join(" "), font, size, max)] : out;
+  };
   const typeLabel = meeting.meeting_type === "Training" ? "TRAINING" : "MEETING";
 
   const header = (page, first) => {
@@ -1766,7 +1781,7 @@ async function buildMeetingPdf(meeting, attendees, slug) {
       const x = M + col * 372;
       const yy = y - row * 20;
       page.drawText(label.toUpperCase(), { x, y: yy, size: 8, font: sansB, color: grey });
-      page.drawText(fit(val, sans, 11, 300), { x: x + 52, y: yy, size: 11, font: sansB, color: ink });
+      page.drawText(fit(val, sans, 12, 290), { x: x + 56, y: yy, size: 12, font: sansB, color: ink });
     });
     return y - 3 * 20 - 4;
   };
@@ -1797,7 +1812,8 @@ async function buildMeetingPdf(meeting, attendees, slug) {
     const vals = [String(i + 1), `${a.first_name} ${a.last_name}`, a.organization, a.title, a.email, a.phone];
     let x = M;
     cols.slice(0, 6).forEach((c, ci) => {
-      page.drawText(fit(vals[ci] || "", sans, 8.5, c.w - 8), { x: x + 4, y: top - rowH / 2 - 3, size: 8.5, font: ci === 1 ? sansB : sans, color: ink });
+      const ls = wrap2(vals[ci] || "", ci === 1 ? sansB : sans, 12, c.w - 8);
+      ls.forEach((ln, li) => page.drawText(ln, { x: x + 4, y: top - (ls.length === 1 ? rowH / 2 + 4 : 14 + li * 14), size: 12, font: ci === 1 ? sansB : sans, color: ink }));
       x += c.w;
     });
     const sigText = (a.signature || "").trim();
@@ -1805,14 +1821,14 @@ async function buildMeetingPdf(meeting, attendees, slug) {
       const png = await typedSignaturePng(sigText);
       if (png) {
         const img = await doc.embedPng(png.bytes);
-        const sc = Math.min((cols[6].w - 12) / png.w, 20 / png.h);
+        const sc = Math.min((cols[6].w - 12) / png.w, 26 / png.h);
         page.drawImage(img, { x: x + 6, y: top - rowH + 5, width: png.w * sc, height: png.h * sc });
       }
     }
     y -= rowH;
   }
   if (rows.length === 0) {
-    page.drawText("No attendees recorded.", { x: M + 4, y: y - 20, size: 10, font: sans, color: grey });
+    page.drawText("No attendees recorded.", { x: M + 4, y: y - 20, size: 12, font: sans, color: grey });
   }
 
   const total = pages.length;
@@ -7440,9 +7456,9 @@ async function buildCertificatePdf(cert) {
   const italic = await doc.embedFont(StandardFonts.TimesRomanItalic);
   page.drawText(clean(signer), { x: 96, y: 124, size: 26, font: italic, color: rgb(0.1, 0.15, 0.4) });
   page.drawLine({ start: { x: 90, y: 118 }, end: { x: 360, y: 118 }, thickness: 0.75, color: ink });
-  page.drawText(clean(signer), { x: 90, y: 105, size: 10, font: sansB, color: ink });
-  page.drawText(clean(`Authorized employer representative - electronically signed ${signedOn}`), { x: 90, y: 93, size: 8, font: sans, color: grey });
-  page.drawText(clean(`Issued by the ${cert.project_name || "Safety Hub"} on behalf of the employer`), { x: 90, y: 82, size: 8, font: sans, color: grey });
+  page.drawText(clean(signer), { x: 90, y: 104, size: 12, font: sansB, color: ink });
+  page.drawText(clean(`Authorized employer representative - electronically signed ${signedOn}`), { x: 90, y: 90, size: 12, font: sans, color: ink });
+  page.drawText(clean(`Issued by the ${cert.project_name || "Safety Hub"} on behalf of the employer`), { x: 90, y: 76, size: 12, font: sans, color: ink });
   center("Written certification record per OSHA 29 CFR 1926.503(b): employee trained, date(s) of training, and employer verification.", 60, sans, 8, grey);
   center(`Record retained electronically - verify with certificate no. ${cert.certificate_no}`, 49, sans, 8, grey);
   return doc.save();
@@ -10853,12 +10869,12 @@ async function buildGenericFormPdf({ companyLogo, form, slug, projectName, stand
   y = form.letterhead ? await letterheadTop() : band(true) - 14;
 
   const kv = (label, value, x, width) => {
-    const lines = wrap(value || "-", sansB, 10, width);
+    const lines = wrap(value || "-", sansB, 12, width);
     const lblLines = wrap(clean(label).toUpperCase(), sansB, 7, width);
     lblLines.forEach((ln, j) => page.drawText(ln, { x, y: y - 8 - j * 8, size: 7, font: sansB, color: grey }));
     const extra = (lblLines.length - 1) * 8;
-    lines.forEach((ln, i) => page.drawText(ln, { x, y: y - 19 - extra - i * 12, size: 10, font: sansB, color: ink }));
-    return 19 + extra + lines.length * 12 + 3;
+    lines.forEach((ln, i) => page.drawText(ln, { x, y: y - 21 - extra - i * 15, size: 12, font: sansB, color: ink }));
+    return 21 + extra + lines.length * 15 + 3;
   };
   // header facts
   const colW = (CW - 16) / 2;
@@ -10876,11 +10892,11 @@ async function buildGenericFormPdf({ companyLogo, form, slug, projectName, stand
   const badItems = [];
   (form.statusGroups || []).forEach((g, gi) => g.items.forEach((it, ii) => { if ((form.genericBadValues || ["Bad"]).includes((statusValues[gi] || {})[ii])) badItems.push(it); }));
   if (badItems.length) {
-    const lines = wrap(`${badItems.length} DEFICIENC${badItems.length === 1 ? "Y" : "IES"} REPORTED: ${badItems.join(", ")}. Do not operate until corrected.`, sansB, 9, CW - 12);
-    const bh = 10 + lines.length * 11;
+    const lines = wrap(`${badItems.length} DEFICIENC${badItems.length === 1 ? "Y" : "IES"} REPORTED: ${badItems.join(", ")}. Do not operate until corrected.`, sansB, 12, CW - 12);
+    const bh = 10 + lines.length * 15;
     need(bh + 6);
     page.drawRectangle({ x: M, y: y - bh, width: CW, height: bh, color: rgb(0.78, 0.07, 0.18) });
-    lines.forEach((ln, li) => page.drawText(ln, { x: M + 6, y: y - 13 - li * 11, size: 9, font: sansB, color: rgb(1, 1, 1) }));
+    lines.forEach((ln, li) => page.drawText(ln, { x: M + 6, y: y - 15 - li * 15, size: 12, font: sansB, color: rgb(1, 1, 1) }));
     y -= bh + 8;
   }
 
@@ -10906,31 +10922,31 @@ async function buildGenericFormPdf({ companyLogo, form, slug, projectName, stand
     }
     if (b.heading) {
       need(30);
-      wrap(b.heading, sansB, 9.5, CW - 8).forEach((ln) => { need(14); page.drawText(ln, { x: M + 4, y: y - 10, size: 9.5, font: sansB, color: ink }); y -= 12.5; });
+      wrap(b.heading, sansB, 12, CW - 8).forEach((ln) => { need(17); page.drawText(ln, { x: M + 4, y: y - 12, size: 12, font: sansB, color: ink }); y -= 15.5; });
       y -= 2;
     }
     if (b.text) {
       const fnt = b.emphasis || (b.title && !b.rows && !b.items && !b.plain) ? sansB : sans;
-      const lines = wrap(tk(b.text), fnt, 9.5, CW - 8);
-      lines.forEach((ln) => { need(14); page.drawText(ln, { x: M + 4, y: y - 10, size: 9.5, font: fnt, color: ink }); y -= 12.5; });
+      const lines = wrap(tk(b.text), fnt, 12, CW - 8);
+      lines.forEach((ln) => { need(17); page.drawText(ln, { x: M + 4, y: y - 12, size: 12, font: fnt, color: ink }); y -= 15.5; });
       y -= 6;
     }
     if (b.ackCheck) {
       need(26);
       page.drawRectangle({ x: M + 4, y: y - 13, width: 11, height: 11, borderColor: ink, borderWidth: 1 });
       if (acknowledged) { page.drawLine({ start: { x: M + 6, y: y - 7 }, end: { x: M + 9, y: y - 11 }, thickness: 1.6, color: ink }); page.drawLine({ start: { x: M + 9, y: y - 11 }, end: { x: M + 14, y: y - 4 }, thickness: 1.6, color: ink }); }
-      page.drawText(clean(b.ackCheck), { x: M + 22, y: y - 11, size: 9.5, font: sansB, color: ink });
+      page.drawText(clean(b.ackCheck), { x: M + 22, y: y - 12, size: 12, font: sansB, color: ink });
       y -= 22;
     }
     if (b.items) {
       flattenBlockItems(b.items).forEach((it) => {
         const ind = it.lvl ? 30 : 12;
-        const lines = wrap(it.t, sans, 9, CW - 8 - ind - 4);
+        const lines = wrap(it.t, sans, 12, CW - 8 - ind - 4);
         lines.forEach((ln, li) => {
-          need(13);
-          if (li === 0 && !/^([0-9]+|[a-z]|[IVX]+)\.\s/.test(it.t.trim())) { if (it.lvl) page.drawText("-", { x: M + 22, y: y - 10, size: 9, font: sans, color: ink }); else page.drawCircle({ x: M + 9, y: y - 6.5, size: 1.6, color: ink }); }
-          page.drawText(ln, { x: M + 4 + ind, y: y - 10, size: 9, font: sans, color: ink });
-          y -= 12;
+          need(17);
+          if (li === 0 && !/^([0-9]+|[a-z]|[IVX]+)\.\s/.test(it.t.trim())) { if (it.lvl) page.drawText("-", { x: M + 22, y: y - 12, size: 12, font: sans, color: ink }); else page.drawCircle({ x: M + 9, y: y - 8, size: 1.8, color: ink }); }
+          page.drawText(ln, { x: M + 4 + ind, y: y - 12, size: 12, font: sans, color: ink });
+          y -= 15;
         });
         y -= 2;
       });
@@ -10939,16 +10955,16 @@ async function buildGenericFormPdf({ companyLogo, form, slug, projectName, stand
     if (b.qr && qrImgs[b.qr.url]) {
       need(100);
       page.drawImage(qrImgs[b.qr.url], { x: M + 4, y: y - 86, width: 84, height: 84 });
-      wrap(b.qr.label, sansB, 9.5, CW - 110).forEach((ln, li) => page.drawText(ln, { x: M + 100, y: y - 36 - li * 12, size: 9.5, font: sansB, color: ink }));
+      wrap(b.qr.label, sansB, 12, CW - 110).forEach((ln, li) => page.drawText(ln, { x: M + 100, y: y - 36 - li * 15, size: 12, font: sansB, color: ink }));
       y -= 94;
     }
     if (b.rows) {
       b.rows.forEach((r) => {
-        need(16);
-        page.drawText(clean(r[0]), { x: M + 4, y: y - 11, size: 9, font: sans, color: ink });
-        if (r[1] != null) page.drawText(clean(r[1]), { x: M + 110, y: y - 11, size: 9, font: sansB, color: ink });
-        if (r[2] != null) page.drawText(clean(r[2]), { x: M + 190, y: y - 11, size: 9, font: sans, color: ink });
-        y -= 15;
+        need(19);
+        page.drawText(clean(r[0]), { x: M + 4, y: y - 13, size: 12, font: sans, color: ink });
+        if (r[1] != null) page.drawText(clean(r[1]), { x: M + 150, y: y - 13, size: 12, font: sansB, color: ink });
+        if (r[2] != null) page.drawText(clean(r[2]), { x: M + 270, y: y - 13, size: 12, font: sans, color: ink });
+        y -= 19;
         page.drawLine({ start: { x: M, y: y + 1 }, end: { x: W - M, y: y + 1 }, thickness: 0.3, color: line });
       });
       y -= 6;
@@ -10972,7 +10988,7 @@ async function buildGenericFormPdf({ companyLogo, form, slug, projectName, stand
   // contact table (name / phone / email per role)
   if (form.contactGroups && contactGroups) {
     need(60);
-    const c1 = M + 4, c2 = M + CW * 0.40, c3 = M + CW * 0.66;
+    const c1 = M + 4, c2 = M + CW * 0.36, c3 = M + CW * 0.60;
     page.drawRectangle({ x: M, y: y - 16, width: CW, height: 16, color: ink });
     [["CONTACT", c1], ["PHONE / CELL", c2], ["EMAIL", c3]].forEach(([t, x]) => page.drawText(t, { x, y: y - 11, size: 7.5, font: sansB, color: gold }));
     y -= 16;
@@ -10982,13 +10998,13 @@ async function buildGenericFormPdf({ companyLogo, form, slug, projectName, stand
       page.drawRectangle({ x: M, y: y - 15, width: CW, height: 15, color: gold });
       page.drawText(clean(g.label).toUpperCase(), { x: c1, y: y - 10.5, size: 8, font: sansB, color: ink });
       y -= 15;
-      if (!rows.length) { need(16); page.drawText("-", { x: c1, y: y - 11, size: 9, font: sans, color: grey }); y -= 16; page.drawLine({ start: { x: M, y }, end: { x: W - M, y }, thickness: 0.3, color: line }); }
+      if (!rows.length) { need(19); page.drawText("-", { x: c1, y: y - 13, size: 12, font: sans, color: grey }); y -= 19; page.drawLine({ start: { x: M, y }, end: { x: W - M, y }, thickness: 0.3, color: line }); }
       rows.forEach((r) => {
         need(20);
-        page.drawText(clean(g.noName ? "Office" : r.name).slice(0, 34), { x: c1, y: y - 12, size: 9.5, font: sansB, color: ink });
-        page.drawText(clean(r.phone).slice(0, 22), { x: c2, y: y - 12, size: 9.5, font: sans, color: ink });
-        page.drawText(clean(r.email).slice(0, 34), { x: c3, y: y - 12, size: 9, font: sans, color: ink });
-        y -= 20;
+        page.drawText(clean(g.noName ? "Office" : r.name).slice(0, 34), { x: c1, y: y - 13, size: 12, font: sansB, color: ink });
+        page.drawText(clean(r.phone).slice(0, 22), { x: c2, y: y - 13, size: 12, font: sans, color: ink });
+        page.drawText(clean(r.email).slice(0, 26), { x: c3, y: y - 13, size: 12, font: sans, color: ink });
+        y -= 21;
         page.drawLine({ start: { x: M, y }, end: { x: W - M, y }, thickness: 0.3, color: line });
       });
     });
@@ -11008,11 +11024,11 @@ async function buildGenericFormPdf({ companyLogo, form, slug, projectName, stand
   while (k < items.length) {
     const a = items[k];
     if (a.full) {
-      const est = 19 + (wrap(clean(a.label).toUpperCase(), sansB, 7, CW).length - 1) * 8 + wrap(a.value || "-", sansB, 10, CW).length * 12 + 3;
+      const est = 21 + (wrap(clean(a.label).toUpperCase(), sansB, 7, CW).length - 1) * 8 + wrap(a.value || "-", sansB, 12, CW).length * 15 + 3;
       need(est); y -= kv(a.label, a.value, M, CW); k++;
     } else {
       const b = items[k + 1] && !items[k + 1].full ? items[k + 1] : null;
-      const est = 19 + Math.max(wrap(a.value || "-", sansB, 10, colW).length, b ? wrap(b.value || "-", sansB, 10, colW).length : 1) * 12 + 3;
+      const est = 21 + Math.max(wrap(a.value || "-", sansB, 12, colW).length, b ? wrap(b.value || "-", sansB, 12, colW).length : 1) * 15 + 3;
       need(est);
       const ha = kv(a.label, a.value, M, colW);
       const hb = b ? kv(b.label, b.value, M + colW + 16, colW) : 0;
@@ -11083,7 +11099,7 @@ async function buildGenericFormPdf({ companyLogo, form, slug, projectName, stand
     const cv = choiceValues[gi];
     if (form.genericPdfShowAllChoices) {
       // print EVERY option from the source form with a checked / unchecked box
-      const cols = g.items.length > 8 ? 3 : g.items.length > 3 ? 2 : 1;
+      const cols = g.items.length > 8 ? 2 : g.items.length > 3 ? 2 : 1;
       const cw = CW / cols;
       const isOn = (k) => Array.isArray(cv) ? cv.includes(k) : cv === k;
       need(30);
@@ -11091,14 +11107,14 @@ async function buildGenericFormPdf({ companyLogo, form, slug, projectName, stand
       y -= 16;
       for (let r = 0; r < Math.ceil(g.items.length / cols); r++) {
         const rowItems = g.items.slice(r * cols, r * cols + cols).map((t, ci) => ({ t, k: r * cols + ci, ci }));
-        const wr = rowItems.map((it) => wrap(it.t, sans, 8.5, cw - 24));
-        const rh = Math.max(...wr.map((l) => l.length)) * 10.5 + 4;
+        const wr = rowItems.map((it) => wrap(it.t, sans, 12, cw - 24));
+        const rh = Math.max(...wr.map((l) => l.length)) * 15 + 4;
         need(rh + 2);
         rowItems.forEach((it, ci) => {
           const x = M + 4 + ci * cw;
           page.drawRectangle({ x, y: y - 10, width: 9, height: 9, borderColor: ink, borderWidth: 0.8 });
           if (isOn(it.k)) { page.drawLine({ start: { x: x + 1.5, y: y - 5.5 }, end: { x: x + 3.8, y: y - 8.5 }, thickness: 1.4, color: ink }); page.drawLine({ start: { x: x + 3.8, y: y - 8.5 }, end: { x: x + 8, y: y - 2 }, thickness: 1.4, color: ink }); }
-          wr[ci].forEach((ln, li) => page.drawText(ln, { x: x + 14, y: y - 8 - li * 10.5, size: 8.5, font: isOn(it.k) ? sansB : sans, color: ink }));
+          wr[ci].forEach((ln, li) => page.drawText(ln, { x: x + 14, y: y - 10 - li * 15, size: 12, font: isOn(it.k) ? sansB : sans, color: ink }));
         });
         y -= rh;
       }
@@ -11115,22 +11131,22 @@ async function buildGenericFormPdf({ companyLogo, form, slug, projectName, stand
   // reference table (e.g. clearance distances)
   if (form.referenceTable) {
     const rt = form.referenceTable;
-    need(30 + rt.rows.length * 14);
+    need(30 + rt.rows.length * 19);
     page.drawRectangle({ x: M, y: y - 14, width: CW, height: 14, color: gold });
     page.drawText(clean(rt.title).toUpperCase(), { x: M + 4, y: y - 10, size: 7.5, font: sansB, color: ink });
     y -= 14;
     rt.rows.forEach((r, ri) => {
-      page.drawText(clean(r[0]), { x: M + 4, y: y - 11, size: 9, font: sans, color: ink });
-      page.drawText(clean(r[1]), { x: M + CW / 2, y: y - 11, size: 9, font: sansB, color: ink });
-      y -= 14;
+      page.drawText(clean(r[0]), { x: M + 4, y: y - 13, size: 12, font: sans, color: ink });
+      page.drawText(clean(r[1]), { x: M + CW / 2, y: y - 13, size: 12, font: sansB, color: ink });
+      y -= 19;
       page.drawLine({ start: { x: M, y: y + 1 }, end: { x: W - M, y: y + 1 }, thickness: 0.3, color: line });
     });
     y -= 6;
   }
   if (form.genericPdfLegend) {
-    need(14);
-    page.drawText(clean(form.genericPdfLegend), { x: M, y: y - 9, size: 7.5, font: sans, color: grey });
-    y -= 14;
+    need(17);
+    page.drawText(clean(form.genericPdfLegend), { x: M, y: y - 11, size: 12, font: sans, color: grey });
+    y -= 17;
   }
 
   // checklists
@@ -11145,42 +11161,39 @@ async function buildGenericFormPdf({ companyLogo, form, slug, projectName, stand
       const per = form.genericPdfCols || 2, cw = CW / per;
       for (let i = 0; i < g.items.length; i += per) {
         const cells = [];
-        for (let j = 0; j < per && i + j < g.items.length; j++) cells.push(wrap(g.items[i + j], sans, 8.5, cw - 54));
+        for (let j = 0; j < per && i + j < g.items.length; j++) cells.push(wrap(g.items[i + j], sans, 12, cw - 62));
         const rowLines = Math.max(...cells.map((c) => c.length));
-        need(rowLines * 10 + 8);
+        need(rowLines * 15 + 8);
         cells.forEach((lines, j) => {
           const idx = i + j, v = sv[idx] || "N/A", x = M + j * cw;
-          lines.forEach((ln, li) => page.drawText(ln, { x: x + 4, y: y - 10 - li * 10, size: 8.5, font: sans, color: ink }));
-          page.drawText(v, { x: x + cw - 8 - sansB.widthOfTextAtSize(v, 8.5), y: y - 10, size: 8.5, font: sansB, color: stCol(v) });
+          lines.forEach((ln, li) => page.drawText(ln, { x: x + 4, y: y - 12 - li * 15, size: 12, font: sans, color: ink }));
+          page.drawText(v, { x: x + cw - 8 - sansB.widthOfTextAtSize(v, 12), y: y - 12, size: 12, font: sansB, color: stCol(v) });
         });
-        y -= rowLines * 10 + 4;
+        y -= rowLines * 15 + 4;
         page.drawLine({ start: { x: M, y: y + 1 }, end: { x: W - M, y: y + 1 }, thickness: 0.3, color: line });
       }
     } else if (form.genericPdfWide) {
       for (let idx = 0; idx < g.items.length; idx++) {
         const v = sv[idx] || "N/A";
-        const lines = wrap(g.items[idx], sans, 9, CW - 60);
-        need(lines.length * 11 + 6);
-        lines.forEach((ln, li) => page.drawText(ln, { x: M + 4, y: y - 11 - li * 11, size: 9, font: sans, color: ink }));
-        page.drawText(v, { x: W - M - 6 - sansB.widthOfTextAtSize(v, 9), y: y - 11, size: 9, font: sansB, color: form.genericPdfNeutral ? ink : ((v === "Yes" || v === "OK") ? rgb(0.12, 0.48, 0.2) : (v === "No" || v === "Bad") ? rgb(0.78, 0.07, 0.18) : grey) });
-        y -= lines.length * 11 + 4;
+        const lines = wrap(g.items[idx], sans, 12, CW - 70);
+        need(lines.length * 15 + 6);
+        lines.forEach((ln, li) => page.drawText(ln, { x: M + 4, y: y - 13 - li * 15, size: 12, font: sans, color: ink }));
+        page.drawText(v, { x: W - M - 6 - sansB.widthOfTextAtSize(v, 12), y: y - 13, size: 12, font: sansB, color: form.genericPdfNeutral ? ink : ((v === "Yes" || v === "OK") ? rgb(0.12, 0.48, 0.2) : (v === "No" || v === "Bad") ? rgb(0.78, 0.07, 0.18) : grey) });
+        y -= lines.length * 15 + 4;
         page.drawLine({ start: { x: M, y: y + 1 }, end: { x: W - M, y: y + 1 }, thickness: 0.3, color: line });
       }
     } else {
-    const per = 2, cw = CW / per;
-    for (let i = 0; i < g.items.length; i += per) {
-      need(16);
-      for (let j = 0; j < per && i + j < g.items.length; j++) {
-        const idx = i + j, v = sv[idx] || "N/A", x = M + j * cw;
-        page.drawText(clean(g.items[idx]).slice(0, 38), { x: x + 4, y: y - 11, size: 9, font: sans, color: ink });
-        const rf = g.refNumbers ? (((statusRefs || {})[gi] || {})[idx] || "").trim() : "";
-        if (g.refNumbers) {
-          const rt = clean(rf ? `Ref #: ${rf}` : "Ref #: -").slice(0, 30);
-          page.drawText(rt, { x: x + 92, y: y - 11, size: 8.5, font: sansB, color: ink });
-        }
-        page.drawText(v, { x: x + cw - 12 - sansB.widthOfTextAtSize(v, 9), y: y - 11, size: 9, font: sansB, color: form.genericPdfNeutral ? ink : (v === "Yes" || v === "OK") ? rgb(0.12, 0.48, 0.2) : (v === "No" || v === "Bad") ? rgb(0.78, 0.07, 0.18) : grey });
-      }
-      y -= 15;
+    for (let idx = 0; idx < g.items.length; idx++) {
+      const v = sv[idx] || "N/A";
+      const rf = g.refNumbers ? (((statusRefs || {})[gi] || {})[idx] || "").trim() : "";
+      const lines = wrap(g.items[idx], sans, 12, CW - 70);
+      const rt = g.refNumbers ? clean(rf ? `Ref #: ${rf}` : "Ref #: -").slice(0, 60) : "";
+      const rh = (lines.length + (rt ? 1 : 0)) * 15 + 4;
+      need(rh + 2);
+      lines.forEach((ln, li) => page.drawText(ln, { x: M + 4, y: y - 13 - li * 15, size: 12, font: sans, color: ink }));
+      if (rt) page.drawText(rt, { x: M + 4, y: y - 13 - lines.length * 15, size: 12, font: sansB, color: ink });
+      page.drawText(v, { x: W - M - 6 - sansB.widthOfTextAtSize(v, 12), y: y - 13, size: 12, font: sansB, color: form.genericPdfNeutral ? ink : (v === "Yes" || v === "OK") ? rgb(0.12, 0.48, 0.2) : (v === "No" || v === "Bad") ? rgb(0.78, 0.07, 0.18) : grey });
+      y -= rh;
       page.drawLine({ start: { x: M, y: y + 1 }, end: { x: W - M, y: y + 1 }, thickness: 0.3, color: line });
     }
     }
@@ -11211,7 +11224,7 @@ async function buildGenericFormPdf({ companyLogo, form, slug, projectName, stand
           } catch (e) { /* signature image optional */ }
         }
         page.drawLine({ start: { x: x + 4, y: y - 42 }, end: { x: x + gw - 20, y: y - 42 }, thickness: 0.5, color: ink });
-        page.drawText(clean(c.name).slice(0, 38), { x: x + 4, y: y - 52, size: 8, font: sans, color: grey });
+        page.drawText(clean(c.name).slice(0, 30), { x: x + 4, y: y - 54, size: 12, font: sans, color: ink });
       }
       y -= 62;
     }
@@ -11238,10 +11251,10 @@ async function buildGenericFormPdf({ companyLogo, form, slug, projectName, stand
         } catch (e) { /* signature image optional */ }
       }
       page.drawLine({ start: { x, y: y - 62 }, end: { x: x + sw, y: y - 62 }, thickness: 0.6, color: ink });
-      page.drawText(i === 0 ? `${clean(standardValues.name)}   ${clean(submittedAt || standardValues.date)}` : `Date: ${clean(submittedAt || standardValues.date)}`, { x, y: y - 73, size: 8, font: sans, color: grey });
+      page.drawText(i === 0 ? `${clean(standardValues.name)}   ${clean(submittedAt || standardValues.date)}` : `Date: ${clean(submittedAt || standardValues.date)}`, { x, y: y - 75, size: 12, font: sans, color: ink });
     }
   }
-  if (sigs.length) y -= 90;
+  if (sigs.length) y -= 92;
   if (!form.letterhead) drawBlocks("end");
   const pages = doc.getPages();
   pages.forEach((p, i) => {
@@ -11318,21 +11331,21 @@ async function buildJhaPdf({ form, slug, projectName, standardValues, fieldValue
     ...(NO_SEGMENT_PROJECTS.includes(slug) ? [] : [["Segment", standardValues.segment]]), ["Conditions", conditions],
   ];
   info.forEach(([k, v], i) => {
-    const col = i % 2, row = Math.floor(i / 2), x = M + col * 372, yy = y - row * 17;
+    const col = i % 2, row = Math.floor(i / 2), x = M + col * 372, yy = y - row * 20;
     page.drawText(k.toUpperCase(), { x, y: yy, size: 7.5, font: sansB, color: grey });
-    const lines = wrap(v || "-", sansB, 10, 290);
-    page.drawText(lines[0] + (lines.length > 1 ? "..." : ""), { x: x + 72, y: yy, size: 10, font: sansB, color: ink });
+    const lines = wrap(v || "-", sansB, 12, 285);
+    page.drawText(lines[0] + (lines.length > 1 ? "..." : ""), { x: x + 78, y: yy, size: 12, font: sansB, color: ink });
   });
-  y -= 3 * 17 + 4;
+  y -= 3 * 20 + 6;
 
   // ---- plan fields (task, FA/CPR person, machinery ...) ----
   (form.fields || []).forEach((label, i) => {
     const val = fieldValues[i] || "";
-    const lines = wrap(val || "-", sans, 9.5, W - 2 * M - 190);
-    need(lines.length * 12 + 6);
+    const lines = wrap(val || "-", sans, 12, W - 2 * M - 190);
+    need(lines.length * 15 + 8);
     page.drawText(clean(label).toUpperCase(), { x: M, y: y - 9, size: 7, font: sansB, color: grey });
-    lines.forEach((ln, li) => page.drawText(ln, { x: M + 190, y: y - 9 - li * 12, size: 9.5, font: sans, color: ink }));
-    y -= lines.length * 12 + 6;
+    lines.forEach((ln, li) => page.drawText(ln, { x: M + 190, y: y - 11 - li * 15, size: 12, font: sans, color: ink }));
+    y -= lines.length * 15 + 8;
     page.drawLine({ start: { x: M, y: y + 3 }, end: { x: W - M, y: y + 3 }, thickness: 0.4, color: line });
   });
   y -= 8;
@@ -11352,12 +11365,12 @@ async function buildJhaPdf({ form, slug, projectName, standardValues, fieldValue
     lhead();
     if (lrows.length === 0) lrows.push({ h: "None identified for this task", c: [] });
     lrows.forEach((r) => {
-      const hl = wrap(r.h, sansB, 9, lw - 8);
-      const cl = r.c.length ? r.c.flatMap((c) => wrap("- " + c, sans, 8.5, rw - 8)) : ["-"];
-      const rh = Math.max(hl.length, cl.length) * 11 + 8;
+      const hl = wrap(r.h, sansB, 12, lw - 8);
+      const cl = r.c.length ? r.c.flatMap((c) => wrap("- " + c, sans, 12, rw - 8)) : ["-"];
+      const rh = Math.max(hl.length, cl.length) * 15 + 8;
       if (y - rh < 44) { newPage(); lhead(); }
-      hl.forEach((ln, li) => page.drawText(ln, { x: M + 4, y: y - 11 - li * 11, size: 9, font: sansB, color: ink }));
-      cl.forEach((ln, li) => page.drawText(ln, { x: M + lw + 4, y: y - 11 - li * 11, size: 8.5, font: sans, color: ink }));
+      hl.forEach((ln, li) => page.drawText(ln, { x: M + 4, y: y - 13 - li * 15, size: 12, font: sansB, color: ink }));
+      cl.forEach((ln, li) => page.drawText(ln, { x: M + lw + 4, y: y - 13 - li * 15, size: 12, font: sans, color: ink }));
       y -= rh;
       page.drawLine({ start: { x: M, y }, end: { x: W - M, y }, thickness: 0.4, color: line });
     });
@@ -11377,12 +11390,12 @@ async function buildJhaPdf({ form, slug, projectName, standardValues, fieldValue
   if (pick.xh.trim() || pick.xc.trim()) rowsData.push({ h: pick.xh.trim() || "Other", c: pick.xc.trim() ? pick.xc.trim().split("\n") : [] });
   if (rowsData.length === 0) rowsData.push({ h: "None selected", c: [] });
   rowsData.forEach((r) => {
-    const hl = wrap(r.h, sansB, 9, cols[0].w - 8);
-    const cl = r.c.length ? r.c.flatMap((c) => wrap("- " + c.replace(/^- /, ""), sans, 8.5, cols[1].w - 8)) : ["No controls confirmed"];
-    const rh = Math.max(hl.length, cl.length) * 11 + 8;
+    const hl = wrap(r.h, sansB, 12, cols[0].w - 8);
+    const cl = r.c.length ? r.c.flatMap((c) => wrap("- " + c.replace(/^- /, ""), sans, 12, cols[1].w - 8)) : ["No controls confirmed"];
+    const rh = Math.max(hl.length, cl.length) * 15 + 8;
     if (y - rh < 44) { newPage(); thead(); }
-    hl.forEach((ln, li) => page.drawText(ln, { x: M + 4, y: y - 11 - li * 11, size: 9, font: sansB, color: ink }));
-    cl.forEach((ln, li) => page.drawText(ln, { x: M + cols[0].w + 4, y: y - 11 - li * 11, size: 8.5, font: sans, color: r.c.length ? ink : grey }));
+    hl.forEach((ln, li) => page.drawText(ln, { x: M + 4, y: y - 13 - li * 15, size: 12, font: sansB, color: ink }));
+    cl.forEach((ln, li) => page.drawText(ln, { x: M + cols[0].w + 4, y: y - 13 - li * 15, size: 12, font: sans, color: r.c.length ? ink : grey }));
     y -= rh;
     page.drawLine({ start: { x: M, y }, end: { x: W - M, y }, thickness: 0.4, color: line });
   });
@@ -11395,16 +11408,19 @@ async function buildJhaPdf({ form, slug, projectName, standardValues, fieldValue
     page.drawRectangle({ x: M, y: y - 14, width: W - 2 * M, height: 14, color: pale });
     page.drawText(clean(group.label).toUpperCase(), { x: M + 4, y: y - 10, size: 7.5, font: sansB, color: ink });
     y -= 14;
-    const perRow = 3, cw = (W - 2 * M) / perRow;
+    const perRow = 2, cw = (W - 2 * M) / perRow;
     for (let i = 0; i < group.items.length; i += perRow) {
-      need(14);
-      for (let j = 0; j < perRow && i + j < group.items.length; j++) {
+      const cells = [];
+      for (let j = 0; j < perRow && i + j < group.items.length; j++) cells.push(wrap(group.items[i + j], sans, 12, cw - 50));
+      const nl = Math.max(...cells.map((c) => c.length));
+      need(nl * 15 + 4);
+      cells.forEach((lines, j) => {
         const idx = i + j, v = sv[idx] || "N/A";
         const x = M + j * cw;
-        page.drawText(clean(group.items[idx]).slice(0, 40), { x: x + 4, y: y - 10, size: 8.5, font: sans, color: ink });
-        page.drawText(v, { x: x + cw - 8 - sansB.widthOfTextAtSize(v, 8.5), y: y - 10, size: 8.5, font: sansB, color: v === "Yes" ? rgb(0.12, 0.48, 0.2) : grey });
-      }
-      y -= 13;
+        lines.forEach((ln, li) => page.drawText(ln, { x: x + 4, y: y - 12 - li * 15, size: 12, font: sans, color: ink }));
+        page.drawText(v, { x: x + cw - 8 - sansB.widthOfTextAtSize(v, 12), y: y - 12, size: 12, font: sansB, color: v === "Yes" ? rgb(0.12, 0.48, 0.2) : grey });
+      });
+      y -= nl * 15 + 2;
     }
     y -= 6;
   });
@@ -11430,7 +11446,7 @@ async function buildJhaPdf({ form, slug, projectName, standardValues, fieldValue
           } catch (e) { /* signature image optional */ }
         }
         page.drawLine({ start: { x: x + 4, y: y - 42 }, end: { x: x + cw - 20, y: y - 42 }, thickness: 0.5, color: ink });
-        page.drawText(clean(c.name).slice(0, 38), { x: x + 4, y: y - 52, size: 8, font: sans, color: grey });
+        page.drawText(clean(c.name).slice(0, 30), { x: x + 4, y: y - 54, size: 12, font: sans, color: ink });
       }
       y -= 62;
     }
@@ -11450,7 +11466,7 @@ async function buildJhaPdf({ form, slug, projectName, standardValues, fieldValue
     } catch (e) { /* signature image optional */ }
   }
   page.drawLine({ start: { x: M, y: y - 66 }, end: { x: M + 240, y: y - 66 }, thickness: 0.6, color: ink });
-  page.drawText(`${clean(standardValues.name)}   ${clean(submittedAt || standardValues.date)}`, { x: M, y: y - 77, size: 8, font: sans, color: grey });
+  page.drawText(`${clean(standardValues.name)}   ${clean(submittedAt || standardValues.date)}`, { x: M, y: y - 79, size: 12, font: sans, color: ink });
 
   const pages = doc.getPages();
   pages.forEach((p, i) => {
@@ -12943,7 +12959,7 @@ async function appendTicketRefreshLog(baseBytes, { original, refreshes, startNum
   page.drawText(t, { x: W - M - sansB.widthOfTextAtSize(t, 14), y: H - 28, size: 14, font: sansB, color: gold });
   page.drawText("UTILITY LOCATE PERMIT", { x: M, y: H - 28, size: 10, font: sansB, color: rgb(1, 1, 1) });
   let y = H - 70;
-  const cols = [M, M + 150, M + 290, M + 380];
+  const cols = [M, M + 170, M + 300, M + 390];
   ["Entry", "Ticket Number", "Date", "Entered by / Time"].forEach((h, i) => page.drawText(h.toUpperCase(), { x: cols[i], y, size: 7.5, font: sansB, color: grey }));
   y -= 6; page.drawLine({ start: { x: M, y }, end: { x: W - M, y }, thickness: 0.8, color: ink });
   const rows = [{ a: "Original ticket", b: original.number || "-", c: original.date || "-", d: "" }].concat(
@@ -12952,11 +12968,12 @@ async function appendTicketRefreshLog(baseBytes, { original, refreshes, startNum
       d: `${r.by || ""}  ${r.at ? new Date(r.at).toLocaleString("en-US", { month: "2-digit", day: "2-digit", year: "numeric", hour: "numeric", minute: "2-digit" }) : ""}`,
     })));
   rows.forEach((r) => {
-    y -= 18;
-    page.drawText(clean(r.a).slice(0, 30), { x: cols[0], y, size: 9.5, font: sansB, color: ink });
-    page.drawText(clean(r.b).slice(0, 26), { x: cols[1], y, size: 9.5, font: sans, color: ink });
-    page.drawText(clean(r.c).slice(0, 18), { x: cols[2], y, size: 9.5, font: sans, color: ink });
-    page.drawText(clean(r.d).slice(0, 40), { x: cols[3], y, size: 8.5, font: sans, color: grey });
+    y -= 20;
+    page.drawText(clean(r.a).slice(0, 24), { x: cols[0], y, size: 12, font: sansB, color: ink });
+    page.drawText(clean(r.b).slice(0, 12), { x: cols[1], y, size: 12, font: sans, color: ink });
+    page.drawText(clean(r.c).slice(0, 11), { x: cols[2], y, size: 12, font: sans, color: ink });
+    page.drawText(clean(r.d).slice(0, 18), { x: cols[3], y, size: 12, font: sans, color: ink });
+    if (r.d && clean(r.d).length > 18) { y -= 15; page.drawText(clean(r.d).slice(18, 44).trim(), { x: cols[3], y, size: 12, font: sans, color: ink }); }
     page.drawLine({ start: { x: M, y: y - 5 }, end: { x: W - M, y: y - 5 }, thickness: 0.3, color: line });
   });
   return await doc.save();
@@ -13125,21 +13142,21 @@ async function appendCloseoutLog(baseBytes, { location, closeouts }) {
   let y = H - 70;
   page.drawText("LOCATION / DESCRIPTION / ID", { x: M, y, size: 7.5, font: sansB, color: grey });
   y -= 14;
-  page.drawText(clean(location || "-").slice(0, 90), { x: M, y, size: 10.5, font: sansB, color: ink });
-  y -= 24;
+  page.drawText(clean(location || "-").slice(0, 70), { x: M, y, size: 12, font: sansB, color: ink });
+  y -= 26;
   closeouts.forEach((c, n) => {
     const stamp = c.at ? new Date(c.at).toLocaleString("en-US", { month: "2-digit", day: "2-digit", year: "numeric", hour: "numeric", minute: "2-digit" }) : "";
     page.drawText(clean(`ENTRY ${n + 1}`), { x: M, y, size: 7.5, font: sansB, color: grey });
-    page.drawText(clean(`${c.by || ""}   ${stamp}`), { x: M + 70, y, size: 8, font: sans, color: grey });
-    y -= 16;
+    page.drawText(clean(`${c.by || ""}   ${stamp}`), { x: M + 70, y, size: 12, font: sans, color: ink });
+    y -= 19;
     const rows = [];
     if (c.time_out) rows.push(["Time Out", c.time_out]);
     if (c.canceled_time || c.reason) rows.push(["Permit Canceled Time", c.canceled_time || "-"], ["Reason Permit Canceled", c.reason || "-"]);
     rows.forEach(([a, b]) => {
-      page.drawText(clean(a), { x: M, y, size: 9.5, font: sansB, color: ink });
+      page.drawText(clean(a), { x: M, y, size: 12, font: sansB, color: ink });
       const words = clean(b).split(/\s+/); let cur = "", first = true;
-      const flush = () => { page.drawText(cur, { x: M + 150, y, size: 9.5, font: sans, color: ink }); y -= 13; };
-      words.forEach((w) => { const tl = cur ? cur + " " + w : w; if (sans.widthOfTextAtSize(tl, 9.5) > W - M - (M + 150)) { flush(); cur = w; } else cur = tl; });
+      const flush = () => { page.drawText(cur, { x: M + 190, y, size: 12, font: sans, color: ink }); y -= 16; };
+      words.forEach((w) => { const tl = cur ? cur + " " + w : w; if (sans.widthOfTextAtSize(tl, 12) > W - M - (M + 190)) { flush(); cur = w; } else cur = tl; });
       flush();
     });
     y -= 4;
@@ -13340,9 +13357,9 @@ async function appendJhaUpdate(baseBytes, { task, update, number, sigDataUrl }) 
     return out;
   };
   const label = (t) => { need(30); page.drawText(clean(t).toUpperCase(), { x: M, y, size: 7.5, font: sansB, color: grey }); y -= 13; };
-  const para = (t, x = M, size = 10, font = sans) => { wrap(t || "-", font, size, W - M - x).forEach((ln) => { need(14); page.drawText(ln, { x, y, size, font, color: ink }); y -= 13; }); };
+  const para = (t, x = M, size = 12, font = sans) => { wrap(t || "-", font, size, W - M - x).forEach((ln) => { need(17); page.drawText(ln, { x, y, size, font, color: ink }); y -= 16; }); };
   newPage();
-  label("Task"); para(task || "-", M, 11, sansB); y -= 6;
+  label("Task"); para(task || "-", M, 12, sansB); y -= 6;
   const stamp = update.at ? new Date(update.at).toLocaleString("en-US", { month: "2-digit", day: "2-digit", year: "numeric", hour: "numeric", minute: "2-digit" }) : "";
   label("Entered by"); para(`${update.by || ""}   ${stamp}`); y -= 6;
   label("Reason for update"); para((update.reasons || []).join(", ") || "-"); y -= 6;
@@ -13352,12 +13369,12 @@ async function appendJhaUpdate(baseBytes, { task, update, number, sigDataUrl }) 
     label("Added steps, hazards and controls");
     update.steps.forEach((s, i) => {
       need(44);
-      page.drawText(clean(`Step ${i + 1}: ${s.step || "-"}`).slice(0, 95), { x: M, y, size: 10, font: sansB, color: ink }); y -= 13;
+      wrap(`Step ${i + 1}: ${s.step || "-"}`, sansB, 12, W - 2 * M).forEach((ln) => { need(17); page.drawText(ln, { x: M, y, size: 12, font: sansB, color: ink }); y -= 16; });
       page.drawText("HAZARDS", { x: M + 8, y, size: 7, font: sansB, color: grey }); y -= 11;
-      para(s.hazard || "-", M + 8, 9.5);
+      para(s.hazard || "-", M + 8, 12);
       need(24);
       page.drawText("CONTROLS", { x: M + 8, y, size: 7, font: sansB, color: grey }); y -= 11;
-      para(s.control || "-", M + 8, 9.5);
+      para(s.control || "-", M + 8, 12);
       y -= 4; need(10); page.drawLine({ start: { x: M, y }, end: { x: W - M, y }, thickness: 0.3, color: line }); y -= 10;
     });
   }
@@ -13372,7 +13389,7 @@ async function appendJhaUpdate(baseBytes, { task, update, number, sigDataUrl }) 
       y -= h + 4;
     } catch (e) { /* signature image could not be embedded */ }
   }
-  page.drawText(clean(update.by || ""), { x: M, y, size: 9, font: sans, color: grey });
+  page.drawText(clean(update.by || ""), { x: M, y, size: 12, font: sans, color: ink });
   return await doc.save();
 }
 
