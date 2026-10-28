@@ -8047,9 +8047,11 @@ function TrainingScreen({ user, go }) {
   const [certs, setCerts] = useState([]);
   const [certView, setCertView] = useState(null);
   const [retrain, setRetrain] = useState({}); // course_id -> { reason, expires_at, refresher_done }
+  const [prac, setPrac] = useState({}); // course_id -> hands-on status
 
   const load = async () => {
     setLoading(true);
+    supabase.rpc("list_my_practical_status", { p_token: user.sessionToken }).then((r) => { const m = {}; (Array.isArray(r.data) ? r.data : []).forEach((x) => { m[x.course_id] = x; }); setPrac(m); });
     const [coursesRes, historyRes, certsRes, retrainRes] = await Promise.all([
       supabase.rpc("list_my_training_courses", { p_token: user.sessionToken }),
       supabase.rpc("list_my_training_history", { p_token: user.sessionToken }),
@@ -8202,6 +8204,14 @@ function TrainingScreen({ user, go }) {
                       Start Retraining
                     </button>
                   )}
+                </div>
+              )}
+              {prac[c.id] && !prac[c.id].passed && (
+                <div className="px-3 py-2 text-[11px] border-t" style={{ borderColor: "#E4E2DA", background: prac[c.id].last_result === "needs_improvement" ? "#FCEFEF" : "#FFF4DC", color: prac[c.id].last_result === "needs_improvement" ? ALERT : "#93650A" }}>
+                  <b>Part 2: hands-on evaluation</b>
+                  {!prac[c.id].part1_done ? " · after you finish the online part, the safety department will schedule your hands-on evaluation"
+                    : prac[c.id].last_result === "needs_improvement" ? " · needs improvement. The safety department will evaluate you again"
+                    : " · online part done. Waiting on the safety department to do your evaluation. Your certificate is issued after you pass."}
                 </div>
               )}
               {status === "completed" && c.has_exam && (!rt || refresherDone) && (
@@ -8365,6 +8375,227 @@ function trainingMailto({ person, contact, course, kind, dueISO, expiresISO, adm
   return `mailto:${to.split("; ").join(";%20")}?${q.join("&")}`;
 }
 
+// ---------- Hands-on evaluation (Part 2): Commentary Drive checklist ----------
+const COMMENTARY_DRIVE_ITEMS = [
+  { k: "lookAhead", l: "Look Ahead (Seconds)", o: ["1-3 sec", "4-8 sec", "9+ sec"] },
+  { k: "scanning", l: "Scanning (looks at something different)", o: ["2 sec", "3-5 sec", ">5 sec"] },
+  { k: "scanWide", l: "Scanning Wide (Bldg. Front To Bldg. Front)", o: ["Bldg to Bldg", "Curb to Curb", "Car to Car"] },
+  { k: "mirrors", l: "Mirror Checks (how often)", o: ["3-5 sec", "6-10 sec", ">10 sec"] },
+  { k: "intWith", l: "Checking Intersections w/ Traffic Controls (looks Left - Right - Left)", o: ["Slows / Covers Brake", "No Slowing / Brake Cover"] },
+  { k: "intWithout", l: "Checking Intersections w/o Traffic Controls (looks Left - Right - Left)", o: ["Scans Wide and Prepared", "No Scanning"] },
+  { k: "turnLane", l: "Correct Lane For Turns", o: ["Stays in Lane", "Crosses Lanes while Turning"] },
+  { k: "wedge", l: "The Wedge (when stopped behind another vehicle)", o: ["Maintains", "Moves up after initial stop"] },
+  { k: "waitInt", l: "Wait At Intersections (counts 1001, 1002, 1003)", o: ["Yes", "No"] },
+  { k: "signs", l: "Checks Road Signs", o: ["3-5 sec", "5-8 sec", "8-12 sec"] },
+  { k: "parked", l: "Checks Parked Cars", o: ["Yes", "No", "Not Applicable"] },
+  { k: "following", l: "Following Time (Seconds) (based on vehicle length)", o: ["Correct", "Not correct"] },
+  { k: "escape", l: "Plans An Escape Path", o: ["Yes", "No"] },
+  { k: "sigLane", l: "Proper Use Of Signals For Lane Change (activates turn signal how far in advance)", o: ["3-5 sec", "6-8 sec", "Inconsistent Use"] },
+  { k: "sigTurn", l: "Proper Use Of Signals For Turns (activates turn signal how far in advance)", o: ["3-5 sec", "6-8 sec", "Inconsistent Use"] },
+  { k: "peds", l: "Alert To Pedestrians / Cyclists (Eye Contact or Friendly Horn)", o: ["Yes", "No", "Not Applicable"] },
+  { k: "parking", l: "Parks To Avoid Backing or To Pull Into Traffic", o: ["Yes", "No", "Not Applicable"] },
+];
+
+async function buildCommentaryDrivePdf({ projectName, driverName, evaluatorName, date, vehicle, answers, narrative, driverSig, coachSig, result }) {
+  const { StandardFonts, rgb } = await import("pdf-lib");
+  const doc = await PDFDocument.create();
+  const sans = await doc.embedFont(StandardFonts.Helvetica);
+  const sansB = await doc.embedFont(StandardFonts.HelveticaBold);
+  const script = await doc.embedFont(StandardFonts.HelveticaBoldOblique);
+  const clean = (t) => String(t == null ? "" : t).replace(/[–—]/g, "-").replace(/[“”]/g, '"').replace(/[‘’]/g, "'").replace(/[^\x20-\xFF\n]/g, "?");
+  const ink = rgb(0.1, 0.1, 0.1), gold = rgb(0.98, 0.78, 0.02), grey = rgb(0.4, 0.42, 0.45), line = rgb(0.8, 0.79, 0.75), red = rgb(0.78, 0.07, 0.18), green = rgb(0.12, 0.48, 0.2);
+  const W = 612, H = 792, M = 36, CW = W - 2 * M;
+  const wrap = (text, font, size, max) => {
+    const out = [];
+    clean(text).split("\n").forEach((para) => {
+      let cur = "";
+      (para.trim() ? para.split(/\s+/) : [""]).forEach((word) => {
+        const t = cur ? cur + " " + word : word;
+        if (font.widthOfTextAtSize(t, size) <= max) { cur = t; return; }
+        if (cur) out.push(cur);
+        let w = word;
+        while (font.widthOfTextAtSize(w, size) > max && w.length > 1) { let k = w.length - 1; while (k > 1 && font.widthOfTextAtSize(w.slice(0, k), size) > max) k--; out.push(w.slice(0, k)); w = w.slice(k); }
+        cur = w;
+      });
+      out.push(cur);
+    });
+    return out;
+  };
+  let page, y;
+  const header = (first) => {
+    page = doc.addPage([W, H]);
+    page.drawRectangle({ x: 0, y: H - 54, width: W, height: 54, color: ink });
+    page.drawText("COMMENTARY DRIVE CHECKLIST", { x: M, y: H - 34, size: first ? 15 : 11, font: sansB, color: gold });
+    const pn = clean(String(projectName || "").split(/\s+-\s+/).pop()).toUpperCase();
+    page.drawText(pn, { x: W - M - sansB.widthOfTextAtSize(pn, 8), y: H - 33, size: 8, font: sansB, color: rgb(1, 1, 1) });
+    y = H - 54 - 18;
+  };
+  const need = (h) => { if (y - h < 50) header(false); };
+  header(true);
+  const kv = (label, value, x, w) => {
+    page.drawText(clean(label).toUpperCase(), { x, y: y - 8, size: 6.5, font: sansB, color: grey });
+    wrap(value || "-", sansB, 12, w).slice(0, 2).forEach((ln, i) => page.drawText(ln, { x, y: y - 21 - i * 15, size: 12, font: sansB, color: ink }));
+  };
+  kv("Driver", driverName, M, 260); kv("Date", date, M + 290, 120); kv("Result", result === "pass" ? "PASSED" : "NEEDS IMPROVEMENT", M + 410, 130);
+  y -= 40;
+  kv("Coach / evaluator", evaluatorName, M, 260); kv("Vehicle / equipment", vehicle, M + 290, 250);
+  y -= 40;
+  page.drawText("S = Skilled     NI = Needs Improvement", { x: M, y: y - 8, size: 9, font: sans, color: grey }); y -= 18;
+  const cH = 18, c1 = CW * 0.40, c2 = CW * 0.25, c3 = 34;
+  const cols = [M, M + c1, M + c1 + c2, M + c1 + c2 + c3];
+  const thead = () => {
+    page.drawRectangle({ x: M, y: y - cH, width: CW, height: cH, color: gold });
+    [["DRIVING HABIT", cols[0]], ["OBSERVED", cols[1]], ["S / NI", cols[2]], ["COMMENTS", cols[3]]].forEach(([t, x]) => page.drawText(t, { x: x + 4, y: y - 12.5, size: 7.5, font: sansB, color: ink }));
+    y -= cH;
+  };
+  thead();
+  for (const it of COMMENTARY_DRIVE_ITEMS) {
+    const a = (answers && answers[it.k]) || {};
+    const hl = wrap(it.l, sans, 12, c1 - 8), ol = wrap(a.obs || "-", sans, 12, c2 - 8), cl = wrap(a.comment || "", sans, 12, CW - c1 - c2 - c3 - 8);
+    const rh = Math.max(hl.length, ol.length, cl.length) * 15 + 8;
+    if (y - rh < 50) { header(false); thead(); }
+    hl.forEach((ln, i) => page.drawText(ln, { x: cols[0] + 4, y: y - 13 - i * 15, size: 12, font: sans, color: ink }));
+    ol.forEach((ln, i) => page.drawText(ln, { x: cols[1] + 4, y: y - 13 - i * 15, size: 12, font: sans, color: ink }));
+    if (a.rating) page.drawText(a.rating, { x: cols[2] + 6, y: y - 13, size: 12, font: sansB, color: a.rating === "S" ? green : red });
+    cl.forEach((ln, i) => page.drawText(ln, { x: cols[3] + 4, y: y - 13 - i * 15, size: 12, font: sans, color: ink }));
+    y -= rh;
+    page.drawLine({ start: { x: M, y }, end: { x: W - M, y }, thickness: 0.4, color: line });
+  }
+  y -= 14; need(60);
+  page.drawText("NARRATIVE (POSITIVE FEEDBACK, SKILLS NEEDING IMPROVEMENT, ADDITIONAL COMMENTS)", { x: M, y: y - 8, size: 6.5, font: sansB, color: grey }); y -= 14;
+  for (const ln of wrap(narrative || "-", sans, 12, CW)) { need(17); page.drawText(ln, { x: M, y: y - 12, size: 12, font: sans, color: ink }); y -= 15; }
+  y -= 14; need(110);
+  const sig = (label, name, x) => {
+    page.drawText(clean(label).toUpperCase(), { x, y: y - 8, size: 6.5, font: sansB, color: grey });
+    if (name) page.drawText(clean(name), { x: x + 4, y: y - 36, size: 18, font: script, color: ink });
+    page.drawLine({ start: { x, y: y - 42 }, end: { x: x + 240, y: y - 42 }, thickness: 0.7, color: ink });
+    page.drawText(name ? `Signed electronically ${date}` : "Not signed", { x, y: y - 54, size: 9, font: sans, color: grey });
+  };
+  sig("Driver (signature)", driverSig, M); sig("Coach (signature)", coachSig, M + 270);
+  const pages = doc.getPages();
+  pages.forEach((p, i) => {
+    p.drawText(`Commentary Drive Checklist - ${clean(driverName)} - Page ${i + 1} of ${pages.length}`, { x: M, y: 22, size: 7.5, font: sans, color: grey });
+  });
+  return await doc.save();
+}
+
+function PracticalEvalModal({ user, projectName, target, onClose, onDone }) {
+  const today = new Date().toISOString().slice(0, 10);
+  const [answers, setAnswers] = useState({});
+  const [vehicle, setVehicle] = useState("");
+  const [narrative, setNarrative] = useState("");
+  const [driverSig, setDriverSig] = useState("");
+  const [coachSig, setCoachSig] = useState(user?.name || "");
+  const [result, setResult] = useState(null); // null = follow the suggestion
+  const [showComment, setShowComment] = useState({});
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const items = COMMENTARY_DRIVE_ITEMS;
+  const rated = items.filter((i) => (answers[i.k] || {}).rating).length;
+  const niCount = items.filter((i) => (answers[i.k] || {}).rating === "NI").length;
+  const allRated = rated === items.length;
+  const suggested = niCount === 0 ? "pass" : "needs_improvement";
+  const finalResult = result || suggested;
+  const setA = (k, patch) => setAnswers((a) => ({ ...a, [k]: { ...(a[k] || {}), ...patch } }));
+  const pickObs = (it, o) => setA(it.k, { obs: (answers[it.k] || {}).obs === o ? "" : o, ...(o === "Not Applicable" ? { rating: "S" } : {}) });
+  const markAll = () => setAnswers((a) => { const n = { ...a }; items.forEach((it) => { n[it.k] = { ...(n[it.k] || {}), rating: (n[it.k] || {}).rating || "S" }; }); return n; });
+  const mono = { fontFamily: "IBM Plex Mono, monospace" };
+
+  const submit = async () => {
+    setErr("");
+    if (!allRated) { setErr(`Rate every item S or NI (${items.length - rated} left).`); return; }
+    if (!driverSig.trim() || !coachSig.trim()) { setErr("The driver and the coach both need to type their name to sign."); return; }
+    if (finalResult !== "pass" && !narrative.trim()) { setErr("Add a short note in the narrative on what needs improvement."); return; }
+    setBusy(true);
+    try {
+      const bytes = await buildCommentaryDrivePdf({ projectName, driverName: target.person_name, evaluatorName: coachSig.trim(), date: today, vehicle, answers, narrative, driverSig: driverSig.trim(), coachSig: coachSig.trim(), result: finalResult });
+      const blob = new Blob([bytes], { type: "application/pdf" });
+      const path = `training-practical/${target.personnel_id}-${Date.now()}-commentary-drive.pdf`;
+      let url = null;
+      const up = await supabase.storage.from("documents").upload(path, blob, { contentType: "application/pdf" });
+      if (!up.error) url = (supabase.storage.from("documents").getPublicUrl(path).data || {}).publicUrl || null;
+      const data = { answers, vehicle, narrative, date: today, driver_signature: driverSig.trim(), coach_signature: coachSig.trim(), driver_name: target.person_name };
+      const { data: res, error } = await supabase.rpc("submit_training_practical", {
+        p_token: user.sessionToken, p_course_id: target.course_id, p_personnel_id: target.personnel_id, p_result: finalResult, p_data: data, p_pdf_url: url,
+      });
+      if (error || !res || res.ok !== true) throw new Error((res && res.error) || "save");
+      saveBlobAs(blob, `Commentary Drive - ${safeFile(target.person_name)} - ${today}.pdf`);
+      onDone(finalResult);
+    } catch (e) { setErr("Couldn't save the evaluation. Check that the hands-on SQL has been run, then try again."); }
+    setBusy(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto" style={{ background: "rgba(0,0,0,.55)" }}>
+      <div className="max-w-xl mx-auto my-4 rounded-md" style={{ background: "#F4F3EF" }}>
+        <div className="flex items-start justify-between gap-2 p-4 pb-2">
+          <div>
+            <div className="text-[15px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>Commentary Drive Checklist</div>
+            <div className="text-[12px]" style={{ color: STEEL }}>{target.person_name} · {target.course_title} · Part 2</div>
+          </div>
+          <button onClick={onClose} className="p-1"><X size={18} color={STEEL} /></button>
+        </div>
+        <div className="px-4 pb-2">
+          <input value={vehicle} onChange={(e) => setVehicle(e.target.value)} placeholder="Vehicle / equipment driven (optional)" className="w-full rounded-md border px-3 py-2 text-[13px] bg-white mb-2" style={{ borderColor: "#C9C6BC" }} />
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-[11px]" style={{ color: STEEL, ...mono }}>{rated} of {items.length} rated · {niCount} need improvement</div>
+            <button onClick={markAll} className="text-[10px] font-bold uppercase px-2.5 py-1.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: INK, ...mono }}>Mark unrated as Skilled</button>
+          </div>
+          <div className="space-y-2">
+            {items.map((it, n) => {
+              const a = answers[it.k] || {};
+              return (
+                <div key={it.k} className="bg-white rounded-md border p-2.5" style={{ borderColor: a.rating === "NI" ? ALERT : "#E4E2DA" }}>
+                  <div className="text-[13px] leading-snug mb-1.5"><b>{n + 1}.</b> {it.l}</div>
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {it.o.map((o) => (
+                      <button key={o} onClick={() => pickObs(it, o)} className="text-[12px] px-2.5 py-1.5 rounded-md border" style={a.obs === o ? { background: INK, color: "white", borderColor: INK } : { background: "white", color: INK, borderColor: "#C9C6BC" }}>{o}</button>
+                    ))}
+                  </div>
+                  <div className="flex gap-2 items-center">
+                    <button onClick={() => setA(it.k, { rating: "S" })} className="flex-1 py-2 rounded-md text-[13px] font-bold" style={a.rating === "S" ? { background: "#1F7A33", color: "white" } : { background: "#EEF3EF", color: "#1F7A33", border: "1px solid #BFD8C5" }}>S · Skilled</button>
+                    <button onClick={() => setA(it.k, { rating: "NI" })} className="flex-1 py-2 rounded-md text-[13px] font-bold" style={a.rating === "NI" ? { background: ALERT, color: "white" } : { background: "#FBEEEE", color: ALERT, border: "1px solid #E8C4C4" }}>NI · Needs Improvement</button>
+                    <button onClick={() => setShowComment((s) => ({ ...s, [it.k]: !s[it.k] }))} className="text-[11px] px-2 py-2 rounded-md border" style={{ borderColor: "#C9C6BC", color: STEEL }}>{a.comment ? "✎" : "+ Note"}</button>
+                  </div>
+                  {(showComment[it.k] || a.comment) && (
+                    <input value={a.comment || ""} onChange={(e) => setA(it.k, { comment: e.target.value })} placeholder="Comment (optional)" className="w-full rounded-md border px-2.5 py-1.5 text-[12px] mt-2" style={{ borderColor: "#C9C6BC" }} />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <div className="text-[11px] uppercase font-bold mt-4 mb-1" style={{ color: STEEL, ...mono }}>Narrative</div>
+          <textarea value={narrative} onChange={(e) => setNarrative(e.target.value)} rows={4} placeholder="Positive feedback, skills needing improvement, additional comments" className="w-full rounded-md border px-3 py-2 text-[13px] bg-white" style={{ borderColor: "#C9C6BC" }} />
+          <div className="grid grid-cols-2 gap-2 mt-3">
+            <div>
+              <div className="text-[10px] uppercase font-bold mb-1" style={{ color: STEEL, ...mono }}>Driver signature (type name)</div>
+              <input value={driverSig} onChange={(e) => setDriverSig(e.target.value)} placeholder={target.person_name} className="w-full rounded-md border px-2.5 py-2 text-[14px] bg-white" style={{ borderColor: "#C9C6BC", fontFamily: '"Dancing Script", cursive', fontWeight: 600, fontSize: 20 }} />
+            </div>
+            <div>
+              <div className="text-[10px] uppercase font-bold mb-1" style={{ color: STEEL, ...mono }}>Coach signature (type name)</div>
+              <input value={coachSig} onChange={(e) => setCoachSig(e.target.value)} className="w-full rounded-md border px-2.5 py-2 text-[14px] bg-white" style={{ borderColor: "#C9C6BC", fontFamily: '"Dancing Script", cursive', fontWeight: 600, fontSize: 20 }} />
+            </div>
+          </div>
+          <div className="text-[11px] uppercase font-bold mt-3 mb-1" style={{ color: STEEL, ...mono }}>Result</div>
+          <div className="flex gap-2">
+            <button onClick={() => setResult("pass")} className="flex-1 py-2.5 rounded-md text-[13px] font-bold" style={finalResult === "pass" ? { background: "#1F7A33", color: "white" } : { background: "white", color: "#1F7A33", border: "1px solid #BFD8C5" }}>Pass</button>
+            <button onClick={() => setResult("needs_improvement")} className="flex-1 py-2.5 rounded-md text-[13px] font-bold" style={finalResult !== "pass" ? { background: ALERT, color: "white" } : { background: "white", color: ALERT, border: "1px solid #E8C4C4" }}>Needs improvement</button>
+          </div>
+          <div className="text-[10px] mt-1" style={{ color: STEEL }}>
+            {finalResult === "pass" ? "Passing issues the certificate (18-month expiration where set) and updates the badge." : "No certificate yet. The driver stays in the Part 2 list to be evaluated again."}
+            {niCount > 0 && finalResult === "pass" ? ` ${niCount} item(s) are marked NI, so double-check the result.` : ""}
+          </div>
+          {err && <div className="text-[12px] mt-2" style={{ color: ALERT }}>{err}</div>}
+          <div className="flex gap-2 mt-3 pb-4">
+            <button onClick={onClose} className="flex-1 text-[11px] font-bold uppercase py-2.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, ...mono }}>Cancel</button>
+            <button disabled={busy} onClick={submit} className="flex-1 text-[11px] font-bold uppercase py-2.5 rounded-sm disabled:opacity-50" style={{ background: GOLD, color: INK, ...mono }}>{busy ? "Saving…" : "Sign & file"}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ManageTrainingScreen({ user }) {
   const { id: projectSlug, name: projectName } = useContext(ProjectContext);
   const [courses, setCourses] = useState([]);
@@ -8387,9 +8618,18 @@ function ManageTrainingScreen({ user }) {
   const [noticeLog, setNoticeLog] = useState([]);
   const [expiryWindow, setExpiryWindow] = useState(60); // days ahead to show upcoming retakes
   const [showDone, setShowDone] = useState(false);
+  const [pracQueue, setPracQueue] = useState([]);
+  const [pracCourses, setPracCourses] = useState({}); // course_id -> true when it has a hands-on part
+  const [pracStatus, setPracStatus] = useState({});   // personnel_id -> status for the open course
+  const [evalTarget, setEvalTarget] = useState(null);
+  const [fullEval, setFullEval] = useState(true);     // assign type: Full (hands-on) vs Refresher (online only)
 
   const load = async () => {
     setLoading(true);
+    const qRes = await supabase.rpc("list_practical_queue", { p_token: user.sessionToken });
+    setPracQueue(Array.isArray(qRes.data) ? qRes.data : []);
+    const pcRes = await supabase.rpc("list_practical_courses", { p_token: user.sessionToken });
+    const pcm = {}; (Array.isArray(pcRes.data) ? pcRes.data : []).forEach((r) => { pcm[r.course_id] = true; }); setPracCourses(pcm);
     const certRes = await supabase.rpc("list_training_certificates_admin", { p_token: user.sessionToken });
     setAllCerts(certRes.error || !certRes.data ? [] : certRes.data.map((c) => ({ ...c, showName: true })));
     const cRes = await supabase.rpc("list_badge_contacts", { p_token: user.sessionToken });
@@ -8408,6 +8648,13 @@ function ManageTrainingScreen({ user }) {
   const loadAssignees = async (courseId) => {
     const { data, error } = await supabase.rpc("list_training_overview_admin", { p_token: user.sessionToken, p_course_id: courseId });
     setAssignees(error || !data ? [] : data);
+    const ps = await supabase.rpc("list_practical_status_admin", { p_token: user.sessionToken, p_course_id: courseId });
+    const m = {}; (Array.isArray(ps.data) ? ps.data : []).forEach((r) => { m[r.personnel_id] = r; }); setPracStatus(m);
+  };
+
+  const setPractical = async (personnelId, required) => {
+    await supabase.rpc("set_training_practical", { p_token: user.sessionToken, p_course_id: openCourseId, p_personnel_ids: [personnelId], p_required: required });
+    loadAssignees(openCourseId); load();
   };
 
   const openCourse = async (courseId) => {
@@ -8427,6 +8674,7 @@ function ManageTrainingScreen({ user }) {
     const ids = Object.keys(checked).filter((id) => checked[id]);
     if (ids.length === 0) { setPicking(false); return; }
     await supabase.rpc("assign_training_course", { p_token: user.sessionToken, p_course_id: openCourseId, p_personnel_ids: ids });
+    if (pracCourses[openCourseId]) await supabase.rpc("set_training_practical", { p_token: user.sessionToken, p_course_id: openCourseId, p_personnel_ids: ids, p_required: fullEval });
     const dueISO = dueN ? dueDateFrom(dueN, dueUnit) : "";
     if (dueISO) await supabase.rpc("set_training_due", { p_token: user.sessionToken, p_course_id: openCourseId, p_personnel_ids: ids, p_due_at: dueISO });
     const { data: contacts } = await supabase.rpc("list_badge_contacts", { p_token: user.sessionToken });
@@ -8495,6 +8743,15 @@ function ManageTrainingScreen({ user }) {
               ))}
               {filteredRoster.length === 0 && <div className="text-[12px] py-2" style={{ color: STEEL }}>No matches.</div>}
             </div>
+            {pracCourses[openCourseId] && (
+              <div className="mb-3">
+                <div className="text-[10px] uppercase font-bold mb-1" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>Training type</div>
+                <div className="flex gap-2">
+                  <button onClick={() => setFullEval(true)} className="flex-1 py-2 rounded-md text-[12px] font-bold border" style={fullEval ? { background: INK, color: "white", borderColor: INK } : { background: "white", color: INK, borderColor: "#C9C6BC" }}>Full<div className="text-[10px] font-normal">Online + hands-on evaluation</div></button>
+                  <button onClick={() => setFullEval(false)} className="flex-1 py-2 rounded-md text-[12px] font-bold border" style={!fullEval ? { background: INK, color: "white", borderColor: INK } : { background: "white", color: INK, borderColor: "#C9C6BC" }}>Refresher<div className="text-[10px] font-normal">Online only</div></button>
+                </div>
+              </div>
+            )}
             <div className="flex items-center gap-2 mb-3 text-[12px]">
               <span style={{ color: STEEL }}>Complete within</span>
               <input type="number" min="1" value={dueN} onChange={(e) => setDueN(e.target.value)} placeholder="–" className="w-16 rounded-md border px-2 py-1.5 text-[13px]" style={{ borderColor: "#C9C6BC" }} />
@@ -8545,7 +8802,24 @@ function ManageTrainingScreen({ user }) {
             const active = assignees.filter((a) => !isDone(a));
             const done = assignees.filter(isDone);
             const card = (a) => (
-              <AssigneeCard key={a.personnel_id} a={a} onUnassign={unassign} onUnlock={unlockExam} onRetrain={retrainPerson} onViewCert={setCertView} onViewExam={setExamReviewId} />
+              <div key={a.personnel_id}>
+                <AssigneeCard a={a} onUnassign={unassign} onUnlock={unlockExam} onRetrain={retrainPerson} onViewCert={setCertView} onViewExam={setExamReviewId} />
+                {pracCourses[openCourseId] && (() => {
+                  const ps = pracStatus[a.personnel_id] || {};
+                  const state = !ps.practical_required ? "Refresher (online only)" : ps.last_result === "pass" ? "Part 2 passed" : !ps.part1_done ? "Part 2 after Part 1" : ps.last_result === "needs_improvement" ? "Part 2: needs improvement" : "Part 2 waiting";
+                  const ready = ps.practical_required && ps.part1_done && ps.last_result !== "pass";
+                  return (
+                    <div className="flex items-center justify-between gap-2 -mt-1 mb-2 px-3 py-1.5 rounded-b-md text-[11px]" style={{ background: "#FFFBEA", border: "1px solid #E4E2DA", borderTop: "none" }}>
+                      <span style={{ color: INK }}><b>Hands-on:</b> {state}{ps.last_by ? ` · ${ps.last_by}` : ""}</span>
+                      <span className="flex items-center gap-2 flex-shrink-0">
+                        {ps.last_pdf && <a href={ps.last_pdf} target="_blank" rel="noreferrer" className="underline" style={{ color: STEEL }}>Checklist</a>}
+                        {ready && <button onClick={() => setEvalTarget({ personnel_id: a.personnel_id, person_name: a.name, course_id: openCourseId, course_title: openCourseMeta?.title })} className="font-bold uppercase px-2 py-1 rounded-sm" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>Evaluate</button>}
+                        <button onClick={() => setPractical(a.personnel_id, !ps.practical_required)} className="underline" style={{ color: STEEL }}>{ps.practical_required ? "Make refresher" : "Require hands-on"}</button>
+                      </span>
+                    </div>
+                  );
+                })()}
+              </div>
             );
             return (
               <>
@@ -8563,6 +8837,7 @@ function ManageTrainingScreen({ user }) {
         </div>
         {examReviewId && <ExamReviewModal user={user} examAttemptId={examReviewId} onClose={() => setExamReviewId(null)} />}
         {certView && <CertificateModal cert={certView} onClose={() => setCertView(null)} />}
+        {evalTarget && <PracticalEvalModal user={user} projectName={projectName} target={evalTarget} onClose={() => setEvalTarget(null)} onDone={(r) => { setEvalTarget(null); setAdminMsg(r === "pass" ? `${evalTarget.person_name} passed the hands-on evaluation. Certificate issued.` : `${evalTarget.person_name}: needs improvement. Saved; evaluate again when ready.`); loadAssignees(openCourseId); load(); }} />}
       </div>
     );
   }
@@ -8573,6 +8848,24 @@ function ManageTrainingScreen({ user }) {
         Every training course, who it's assigned to, and who's completed it. Tap a course to manage assignments.
       </div>
       {loading && <div className="text-[12px] mb-2" style={{ color: STEEL }}>Loading…</div>}
+      {pracQueue.length > 0 && (
+        <div className="bg-white rounded-md border p-3 mb-4" style={{ borderColor: GOLD }}>
+          <div className="text-[11px] uppercase font-bold mb-1" style={{ color: INK, fontFamily: "IBM Plex Mono, monospace" }}>Waiting on hands-on evaluation ({pracQueue.length})</div>
+          <div className="text-[11px] mb-2" style={{ color: STEEL }}>These people finished the online part. Do the drive with them, then tap Evaluate to fill in the checklist.</div>
+          <div className="space-y-1.5">
+            {pracQueue.map((q) => (
+              <div key={`${q.personnel_id}|${q.course_id}`} className="flex items-center justify-between gap-2 text-[13px]">
+                <div className="min-w-0">
+                  <div className="truncate">{q.person_name} <span className="text-[11px]" style={{ color: STEEL }}>{q.employer || ""}</span></div>
+                  <div className="text-[10px]" style={{ color: q.last_result === "needs_improvement" ? ALERT : STEEL }}>{q.course_title}{q.last_result === "needs_improvement" ? " · needs improvement, re-evaluate" : ""}</div>
+                </div>
+                <button onClick={() => setEvalTarget(q)} className="flex-shrink-0 text-[11px] font-bold uppercase px-2.5 py-1.5 rounded-sm" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>Evaluate</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {evalTarget && <PracticalEvalModal user={user} projectName={projectName} target={evalTarget} onClose={() => setEvalTarget(null)} onDone={(r) => { setEvalTarget(null); setAdminMsg(r === "pass" ? "Passed. Certificate issued." : "Saved as needs improvement."); load(); }} />}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
         {courses.map((c) => (
           <button key={c.id} onClick={() => openCourse(c.id)} className="text-left bg-white rounded-md p-4 border" style={{ borderColor: "#E4E2DA" }}>
