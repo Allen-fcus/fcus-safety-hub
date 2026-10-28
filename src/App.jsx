@@ -2853,7 +2853,7 @@ function SrEmailPanel({ detail, data, pdfUrl, projectName, notifyEmail, userName
     ...media.map((p, i) => `${/^video\//.test(p.type || "") || /\.(mp4|mov|m4v|webm)$/i.test(p.name || "") ? "Video" : "Photo"} ${i + 1}: ${p.url}`),
     "", "Thank you,", userName || "",
   ].filter((l, i, arr) => !(l === "" && arr[i - 1] === ""));
-  const href = `mailto:${to.join(",")}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.join("\n"))}`;
+  const href = `mailto:${to.join(";%20")}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.join("\n"))}`;
   const fetchFile = async (url, name, type) => new File([await (await fetch(url)).blob()], name, { type });
   const share = async () => {
     setBusy(true); setNote("");
@@ -2864,7 +2864,7 @@ function SrEmailPanel({ detail, data, pdfUrl, projectName, notifyEmail, userName
       for (const [i, p] of media.entries()) { try { files.push(await fetchFile(p.url, p.name || `media-${i + 1}`, p.type || "application/octet-stream")); } catch (e) { /* skip */ } }
       if (!(navigator.canShare && navigator.canShare({ files }))) files = [pdf];
       if (!(navigator.canShare && navigator.canShare({ files }))) { setNote("This device can't attach files from here. Use Download PDF and attach it in your email."); setBusy(false); return; }
-      await navigator.share({ files, title: subject, text: `${subject}\n\nSend to: ${to.join(", ")}` });
+      await navigator.share({ files, title: subject, text: `${subject}\n\nSend to: ${to.join("; ")}` });
     } catch (e) { if (!e || e.name !== "AbortError") setNote("Couldn't open the share sheet. Use Download PDF and attach it in your email."); }
     setBusy(false);
   };
@@ -2872,7 +2872,7 @@ function SrEmailPanel({ detail, data, pdfUrl, projectName, notifyEmail, userName
   return (
     <div className="mt-4 rounded-md border p-3" style={{ borderColor: GOLD, background: "#FFFBEA" }}>
       <div className="text-[11px] uppercase font-bold mb-1" style={{ color: INK, ...mono }}>Send this report</div>
-      <div className="text-[11px] mb-2" style={{ color: STEEL }}>To: {to.join(", ")}</div>
+      <div className="text-[11px] mb-2" style={{ color: STEEL }}>To: {to.join("; ")}</div>
       <div className="flex flex-wrap gap-2">
         <a href={href} className="flex-1 text-center text-[11px] font-bold uppercase py-2.5 rounded-sm" style={{ background: GOLD, color: INK, ...mono }}>Open email</a>
         <button disabled={busy} onClick={share} className="flex-1 text-[11px] font-bold uppercase py-2.5 rounded-sm border disabled:opacity-50" style={{ borderColor: "#C9C6BC", color: INK, ...mono }}>{busy ? "Preparing…" : "Share PDF + media (attach)"}</button>
