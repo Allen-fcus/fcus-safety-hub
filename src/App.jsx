@@ -11600,7 +11600,7 @@ const HAZARD_LIBRARY = {
   "Impalement risk must be eliminated or otherwise protected to reduce the hazard (Rebar/Carney Cap)"
  ],
  "Lifting operation": [
-  "All crane(s) have been checked in by the project Safety Department",
+  "All crane(s) have been checked in by the safety department",
   "All rigging equipment must be inspected by designated competent person",
   "Critical Lift Plan required when lift exceeds 75% of crane capacity",
   "Damage/Defective/shock loaded rigging equipment to be removed from service, report to supervisor",
