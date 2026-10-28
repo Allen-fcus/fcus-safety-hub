@@ -1902,7 +1902,11 @@ function srReg(slug) {
     ? { short: "TOSHA", name: "Tennessee Occupational Safety and Health Administration (TOSHA)", state: "TN", plan: "TOSHA (Tennessee state plan)" }
     : { short: "OSHA", name: "OSHA", state: "TX", plan: "OSHA" };
 }
-const SR_AREAS = { "nti-sylvania": SR_L.area, "nti-golden-triangle": SR_L.area, "sh99-houston": ["FCW99", "Off Site"], "nashville": ["FCW24", "Off Site"] };
+const SR_NEW_AREAS = ["NTI- CI 1&2 CO- CEC24", "NTI- Sylvania- CEC22"];
+// older cases saved the previous names; they read as the new ones
+const SR_AREA_LEGACY = { "3C Sylvania": "NTI- Sylvania- CEC22", "CI- Seg. 1&2 CO": "NTI- CI 1&2 CO- CEC24", "CI-Seg. 1&2 CO": "NTI- CI 1&2 CO- CEC24" };
+const srAreaNorm = (a) => SR_AREA_LEGACY[String(a || "").trim()] || a || "";
+const SR_AREAS = { "nti-sylvania": SR_NEW_AREAS, "nti-golden-triangle": SR_NEW_AREAS, "sh99-houston": ["FCW99", "Off Site"], "nashville": ["FCW24", "Off Site"] };
 const SR_COORDINATORS = { "nti-sylvania": SR_L.coordinator };
 const SR_RISK_CLASS = ["Minor (Not worthy but with less consequences)", "Moderate (Potential for event that cause short-term harm)", "Serious (Intense harm or loss with disabling and/or long-term consequences)", "Potential Fatal (Life threatening and deadly condition)"];
 // Opening a report or form should always start at the top, not where the last screen was scrolled to.
@@ -2338,7 +2342,7 @@ function srDefaults(type, ctx) {
   return d;
 }
 function srDefaultsBase(type, ctx) {
-  const c = ctx.caseRow || {};
+  const c = { ...(ctx.caseRow || {}) }; c.area = srAreaNorm(c.area);
   const yesNo = (v) => (v === true ? "Yes" : v === false ? "No" : "");
   if (type === "incident_report") return {
     date: c.incident_date ? String(c.incident_date).slice(0, 10) : todayISO(), time: c.incident_time || "", where: c.area || "", type: c.incident_type || "",
@@ -2894,6 +2898,9 @@ function SrFormView({ user, activeProjectId, projectName, detail, form, type, at
   const [data, setData] = useState(() => {
     if (!form) return srDefaults(type, ctx);
     const d = { ...form.data };
+    // the location always follows the case as it is now (e.g. changed to "CI- Seg. 1&2 CO" on the Incident Report)
+    const cur = srDefaultsBase(type, ctx);
+    ["where", "location", "siteLocation", "area"].forEach((x) => { if (cur[x] != null && String(cur[x]).trim()) d[x] = cur[x]; });
     // a draft started before the incident description existed picks it up when still empty
     const k = srDescKey(type);
     if (form.status !== "submitted" && k && !String(d[k] || "").trim()) { const t = srIncidentDescription(detail); if (t) d[k] = t; }
@@ -3331,7 +3338,7 @@ function SrCaseView({ user, activeProjectId, projectName, caseId, onBack, onOpen
           <div><label className="text-[10px] uppercase font-bold" style={lab}>Date</label><input type="date" value={cls.incident_date || ""} onChange={(e) => setCls({ ...cls, incident_date: e.target.value })} className={inp} style={bd} /></div>
           <div><label className="text-[10px] uppercase font-bold" style={lab}>Time</label><input type="time" value={cls.incident_time || ""} onChange={(e) => setCls({ ...cls, incident_time: e.target.value })} className={inp} style={bd} /></div>
           <div><label className="text-[10px] uppercase font-bold" style={lab}>Where</label>
-            <select value={cls.area || ""} onChange={(e) => setCls({ ...cls, area: e.target.value })} className={inp} style={bd}><option value="">Select…</option>{areas.map((a) => <option key={a} value={a}>{a}</option>)}{cls.area && !areas.includes(cls.area) && <option value={cls.area}>{cls.area}</option>}</select></div>
+            <select value={srAreaNorm(cls.area)} onChange={(e) => setCls({ ...cls, area: e.target.value })} className={inp} style={bd}><option value="">Select…</option>{areas.map((a) => <option key={a} value={a}>{a}</option>)}{cls.area && !areas.includes(cls.area) && <option value={cls.area}>{cls.area}</option>}</select></div>
           <div><label className="text-[10px] uppercase font-bold" style={lab}>Type of incident</label>
             <select value={cls.incident_type || ""} onChange={(e) => { const v = e.target.value; setCls((c) => ({ ...c, incident_type: v, ...srFlagsForType(v) })); }} className={inp} style={bd}><option value="">Select…</option>{SR_TYPES.map((a) => <option key={a} value={a}>{a}</option>)}</select></div>
         </div>
