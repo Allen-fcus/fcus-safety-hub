@@ -7607,6 +7607,52 @@ function CertificateList({ certs, onView }) {
   );
 }
 
+// Certification records grouped by course, with search + status filter
+function CertRecords({ certs, onView }) {
+  const [q, setQ] = useState("");
+  const [status, setStatus] = useState("all");
+  const [open, setOpen] = useState({});
+  const mono = { fontFamily: "IBM Plex Mono, monospace" };
+  const term = q.trim().toLowerCase();
+  const filtered = certs.filter((c) => {
+    if (status !== "all" && (c.status || "current") !== status) return false;
+    if (!term) return true;
+    return [c.person_name, c.employer, c.course_title, c.cert_label].some((v) => String(v || "").toLowerCase().includes(term));
+  });
+  const groups = {};
+  filtered.forEach((c) => { (groups[c.course_title || "Other"] = groups[c.course_title || "Other"] || []).push(c); });
+  const names = Object.keys(groups).sort((a, b) => a.localeCompare(b));
+  names.forEach((n) => groups[n].sort((a, b) => String(a.person_name || "").localeCompare(String(b.person_name || ""))));
+  const statuses = ["all", ...Array.from(new Set(certs.map((c) => c.status || "current")))];
+  return (
+    <div>
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, company or course" className="w-full rounded-md border px-3 py-2 text-[13px] bg-white mb-2" style={{ borderColor: "#C9C6BC" }} />
+      <div className="flex flex-wrap gap-1.5 mb-3">
+        {statuses.map((st) => (
+          <button key={st} onClick={() => setStatus(st)} className="text-[10px] font-bold uppercase px-2.5 py-1.5 rounded-sm border" style={status === st ? { background: INK, color: "white", borderColor: INK, ...mono } : { background: "white", color: INK, borderColor: "#C9C6BC", ...mono }}>{st === "all" ? "All" : (CERT_STATUS[st] || {}).label || st}</button>
+        ))}
+      </div>
+      {names.length === 0 && <div className="text-[12px]" style={{ color: STEEL }}>No records match.</div>}
+      <div className="space-y-2">
+        {names.map((n) => {
+          const isOpen = term ? true : !!open[n];
+          const list = groups[n];
+          const bad = list.filter((c) => (c.status || "current") !== "current").length;
+          return (
+            <div key={n} className="bg-white rounded-md border overflow-hidden" style={{ borderColor: "#E4E2DA" }}>
+              <button onClick={() => setOpen((o) => ({ ...o, [n]: !o[n] }))} className="w-full flex items-center justify-between gap-2 p-3 text-left">
+                <span className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{n}</span>
+                <span className="text-[11px] flex-shrink-0" style={{ color: STEEL }}>{list.length} record{list.length === 1 ? "" : "s"}{bad ? ` · ${bad} not current` : ""} {isOpen ? "▲" : "▼"}</span>
+              </button>
+              {isOpen && <div className="p-2 border-t" style={{ borderColor: "#E4E2DA" }}><CertificateList certs={list} onView={onView} /></div>}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ---- Admin: per-person training detail, test answer review, certificates ----
 function fmtDT(ts) {
   if (!ts) return "—";
@@ -8951,7 +8997,7 @@ function ManageTrainingScreen({ user }) {
           <div className="text-[11px] uppercase font-bold mt-5 mb-2" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>
             Certification Records ({allCerts.length})
           </div>
-          <CertificateList certs={allCerts} onView={setCertView} />
+          <CertRecords certs={allCerts} onView={setCertView} />
         </>
       )}
       {certView && <CertificateModal cert={certView} onClose={() => setCertView(null)} />}
