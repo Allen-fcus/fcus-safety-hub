@@ -1930,6 +1930,7 @@ function srScrollToTop() {
   } catch (e) { /* ignore */ }
 }
 // These four people always receive every submitted Incident Report, plus the segment and project managers named on it.
+const SR_SIR_RECIPIENTS = ["kfreeman@ferrovial.us", "jquinn@ferrovial.us", "mmaldonado@ferrovial.us"];
 const SR_INCIDENT_RECIPIENTS = ["Pvares@ferrovial.us", "jquinn@ferrovial.us", "agarcia@ferrovial.us", "dherd@ferrovial.us"];
 const SR_VIDEO_MAX_MB = 50; // Supabase Storage per-file limit on the standard plan
 const SR_TYPES = [...SR_L.type, "Near Miss - HiPo", "HiPo", "Injury / Illness", "Property Damage", "Other"];
@@ -2848,17 +2849,30 @@ function SrFormFields({ schema, data, setData, readOnly }) {
 // ---------- one form on a case ----------
 // After an Incident Report is submitted: open the user's own email app with everything filled in
 // (To = the four standing recipients + the managers named on the report), and share the PDF / photos / videos as real attachments from a phone.
-function SrEmailPanel({ detail, data, pdfUrl, projectName, notifyEmail, userName, makePdf }) {
+function SrEmailPanel({ kind = "incident_report", detail, data, pdfUrl, projectName, notifyEmail, userName, makePdf }) {
+  const isSir = kind === "sir";
+  const title = isSir ? "SIR" : "Incident Report";
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
   const seen = new Set();
-  const to = [...SR_INCIDENT_RECIPIENTS, data.segmentMgrEmail, data.projectMgrEmail, notifyEmail]
+  const to = (isSir ? SR_SIR_RECIPIENTS : [...SR_INCIDENT_RECIPIENTS, data.segmentMgrEmail, data.projectMgrEmail, notifyEmail])
     .map((x) => String(x || "").trim()).filter((x) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x))
     .filter((x) => { const k = x.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
   const media = [...(Array.isArray(data.photos) ? data.photos : []), ...(Array.isArray(data.videos) ? data.videos : [])];
-  const subject = `Incident Report - ${detail.case_number}${detail.title ? " - " + detail.title : ""}`;
+  const subject = `${title} - ${detail.case_number}${detail.title ? " - " + detail.title : ""}`;
   const desc = String(data.description || "").trim();
-  const lines = [
+  const sirLines = [
+    "Serious Incident Report (SIR)", projectName ? `Project: ${String(projectName).split(/\s+-\s+/).pop()}` : "",
+    `Case: ${detail.case_number}`, `Report type: ${data.reportType || "-"}`, data.contract ? `Company - contract: ${data.contract}` : "",
+    `Date / time: ${[data.date, data.time].filter(Boolean).join(" ") || "-"}`, `Location: ${data.location || "-"}`,
+    data.incidentLevel ? `Type of incident: ${data.incidentLevel}` : "", data.riskClass ? `Classification of risk: ${data.riskClass}` : "",
+    data.injClass ? `Incident classification: ${data.injClass}` : "", "",
+    desc ? "Description: " + (desc.length > 600 ? desc.slice(0, 600) + "..." : desc) : "", "",
+    pdfUrl ? `SIR (PDF): ${pdfUrl}` : "The SIR PDF is attached.",
+    ...media.map((p, i) => `${/^video\//.test(p.type || "") || /\.(mp4|mov|m4v|webm)$/i.test(p.name || "") ? "Video" : "Photo"} ${i + 1}: ${p.url}`),
+    "", "Thank you,", userName || "",
+  ];
+  const lines = isSir ? sirLines.filter((l, i, arr) => !(l === "" && arr[i - 1] === "")) : [
     "Incident Report", projectName ? `Project: ${String(projectName).split(/\s+-\s+/).pop()}` : "",
     `Case: ${detail.case_number}`, `Event: ${data.type || "-"}`, `Date / time: ${[data.date, data.time].filter(Boolean).join(" ") || "-"}`,
     `Where: ${[data.where, data.location].filter(Boolean).join(" - ") || "-"}`,
@@ -2875,8 +2889,8 @@ function SrEmailPanel({ detail, data, pdfUrl, projectName, notifyEmail, userName
   const share = async () => {
     setBusy(true); setNote("");
     try {
-      const pdf = pdfUrl ? await fetchFile(pdfUrl, `${safeFile(detail.case_number)}-incident-report.pdf`, "application/pdf")
-        : new File([await makePdf()], `${safeFile(detail.case_number)}-incident-report.pdf`, { type: "application/pdf" });
+      const pdf = pdfUrl ? await fetchFile(pdfUrl, `${safeFile(detail.case_number)}-${isSir ? "sir" : "incident-report"}.pdf`, "application/pdf")
+        : new File([await makePdf()], `${safeFile(detail.case_number)}-${isSir ? "sir" : "incident-report"}.pdf`, { type: "application/pdf" });
       let files = [pdf];
       for (const [i, p] of media.entries()) { try { files.push(await fetchFile(p.url, p.name || `media-${i + 1}`, p.type || "application/octet-stream")); } catch (e) { /* skip */ } }
       if (!(navigator.canShare && navigator.canShare({ files }))) files = [pdf];
@@ -2897,7 +2911,7 @@ function SrEmailPanel({ detail, data, pdfUrl, projectName, notifyEmail, userName
       <div className="text-[10px] mt-2 leading-snug" style={{ color: STEEL }}>
         "Open email" fills in the recipients, subject and message, with links to the PDF{media.length ? ", photos and videos" : ""}. Email apps can't attach files on their own, so on a phone use "Share PDF + media" to attach them, then choose your email app. On a computer, use Download PDF and attach it.
       </div>
-      {!(data.segmentMgrEmail || data.projectMgrEmail) && <div className="text-[10px] mt-1" style={{ color: "#7A5B00" }}>No segment or project manager email is on this report, so only the standing recipients are listed. Add them on the form and save to include them.</div>}
+      {!isSir && !(data.segmentMgrEmail || data.projectMgrEmail) && <div className="text-[10px] mt-1" style={{ color: "#7A5B00" }}>No segment or project manager email is on this report, so only the standing recipients are listed. Add them on the form and save to include them.</div>}
       {note && <div className="text-[11px] mt-1" style={{ color: ALERT }}>{note}</div>}
     </div>
   );
@@ -3007,7 +3021,7 @@ function SrFormView({ user, activeProjectId, projectName, detail, form, type, at
         {readOnly && <button onClick={reopen} className="flex-1 text-[11px] font-bold uppercase py-2.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, ...SR_MONO }}>Reopen to edit</button>}
         <button disabled={busy} onClick={download} className="flex-1 flex items-center justify-center gap-1 text-[11px] font-bold uppercase py-2.5 rounded-sm disabled:opacity-50" style={{ background: INK, color: "white", ...SR_MONO }}><Download size={13} /> PDF</button>
       </div>
-      {type === "incident_report" && status === "submitted" && <SrEmailPanel detail={detail} data={data} pdfUrl={pdfUrl} projectName={projectName} notifyEmail={notifyEmail} userName={user.name} makePdf={makePdf} />}
+      {(type === "incident_report" || type === "sir") && status === "submitted" && <SrEmailPanel kind={type} detail={detail} data={data} pdfUrl={pdfUrl} projectName={projectName} notifyEmail={notifyEmail} userName={user.name} makePdf={makePdf} />}
       {pdfUrl && <a href={pdfUrl} target="_blank" rel="noreferrer" className="block text-center text-[11px] mt-3 underline" style={{ color: STEEL }}>Open the filed copy</a>}
     </div>
   );
