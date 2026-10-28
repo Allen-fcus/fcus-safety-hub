@@ -5702,7 +5702,7 @@ function ReportConcernScreen({ onSubmit }) {
 // ---- Screen: Safety Manual ----
 // H&S Minimum Standards is the same document company-wide, shared across every project.
 const HS_STANDARDS_DOCS = [
-  { language: "English", title: "H&S Minimum Standards", pages: 38, link: "https://drive.google.com/file/d/1OF9Es0Q0Vy-tkE1UNe3zSptsxbDGHEth/preview" },
+  { language: "English", title: "H&S Minimum Standards (US Ed. 6.0, Oct 2026)", pages: 40, link: "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/fc-hs-minimum-standards-eng-ed6.pdf" },
   { language: "Spanish", title: "Estándares Mínimos de Seguridad y Salud", pages: 38, link: "https://drive.google.com/file/d/1uuTyfamCzU4GW2lvhGD6fmA8Q-_luEkH/preview" },
 ];
 // The Safety Plan itself is project-specific — each project's fallback is set in PROJECTS below.
