@@ -13619,8 +13619,8 @@ function FormsScreen({ user, go, activeProjectId }) {
               My Submissions
             </button>
           )}
-          {user && (user.canAddPersonnel || isStaffViewer(user, activeProjectId)) && (
-            <button onClick={() => go("managesubmittedforms")} className="text-[10px] font-bold uppercase px-2 py-1 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>
+          {user && user.sessionToken && (
+            <button onClick={() => go(user.canAddPersonnel || isStaffViewer(user, activeProjectId) ? "managesubmittedforms" : "submittedforms")} className="text-[10px] font-bold uppercase px-2 py-1 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>
               Submissions
             </button>
           )}
@@ -19672,7 +19672,7 @@ function TruckDriverVerifyScreen() {
 // reporting, and the Labor Law QR code that anyone can scan).
 const ALWAYS_PUBLIC_SCREENS = ["emergency", "concern", "laborlaws", "trafficcontrol", "meetingsignin", "orientationsignin", "hsstandards", "orientationschedule", "verifybadge", "truckdriver", "verifytruckdriver"];
 // Normally-gated screens for every project.
-const BASE_GATED_SCREENS = ["forms", "safetyplan", "toolbox", "reports", "workplans", "mysubmissions", "quarterlymysubmissions", "summarymysubmissions", "preconsubmissions", "preconstruction", "quarterlymonthly", "training", "meetings", "safetyreports"];
+const BASE_GATED_SCREENS = ["forms", "safetyplan", "toolbox", "reports", "workplans", "mysubmissions", "submittedforms", "quarterlymysubmissions", "summarymysubmissions", "preconsubmissions", "preconstruction", "quarterlymonthly", "training", "meetings", "safetyreports"];
 // Projects where EVERYTHING (except the always-public screens above)
 // requires a badge — including Home itself.
 const FULLY_GATED_PROJECTS = ["sh99-houston"];
@@ -19932,6 +19932,7 @@ export default function SafetyHubPrototype() {
     manageemergency: "Manage Emergency Contacts",
     manageweeklyreport: "Manage Weekly Report",
     managesubmittedforms: "Submitted Forms",
+    submittedforms: "Submissions",
     mysubmissions: "My Submissions",
     truckdriver: "Truck Driver Onboarding",
     managetruckdrivers: "Truck Drivers",
@@ -20157,7 +20158,7 @@ export default function SafetyHubPrototype() {
             {screen === "training" && <TrainingScreen user={user} go={go} />}
             {screen === "managetraining" && <ManageTrainingScreen user={user} />}
             {screen === "mysubmissions" && <MySubmissionsScreen user={user} />}
-            {screen === "managesubmittedforms" && <SubmittedFormsScreen user={user} />}
+            {(screen === "managesubmittedforms" || screen === "submittedforms") && <SubmittedFormsScreen user={user} />}
             {screen === "personnel" && <PersonnelScreen user={user} go={go} />}
             {screen === "addperson" && <AddPersonScreen user={user} onDone={() => go("personnel")} />}
             {screen === "manageroster" && <ManageRosterScreen user={user} onSwitchProject={handleSwitchProject} />}
