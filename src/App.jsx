@@ -54,7 +54,7 @@ async function sendFormEmail({ toEmail, formTitle, fieldsText, submittedBy, proj
         template_id: EMAILJS_TEMPLATE_ID,
         user_id: EMAILJS_PUBLIC_KEY,
         template_params: {
-          to_email: toEmail,
+          to_email: joinAddrs(toEmail, ", "),
           form_title: formTitle,
           submitted_by: submittedBy,
           project_name: projectName,
@@ -8288,10 +8288,12 @@ const dueDateFrom = (n, unit) => {
   return d.toISOString().slice(0, 10);
 };
 const prettyDate = (iso) => { try { return new Date(iso + "T12:00:00").toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }); } catch (e) { return iso; } };
+// Splits any mix of commas / semicolons / spaces and rejoins as "a@x.com; b@y.com" so Outlook reads each address as its own name.
+const joinAddrs = (v, sep = "; ") => String(v || "").split(/[\s,;]+/).map((x) => x.trim()).filter((x) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x)).join(sep);
 function trainingMailto({ person, contact, course, kind, dueISO, expiresISO, adminName, projectName, slug }) {
   const link = `${window.location.origin}${window.location.pathname}?project=${slug}&screen=training`;
-  const to = (contact && contact.email) || "";
-  const cc = (contact && contact.manager_email) || "";
+  const to = joinAddrs(contact && contact.email);
+  const cc = joinAddrs(contact && contact.manager_email);
   const first = (person.name || "").split(" ")[0] || "there";
   const mgr = (contact && contact.manager_name) || "";
   let subject, lines;
@@ -8320,8 +8322,8 @@ function trainingMailto({ person, contact, course, kind, dueISO, expiresISO, adm
   if (mgr) lines.push("", `${mgr} is copied on this message.`);
   lines.push("", "Thank you,", adminName || "Safety");
   const q = [`subject=${encodeURIComponent(subject)}`, `body=${encodeURIComponent(lines.join("\n"))}`];
-  if (cc) q.unshift(`cc=${encodeURIComponent(cc)}`);
-  return `mailto:${to}?${q.join("&")}`;
+  if (cc) q.unshift(`cc=${cc.split("; ").join(";%20")}`);
+  return `mailto:${to.split("; ").join(";%20")}?${q.join("&")}`;
 }
 
 function ManageTrainingScreen({ user }) {
