@@ -7728,7 +7728,7 @@ function ExamReviewModal({ user, examAttemptId, onClose }) {
   );
 }
 
-function AssigneeCard({ a, onUnassign, onUnlock, onRetrain, onViewCert, onViewExam }) {
+function AssigneeCard({ a, steps, onUnassign, onUnlock, onRetrain, onViewCert, onViewExam }) {
   const [open, setOpen] = useState(false);
   const att = a.attempt;
   const exam = a.exam || {};
@@ -7758,7 +7758,7 @@ function AssigneeCard({ a, onUnassign, onUnlock, onRetrain, onViewCert, onViewEx
 
       <div className="mt-2">
         <div className="flex items-center justify-between text-[10px] mb-0.5" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>
-          <span>{att ? `Step ${Math.min((att.current_step_index || 0) + (att.status === "completed" ? 0 : 1), att.step_count)} of ${att.step_count}` : "Not started"}</span>
+          <span>{!att ? "Not started" : att.status === "completed" ? `All ${att.step_count} steps done` : (att.current_step_index || 0) >= att.step_count ? `All ${att.step_count} steps done, not finished yet` : `Step ${(att.current_step_index || 0) + 1} of ${att.step_count}${(steps || [])[att.current_step_index || 0]?.title ? ` · ${steps[att.current_step_index || 0].title}` : ""}`}</span>
           <span>{pct}%</span>
         </div>
         <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "#E4E2DA" }}>
@@ -8708,7 +8708,7 @@ function TrainingProgressTracker({ rows, onOpenCourse }) {
                   <div className="h-full" style={{ width: `${r.progress_pct || 0}%`, background: r.state === "complete" ? "#1E7A34" : GOLD }} />
                 </div>
                 <div className="text-[10px] mt-1" style={{ color: STEEL }}>
-                  {r.state === "in_progress" ? `Step ${Math.min((r.current_step_index || 0) + 1, r.step_count)} of ${r.step_count} · ` : ""}
+                  {r.state === "in_progress" ? ((r.current_step_index || 0) >= r.step_count ? "All steps done, not finished · " : `Step ${(r.current_step_index || 0) + 1} of ${r.step_count} · `) : ""}
                   {r.needTest ? "Written test not passed · " : ""}{r.needHands ? "Hands-on pending · " : ""}
                   {r.state === "not_started" ? `Assigned ${fmtCertDate(r.assigned_at)}` : r.state === "complete" ? `Finished ${fmtCertDate(r.completed_at)}` : `Last activity ${r.idleDays == null ? "none yet" : r.idleDays === 0 ? "today" : r.idleDays + " day(s) ago"}`}
                   {r.due_at ? ` · Due ${fmtCertDate(r.due_at)}` : ""}
@@ -8747,6 +8747,8 @@ function ManageTrainingScreen({ user }) {
   const [showDone, setShowDone] = useState(false);
   const [pracQueue, setPracQueue] = useState([]);
   const [progressRows, setProgressRows] = useState([]);
+  const [courseSteps, setCourseSteps] = useState([]);
+  const [refreshedAt, setRefreshedAt] = useState(null);
   const [pracCourses, setPracCourses] = useState({}); // course_id -> true when it has a hands-on part
   const [pracStatus, setPracStatus] = useState({});   // personnel_id -> status for the open course
   const [evalTarget, setEvalTarget] = useState(null);
@@ -8777,6 +8779,8 @@ function ManageTrainingScreen({ user }) {
   const loadAssignees = async (courseId) => {
     const { data, error } = await supabase.rpc("list_training_overview_admin", { p_token: user.sessionToken, p_course_id: courseId });
     setAssignees(error || !data ? [] : data);
+    supabase.rpc("get_training_course", { p_token: user.sessionToken, p_course_id: courseId }).then((r) => setCourseSteps(Array.isArray(r.data?.steps) ? r.data.steps : []));
+    setRefreshedAt(new Date());
     const ps = await supabase.rpc("list_practical_status_admin", { p_token: user.sessionToken, p_course_id: courseId });
     const m = {}; (Array.isArray(ps.data) ? ps.data : []).forEach((r) => { m[r.personnel_id] = r; }); setPracStatus(m);
   };
@@ -8839,13 +8843,23 @@ function ManageTrainingScreen({ user }) {
 
   const filteredRoster = roster.filter((p) => !search || p.name.toLowerCase().includes(search.toLowerCase()));
   const openCourseMeta = courses.find((c) => c.id === openCourseId);
+  useEffect(() => {
+    if (!openCourseId) return;
+    const t = setInterval(() => { if (!document.hidden) loadAssignees(openCourseId); }, 30000);
+    return () => clearInterval(t);
+  }, [openCourseId]);
 
   if (openCourseId) {
     return (
       <div className="px-4 pt-4 pb-8" style={{ background: "#F4F3EF", minHeight: "100%" }}>
-        <button onClick={() => setOpenCourseId(null)} className="text-[11px] font-bold uppercase mb-3" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>
+        <div className="flex items-center justify-between mb-3">
+        <button onClick={() => { setOpenCourseId(null); load(); }} className="text-[11px] font-bold uppercase" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>
           ← All Courses
         </button>
+        <button onClick={() => loadAssignees(openCourseId)} className="text-[10px] font-bold uppercase px-2 py-1 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>
+          Refresh{refreshedAt ? ` · ${refreshedAt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` : ""}
+        </button>
+        </div>
         <div className="text-[15px] mb-1" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{openCourseMeta?.title}</div>
         <div className="text-[11px] mb-4" style={{ color: STEEL }}>{openCourseMeta?.assigned_count} assigned · {openCourseMeta?.completed_count} completed</div>
 
@@ -8932,7 +8946,7 @@ function ManageTrainingScreen({ user }) {
             const done = assignees.filter(isDone);
             const card = (a) => (
               <div key={a.personnel_id}>
-                <AssigneeCard a={a} onUnassign={unassign} onUnlock={unlockExam} onRetrain={retrainPerson} onViewCert={setCertView} onViewExam={setExamReviewId} />
+                <AssigneeCard a={a} steps={courseSteps} onUnassign={unassign} onUnlock={unlockExam} onRetrain={retrainPerson} onViewCert={setCertView} onViewExam={setExamReviewId} />
                 {pracCourses[openCourseId] && (() => {
                   const ps = pracStatus[a.personnel_id] || {};
                   const state = !ps.practical_required ? "Refresher (online only)" : ps.last_result === "pass" ? "Part 2 passed" : !ps.part1_done ? "Part 2 after Part 1" : ps.last_result === "needs_improvement" ? "Part 2: needs improvement" : "Part 2 waiting";
