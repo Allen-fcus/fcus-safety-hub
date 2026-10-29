@@ -5782,7 +5782,7 @@ function HSStandardsScreen({ user, activeProjectId }) {
       </div>
       {doc.link ? (
         <div className="flex-1 rounded-md overflow-hidden border" style={{ borderColor: "#E4E2DA", minHeight: 500 }}>
-          <iframe src={doc.link} className="w-full h-full" style={{ border: "none", minHeight: 500 }} title={doc.title} />
+          <iframe src={/supabase\.co\/storage.*\.pdf$/i.test(doc.link) ? `https://docs.google.com/viewer?embedded=true&url=${encodeURIComponent(doc.link)}` : doc.link} className="w-full h-full" style={{ border: "none", minHeight: 500 }} title={doc.title} />
         </div>
       ) : (
         <div className="flex-1 flex items-center justify-center py-12" style={{ color: STEEL }}>No document set up yet.</div>
