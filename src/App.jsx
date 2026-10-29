@@ -8642,6 +8642,87 @@ function PracticalEvalModal({ user, projectName, target, onClose, onDone }) {
   );
 }
 
+// Cross-course progress tracker for the training manager
+function TrainingProgressTracker({ rows, onOpenCourse }) {
+  const [filter, setFilter] = useState("all");
+  const [q, setQ] = useState("");
+  const [show, setShow] = useState(false);
+  const mono = { fontFamily: "IBM Plex Mono, monospace" };
+  const todayISO = new Date().toISOString().slice(0, 10);
+  const daysAgo = (ts) => (ts ? Math.floor((Date.now() - new Date(ts).getTime()) / 86400000) : null);
+  const list = rows.map((r) => {
+    const p1 = r.attempt_status === "completed";
+    const needTest = p1 && r.has_exam && !r.exam_passed;
+    const needHands = p1 && !needTest && r.practical_required && !r.practical_passed;
+    let state = "not_started";
+    if (p1 && !needTest && !needHands) state = "complete"; else if (needTest || needHands) state = "waiting"; else if (r.attempt_status) state = "in_progress";
+    const overdue = state !== "complete" && r.due_at && String(r.due_at).slice(0, 10) < todayISO;
+    const idle = r.last_activity || r.started_at;
+    const stalled = state === "in_progress" && daysAgo(idle) >= 7;
+    return { ...r, state, overdue, stalled, needTest, needHands, idleDays: daysAgo(idle) };
+  });
+  const count = (f) => list.filter(f).length;
+  const tiles = [
+    ["all", "All", list.length, INK],
+    ["not_started", "Not started", count((r) => r.state === "not_started"), STEEL],
+    ["in_progress", "In progress", count((r) => r.state === "in_progress"), "#93650A"],
+    ["waiting", "Test / hands-on", count((r) => r.state === "waiting"), "#93650A"],
+    ["complete", "Complete", count((r) => r.state === "complete"), "#1E7A34"],
+    ["overdue", "Overdue", count((r) => r.overdue), ALERT],
+  ];
+  const term = q.trim().toLowerCase();
+  const shown = list.filter((r) => {
+    if (filter === "overdue" ? !r.overdue : filter !== "all" && r.state !== filter) return false;
+    return !term || [r.name, r.employer, r.course_title].some((v) => String(v || "").toLowerCase().includes(term));
+  });
+  const label = { not_started: "Not started", in_progress: "In progress", waiting: "Part 1 done", complete: "Complete" };
+  return (
+    <div className="bg-white rounded-md border p-3 mb-4" style={{ borderColor: "#E4E2DA" }}>
+      <button onClick={() => setShow((v) => !v)} className="w-full flex items-center justify-between text-left">
+        <span className="text-[11px] uppercase font-bold" style={{ color: INK, ...mono }}>Training progress tracker</span>
+        <span className="text-[11px]" style={{ color: STEEL }}>{show ? "Hide ▲" : "Show ▼"}</span>
+      </button>
+      <div className="grid grid-cols-3 md:grid-cols-6 gap-1.5 mt-2">
+        {tiles.map(([k, l, n, col]) => (
+          <button key={k} onClick={() => { setFilter(k); setShow(true); }} className="rounded-md border py-1.5 text-center" style={{ borderColor: filter === k ? INK : "#E4E2DA", background: filter === k ? "#F4F3EF" : "white" }}>
+            <div className="text-[18px] leading-none" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600, color: col }}>{n}</div>
+            <div className="text-[9px] uppercase mt-0.5" style={{ color: STEEL, ...mono }}>{l}</div>
+          </button>
+        ))}
+      </div>
+      {show && (
+        <div className="mt-3">
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, company or course" className="w-full rounded-md border px-3 py-2 text-[13px] mb-2" style={{ borderColor: "#C9C6BC" }} />
+          {shown.length === 0 && <div className="text-[12px]" style={{ color: STEEL }}>Nothing matches.</div>}
+          <div className="space-y-1.5">
+            {shown.map((r) => (
+              <button key={`${r.course_id}|${r.personnel_id}`} onClick={() => onOpenCourse(r.course_id)} className="w-full text-left rounded-md border p-2" style={{ borderColor: r.overdue ? ALERT : "#E4E2DA" }}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="text-[13px] truncate">{r.name} <span className="text-[11px]" style={{ color: STEEL }}>{r.employer || ""}</span></div>
+                    <div className="text-[11px] truncate" style={{ color: STEEL }}>{r.course_title}</div>
+                  </div>
+                  <span className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded-sm flex-shrink-0" style={{ background: r.state === "complete" ? "#E9F6EC" : r.state === "not_started" ? "#EEE" : "#FFF4DC", color: r.state === "complete" ? "#1E7A34" : r.state === "not_started" ? STEEL : "#93650A", ...mono }}>{label[r.state]}</span>
+                </div>
+                <div className="h-1.5 rounded-full overflow-hidden mt-1.5" style={{ background: "#E4E2DA" }}>
+                  <div className="h-full" style={{ width: `${r.progress_pct || 0}%`, background: r.state === "complete" ? "#1E7A34" : GOLD }} />
+                </div>
+                <div className="text-[10px] mt-1" style={{ color: STEEL }}>
+                  {r.state === "in_progress" ? `Step ${Math.min((r.current_step_index || 0) + 1, r.step_count)} of ${r.step_count} · ` : ""}
+                  {r.needTest ? "Written test not passed · " : ""}{r.needHands ? "Hands-on pending · " : ""}
+                  {r.state === "not_started" ? `Assigned ${fmtCertDate(r.assigned_at)}` : r.state === "complete" ? `Finished ${fmtCertDate(r.completed_at)}` : `Last activity ${r.idleDays == null ? "none yet" : r.idleDays === 0 ? "today" : r.idleDays + " day(s) ago"}`}
+                  {r.due_at ? ` · Due ${fmtCertDate(r.due_at)}` : ""}
+                  {r.overdue ? " · OVERDUE" : ""}{r.stalled ? " · stalled" : ""}
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ManageTrainingScreen({ user }) {
   const { id: projectSlug, name: projectName } = useContext(ProjectContext);
   const [courses, setCourses] = useState([]);
@@ -8665,6 +8746,7 @@ function ManageTrainingScreen({ user }) {
   const [expiryWindow, setExpiryWindow] = useState(60); // days ahead to show upcoming retakes
   const [showDone, setShowDone] = useState(false);
   const [pracQueue, setPracQueue] = useState([]);
+  const [progressRows, setProgressRows] = useState([]);
   const [pracCourses, setPracCourses] = useState({}); // course_id -> true when it has a hands-on part
   const [pracStatus, setPracStatus] = useState({});   // personnel_id -> status for the open course
   const [evalTarget, setEvalTarget] = useState(null);
@@ -8672,6 +8754,7 @@ function ManageTrainingScreen({ user }) {
 
   const load = async () => {
     setLoading(true);
+    supabase.rpc("list_training_progress_all", { p_token: user.sessionToken }).then((r) => setProgressRows(Array.isArray(r.data) ? r.data : []));
     const qRes = await supabase.rpc("list_practical_queue", { p_token: user.sessionToken });
     setPracQueue(Array.isArray(qRes.data) ? qRes.data : []);
     const pcRes = await supabase.rpc("list_practical_courses", { p_token: user.sessionToken });
@@ -8894,6 +8977,7 @@ function ManageTrainingScreen({ user }) {
         Every training course, who it's assigned to, and who's completed it. Tap a course to manage assignments.
       </div>
       {loading && <div className="text-[12px] mb-2" style={{ color: STEEL }}>Loading…</div>}
+      {progressRows.length > 0 && <TrainingProgressTracker rows={progressRows} onOpenCourse={openCourse} />}
       {pracQueue.length > 0 && (
         <div className="bg-white rounded-md border p-3 mb-4" style={{ borderColor: GOLD }}>
           <div className="text-[11px] uppercase font-bold mb-1" style={{ color: INK, fontFamily: "IBM Plex Mono, monospace" }}>Waiting on hands-on evaluation ({pracQueue.length})</div>
