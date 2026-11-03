@@ -14492,7 +14492,16 @@ function EmployeeDetail({ emp, onClose, photo, user }) {
           ) : (
             <div className="space-y-1.5">
               {emp.quals.map((q, i) => (
-                <QualTag key={i} status={q.status} fileUrl={fileFor(q)}>{q.label}</QualTag>
+                <div key={i}>
+                  <QualTag status={q.status} fileUrl={fileFor(q)}>{q.label}</QualTag>
+                  <div className="text-[10px] mt-0.5 px-1" style={{ color: q.status === "expired" ? ALERT : q.status === "expiring" ? "#93650A" : STEEL }}>
+                    {q.issued_at ? `Issued ${fmtD(q.issued_at)}` : ""}
+                    {q.issued_at ? " · " : ""}
+                    {q.expires_at
+                      ? <b>{q.status === "expired" ? "Expired" : "Expires"} {fmtD(q.expires_at)}{(() => { const d = Math.ceil((new Date(String(q.expires_at).slice(0, 10) + "T00:00:00").getTime() - Date.now()) / 86400000); return Number.isFinite(d) ? (d < 0 ? ` (${-d} day${d === -1 ? "" : "s"} ago)` : ` (${d} day${d === 1 ? "" : "s"} left)`) : ""; })()}</b>
+                      : "No expiration date on file"}
+                  </div>
+                </div>
               ))}
             </div>
           )}
