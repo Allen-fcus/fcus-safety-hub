@@ -2315,10 +2315,10 @@ function srSchemaBase(type, ctx) {
 function srSchema(type, ctx) {
   const sc = srSchemaBase(type, ctx);
   if (type === "employee_statement") {
-    return { ...sc, sections: [...sc.sections, { title: "Written statement on paper", fields: [
-      { k: "_pp", t: "info", l: "If the employee wrote the statement on paper, upload a photo or scan of it here instead of typing the account above. A PDF scan is added to the end of the report PDF." },
+    return { ...sc, sections: [{ title: "Paper statement", fields: [
+      { k: "_pp", t: "info", l: "If the employee already wrote and signed a statement on paper, just upload a photo or scan of it here and submit. Nothing else on this form needs to be filled in or signed. A PDF scan is added to the end of the report PDF. If there is no paper statement, skip this and complete the form below." },
       { k: "paper", l: "Paper statement (photos or PDF)", t: "files", accept: "any" },
-    ] }] };
+    ] }, ...sc.sections] };
   }
   if (type === "investigation_report") return sc;
   return { ...sc, sections: [...sc.sections, { title: "Photos and videos", fields: [
@@ -2946,12 +2946,13 @@ function SrFormView({ user, activeProjectId, projectName, detail, form, type, at
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
   const readOnly = status === "submitted";
-  const subjectOf = (d) => (type === "employee_statement" ? d.name : type === "investigation_report" ? d.brief && d.brief.slice(0, 80) : type === "incident_report" ? d.type : type === "sir" ? d.description && d.description.slice(0, 80) : type === "eir" ? d.overview && d.overview.slice(0, 80) : type === "lesson_learned" ? d.bulletinTitle : d.summary) || "";
+  const subjectOf = (d) => (type === "employee_statement" ? (d.name || (Array.isArray(d.paper) && d.paper.length ? "Paper statement" : "")) : type === "investigation_report" ? d.brief && d.brief.slice(0, 80) : type === "incident_report" ? d.type : type === "sir" ? d.description && d.description.slice(0, 80) : type === "eir" ? d.overview && d.overview.slice(0, 80) : type === "lesson_learned" ? d.bulletinTitle : d.summary) || "";
 
   const missing = () => {
     const out = [];
+    const paperOnly = type === "employee_statement" && Array.isArray(data.paper) && data.paper.length > 0;
     schema.sections.forEach((s) => s.fields.forEach((f) => {
-      if (!f.req || (f.showIf && !f.showIf(data))) return;
+      if (paperOnly || !f.req || (f.showIf && !f.showIf(data))) return;
       const v = data[f.k];
       if (v == null || (typeof v === "string" && !v.trim()) || (Array.isArray(v) && v.length === 0)) out.push(f.l);
     }));
