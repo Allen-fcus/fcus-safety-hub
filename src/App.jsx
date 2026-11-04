@@ -3626,7 +3626,9 @@ function MeetingsScreen({ user, activeProjectId, initialOpenId }) {
 // =====================================================================================
 const SafetyTeamContext = createContext(false);
 const SAFETY_TEAM_FORMS = [
-  { key: "daily_safety_assessment", title: "Daily Safety Assessment", desc: "One assessment per operation or task. Mark what is deficient, set whole sections to N/A, and file the PDF." },
+  { key: "hs_minimum_standard_lsc", kind: "hs_lsc", title: "H&S Minimum Standard - Lifesaving Control Assessment", desc: "Tier 1 and Tier 2 control checklist. Rate each item MR / PMR / DNM / NO; gaps ask what you found and what you did." },
+  { key: "hipo_scenario_lsc", kind: "hipo_lsc", title: "HiPo Scenario - Lifesaving Control Assessment", desc: "Six high-potential scenarios. If a condition exists, confirm the lifesaving control is present and effective." },
+  { key: "daily_safety_assessment", kind: "dsa", title: "Daily Safety Assessment", desc: "One assessment per operation or task. Mark what is deficient, set whole sections to N/A, and file the PDF." },
 ];
 const DSA_SECTIONS = [{"n": "1", "t": "Site / Public Protection", "items": [["1.1", "Work Plan"], ["1.2", "JHA"], ["1.3", "Competent Person Designation"], ["1.4", "Flagger Designation"], ["1.5", "Adequate lighting"], ["1.6", "Light Plant Placement / Hotspot"], ["1.7", "Barricade Installed properly"], ["1.8", "Excavation protected"], ["1.9", "Falling object protection"], ["1.10", "Perimeter fences"], ["1.11", "Public protection signage"], ["1.12", "Street closure identified"], ["1.13", "Traffic control"], ["1.14", "Badge ID"], ["1.15", "Oasis Station (85 degrees & above)"], ["1.16", "Person trained in First Aid / CPR"]]}, {"n": "2", "t": "Housekeeping", "items": [["2.1", "Clear access to bldg./site"], ["2.2", "Designated employee parking"], ["2.3", "Impalement protection"], ["2.4", "Proper material storage"], ["2.5", "Roadway around project clear"], ["2.6", "Slip, trip, fall hazards"], ["2.7", "Trash in container(s)"], ["2.8", "Walkways clear"]]}, {"n": "3", "t": "Personal Protective Equipment (PPE)", "items": [["3.1", "Eye Protection"], ["3.2", "Gloves"], ["3.3", "Hard Hat"], ["3.4", "Hearing Protection"], ["3.5", "Metatarsal Protection"], ["3.6", "Proper Clothing (Class 3 Vest), Type E pants (working near traffic)"], ["3.7", "Respirator"], ["3.8", "Appropriate footwear"], ["3.9", "Specialty PPE (Face-shields, Welding etc.)"]]}, {"n": "4", "t": "Confined Space", "items": [["4.1", "Confined Space Evaluation"], ["4.2", "Electrical / Fire Prevention"], ["4.3", "Harness / Extraction-Rescue Equipment"], ["4.4", "Comm. / Secure Area / Signage"], ["4.5", "Inspection / Air Monitor"], ["4.6", "Rescue Plan / Emergency #'s / Map"], ["4.7", "Ventilation"]]}, {"n": "5", "t": "Excavation", "items": [["5.1", "Utility Locate Permit"], ["5.2", "Excavation Daily Inspection"], ["5.3", "Access 25 Feet"], ["5.4", "Competent person present"], ["5.5", "Entry Permit"], ["5.6", "Excavation > 20 Feet Engineered"], ["5.7", "Perimeter Protection / Barricade"], ["5.8", "Slope / Benched / Shored"], ["5.9", "Spoils 2 feet from edge"], ["5.10", "Surface traffic exposure"], ["5.11", "Water entering excavation"], ["5.12", "Trench Box Tabulated Data on site"]]}, {"n": "6", "t": "Ladders / Stairs", "items": [["6.1", "3' above landing"], ["6.2", "Clear of debris / materials"], ["6.3", "Extension ladder 4:1 pitch"], ["6.4", "Inspected for defects"], ["6.5", "Job-built ladders"], ["6.6", "Ladders secured"], ["6.7", "Proper use of ladder"], ["6.8", "Safe work distance from hazard"], ["6.9", "Verification of quarterly inspection"]]}, {"n": "7", "t": "Fall Protection", "items": [["7.1", "Protection of floor holes, window openings and exposed edges"], ["7.2", "Guardrails, cables and nets"], ["7.3", "Personal fall protection/arrest components"], ["7.4", "Use of specific PPE (e.g. harnesses, lanyards, SRLs, etc.)"], ["7.5", "Points of anchorage"], ["7.6", "Enforcement of fall protection practices"], ["7.7", "Enforcement of Fall Protection Plan for leading edge work"], ["7.8", "Protection from falling objects"], ["7.9", "Protection and marking of floor openings"], ["7.10", "Protection from impalement (e.g. rebar, t-posts, etc.)"], ["7.11", "Availability of Competent Persons"], ["7.12", "Fall hazards and fall protection use noted on JHAs"]]}, {"n": "8", "t": "Electrical", "items": [["8.1", "Close Proximity Permit"], ["8.2", "Cords in good condition"], ["8.3", "Cords protected from traffic"], ["8.4", "Electrical hot work procedure"], ["8.5", "Energized parts protected"], ["8.6", "GFCI's used"], ["8.7", "LO/TO procedure"], ["8.8", "Signage (including overhead)"], ["8.9", "Inspection verification on tools"]]}, {"n": "9", "t": "Fire Protection", "items": [["9.1", "Hot Work Permit"], ["9.2", "Emergency vehicle access"], ["9.3", "Extinguisher charged and inspected"], ["9.4", "Fire suppression equipment available"], ["9.5", "Fire watch when applicable"], ["9.6", "Proper signage (storage area…)"], ["9.7", "Proper fuel containers"]]}, {"n": "10", "t": "Equipment", "items": [["10.1", "Operator Designation"], ["10.2", "Daily documented inspections"], ["10.3", "Deficiencies from inspections addressed"], ["10.4", "Safety features (e.g. alarms, lights, horns, etc.)"], ["10.5", "Control of work area (swing radiuses, overhead work, blind spots)"], ["10.6", "Availability of operator manuals"], ["10.7", "Condition of warning stickers"], ["10.8", "Guard rails, machine guards, seatbelts"], ["10.9", "Windows and mirrors"], ["10.10", "Cab access and egress (e.g. ladders, hand grabs, foot holds, etc.)"], ["10.11", "Enforcement of seatbelt use"], ["10.12", "Securing of unmanned equipment"], ["10.13", "Availability of operators' qualifications for piece of equipment"]]}, {"n": "11", "t": "Cranes and Hoisting Equipment", "items": [["11.1", "Crane Operator Designation"], ["11.2", "Crane-Specific Qualified Person Designation (rigger / signal person)"], ["11.3", "Assembly/Disassembly (A/D) Director Designation"], ["11.4", "Mobile Crane Check-In"], ["11.5", "Crane Inspection"], ["11.6", "Wire Rope Inspection (Quarterly)"], ["11.7", "Comprehensive Crane Inspection (Annual)"], ["11.8", "Comprehensive Wire Rope Inspection (Annual)"], ["11.9", "Anti-Two block device"], ["11.10", "Boom angle indicator"], ["11.11", "Crane supported and level"], ["11.12", "Dist. Power lines/de-energized"], ["11.13", "Lift Plan"], ["11.14", "Load charts posted"], ["11.15", "Loads properly secured"], ["11.16", "Means of communication"], ["11.17", "Operator manual in crane"], ["11.18", "Outrigger(s) extend/cribbing"], ["11.19", "Safety latches"], ["11.20", "Swing radius barricaded"], ["11.21", "Tag line(s)"], ["11.22", "Rigging"], ["11.23", "Boom Sections & Lacings"]]}, {"n": "12", "t": "Welding / Cutting", "items": [["12.1", "Bottles upright / cap / secured"], ["12.2", "Fire extinguisher present"], ["12.3", "Flash arrest on torches"], ["12.4", "Flash protection available"], ["12.5", "Gauges working properly"], ["12.6", "Leads in good condition"], ["12.7", "Torch hoses in good condition"]]}, {"n": "13", "t": "Hand and Power Tools", "items": [["13.1", "Cord in good condition"], ["13.2", "Ground prong in place"], ["13.3", "Guards in place"], ["13.4", "Information label on tool"], ["13.5", "Proper tool for task"]]}, {"n": "14", "t": "Scaffolds", "items": [["14.1", "Bracing and pins in place"], ["14.2", "Compatible components used"], ["14.3", "Inspected daily"], ["14.4", "Prop secured to structure"], ["14.5", "Proper access to platforms"], ["14.6", "Proper loading of materials"], ["14.7", "Sills, plates, jacks installed"]]}];
 const DSA_SYLVANIA_ITEM = "Low Profile Barrier is pinned and bolted in all locations and has 2' of slide or pinned";
@@ -4000,6 +4002,428 @@ function AddProjectCheck({ onAdd }) {
   );
 }
 
+const HS_LSC_SECTIONS = [{"n": "1", "t": "Min. Personal Protective Equipment", "items": [{"id": "q1", "ref": "1.2", "tier": "T2", "enh": true, "q": "Do all workers wear a multi-directional, impact-rated helmet with a chinstrap?"}, {"id": "q2", "ref": "1.5", "tier": "T2", "enh": false, "q": "Have task-specific lifesaving PPE (for example, SCBA, FR/Arc clothing, PFAS) been identified and used as required?"}]}, {"n": "2", "t": "Fall Protection", "items": [{"id": "q3", "ref": "2.1", "tier": "T1", "enh": false, "q": "Is collective fall protection, such as guardrails or safety nets, installed as the primary control at all fall-risk edges before individual fall-arrest systems are considered?"}, {"id": "q4", "ref": "2.3", "tier": "T2", "enh": false, "q": "When in place, are fall arrest or restraint systems, including harness, SRL, shock-absorbing lanyard, restraint, HLL, VLL, clearances and anchorages, correctly installed and used?"}]}, {"n": "3", "t": "Opening Protection", "items": [{"id": "q5", "ref": "3.4", "tier": "T1", "enh": false, "q": "Are all floor openings, holes, and excavation edges protected by rigid covers or guardrails capable of withstanding imposed loads?"}]}, {"n": "4", "t": "Machinery & Equipment", "items": [{"id": "q6", "ref": "4.2", "tier": "T2", "enh": false, "q": "Is self-propelled machinery fitted with all manufacturer-required safety features. Can include; ROPS, FOPS, seatbelts, and proximity warning devices, and are these features functioning properly?"}, {"id": "q7", "ref": "4.3", "tier": "T2", "enh": false, "q": "Is the use of safety seatbelts observed and enforced for all mobile vehicle and machinery operators?"}, {"id": "q8", "ref": "4.8", "tier": "T1", "enh": false, "q": "Is equipment fitted with functional emergency stop (trip) devices and/ or controls that prevent inadvertent machine operation?"}]}, {"n": "5", "t": "Lifting Operations", "items": [{"id": "q9", "ref": "5.3", "tier": "T1", "enh": false, "q": "Are all lifting hooks fitted with a functional safety latch that prevents accidental load release?"}, {"id": "q10", "ref": "5.4", "tier": "T1", "enh": false, "q": "Are all loads being slung, hoisted, lifted, transported, stored, or stacked adequately secured to prevent uncontrolled movement, including through redundant rigging or secondary containment where needed?"}, {"id": "q11", "ref": "5.5", "tier": "T1", "enh": false, "q": "Are all objects transported through the site adequately restrained to prevent falling or shifting?"}, {"id": "q12", "ref": "5.8", "tier": "T2", "enh": false, "q": "Are physical exclusion zones established and enforced below and around all lifting operations, preventing personnel from entering the drop zone?"}]}, {"n": "6", "t": "Aerial Work Platforms (MEWPs)", "items": [{"id": "q13", "ref": "", "tier": "T1", "enh": true, "q": "Are boom-supported MEWP baskets fitted with functional anti-entrapment devices (e.g. secondary guarding and controls at ground level)?"}, {"id": "q14", "ref": "6.5", "tier": "T2", "enh": false, "q": "Are all MEWP occupants wearing a full-body harness secured to designated anchor points during operation?"}, {"id": "q15", "ref": "6.9", "tier": "T2", "enh": false, "q": "Is the ground-level work area around the MEWP physically delimited to prevent pedestrian and vehicle intrusion into the drop zone and operating radius?"}]}, {"n": "7", "t": "Trench & Shaft Excavations", "items": [{"id": "q16", "ref": "7.1", "tier": "T1", "enh": false, "q": "Are excavations benched, shored, battered back, or sloped to a safe angle to prevent collapse?"}, {"id": "q17", "ref": "7.3", "tier": "T1", "enh": false, "q": "Where benching/battering is not practicable, are trenches and excavations mechanically shored or supported with engineered systems to prevent collapse (trench boxes)?"}, {"id": "q18", "ref": "7.4", "tier": "T1", "enh": false, "q": "Are adequate physical barriers and signage in place around all excavation edges to prevent people, machinery or vehicles from falls into excavations?"}, {"id": "q19", "ref": "7.6", "tier": "T1", "enh": false, "q": "Are temporary stairs or scaffold towers installed to provide safe access/egress into excavations?"}, {"id": "q20", "ref": "7.7", "tier": "T1", "enh": false, "q": "Are shaft excavations covered and their perimeters protected and secured against unauthorized access?"}]}, {"n": "8", "t": "Traffic Control", "items": [{"id": "q21", "ref": "", "tier": "T2", "enh": true, "q": "Are attenuator vehicles (e.g. truck-mounted attenuators) deployed where crews work on public roads to protect them from errant vehicles?"}, {"id": "q22", "ref": "8.2", "tier": "T1", "enh": false, "q": "Are separate, physically defined entrance and exit points for pedestrians and vehicles in place and enforced?"}, {"id": "q23", "ref": "8.3", "tier": "T1", "enh": false, "q": "Are vehicles and moving machines physically separated from pedestrian routes by hard barriers (e.g. Jersey barriers, earth berms, dedicated lanes) to prevent interaction?"}, {"id": "q24", "ref": "8.15", "tier": "T1", "enh": false, "q": "Has the use of human traffic signalers been eliminated wherever practicable, replaced by physical segregation or automated traffic control?"}, {"id": "q25", "ref": "", "tier": "T1", "enh": true, "q": "Are earth berms, stoppers, or barriers in place to clearly mark travel path edges and prevent vehicles or equipment from rolling over or driving off the edge?"}]}, {"n": "9", "t": "Working Platforms", "items": [{"id": "q26", "ref": "9.2", "tier": "T1", "enh": false, "q": "Is the working platform designed and verified to provide adequate load capacity for the intended work and personnel?"}, {"id": "q27", "ref": "9.9", "tier": "T1", "enh": false, "q": "Are guardrails, mid-rails, and toe boards installed on all open sides and ends of working platforms at height?"}, {"id": "q28", "ref": "9.10", "tier": "T2", "enh": false, "q": "Is harness use on working platforms limited to assembly/dismantling phases only, with guardrails as the primary control during work?"}, {"id": "q29", "ref": "9.11", "tier": "T1", "enh": false, "q": "Are scaffold towers used for access to working areas at heights over 5 m?"}]}, {"n": "10", "t": "Ladders", "items": [{"id": "q30", "ref": "10.1", "tier": "T1", "enh": true, "q": "Are ladders the last resort? And when used only for one-off, short-term only. For recurring, ongoing vertical access, use of MEWPs, scaffolds."}, {"id": "q31", "ref": "10.3", "tier": "T1", "enh": false, "q": "Are job-built ladders absent from the site?"}, {"id": "q32", "ref": "10.5", "tier": "T1", "enh": false, "q": "Is it observed that ladders are not used for access at heights over 5 m, with scaffold or MEWPs used instead?"}]}, {"n": "11", "t": "Electrical", "items": [{"id": "q33", "ref": "11.2", "tier": "T1", "enh": false, "q": "Are all electrical covers and boxes isolated from live parts, preventing inadvertent contact?"}, {"id": "q34", "ref": "11.4", "tier": "T1", "enh": false, "q": "Are GFCIs rated 30 mA installed on all temporary electrical circuits and portable equipment?"}, {"id": "q35", "ref": "11.6", "tier": "T1", "enh": false, "q": "Do all electrical cables and connections in use have an insulated cover with no exposed conductors or damaged insulation?"}, {"id": "q36", "ref": "11.7", "tier": "T1", "enh": false, "q": "Do all electrical tools and equipment in use have a grounding conductor, or double insulated?"}, {"id": "q37", "ref": "11.8", "tier": "T1", "enh": false, "q": "Are all electrical extensions made using proper power outlets, with direct splicing of extension cords absent from the site?"}]}, {"n": "13", "t": "Utilities", "items": [{"id": "q38", "ref": "13.1", "tier": "T1", "enh": false, "q": "Are underground utility detection technologies (e.g. locators, geo-radar) used to verify the exact location of utilities before excavation commences?"}, {"id": "q39", "ref": "13.2", "tier": "T1", "enh": false, "q": "Where practicable, has power distribution been redirected or de-energized to eliminate live utilities from the excavation zone before work commences?"}, {"id": "q40", "ref": "", "tier": "T1", "enh": true, "q": "Is exploratory digging non-destructive? Potholing, manual or vacuum used to verify exact location, horizontal and vertical of buried utilities."}, {"id": "q41", "ref": "13.3", "tier": "T2", "enh": false, "q": "Have overhead utilities been identified and minimum clearances established, and control points (e.g. nonconductive goal posts) installed to prevent contact?"}]}, {"n": "15", "t": "Air Quality / Confined Spaces", "items": [{"id": "q42", "ref": "15.2", "tier": "T1", "enh": false, "q": "Is priority given to avoiding confined space entry through design or alternative procedures (e.g. remote cameras, drones) before entry is considered?"}, {"id": "q43", "ref": "15.3", "tier": "T2", "enh": false, "q": "Where confined space entry cannot be avoided, is a system of work in place (risk assessment, atmospheric monitoring, permit, PPE, rescue arrangements)?"}]}];
+const HIPO_SCENARIOS = [{"n": "1", "t": "Pedestrian proximity to Worksite Vehicles and Mobile Equipment (pedestrian strikes)", "def": "", "conds": ["Pedestrians and vehicles/mobile equipment sharing the same area with no physical barriers or exclusion zones in place.", "Pedestrians work or transit near vehicle/equipment blind spots with no proximity detection or collision avoidance in place.", "Vehicles or equipment required to reverse in areas accessible to pedestrians."]}, {"n": "2", "t": "Roadworks (traffic events requiring evasive action)", "def": "", "conds": ["Road crews are exposed to live traffic without physical separation barriers, or attenuating vehicles (TMAs).", "Human traffic signalers in use where physical segregation or automated traffic control could be implemented.", "Traffic circulates at high speeds ≥70Kph (45Mph) adjacent to roadwork activities."]}, {"n": "3", "t": "Work at height (falls from height)", "def": "", "conds": ["Personnel working near unprotected edges, leading edges, or fragile surfaces at any height without collective fall prevention as the primary control.", "Floor holes, open shafts, or skylights present in the work area without secured, load-rated covers or physical barricades.", "Access to elevated areas being achieved via ladders where a safer alternative (MEWP, scaffold, stair tower) is practicable. (Ladders Last)"]}, {"n": "4", "t": "Lifting operations (failure in lifting operation or equipment)", "def": "", "conds": ["Personnel working or transiting near suspended loads with no hard exclusion zone preventing entry to the drop zone.", "Lifting equipment operating on unverified or soft ground, or without outriggers/cribbing confirmed to rated ground bearing capacity.", "Crane safety devices (LMI/RCI, A2B, Position limit switches, etc.) have not been confirmed, and/or lift plans are not documented, including for telehandlers and excavators when used for such."]}, {"n": "5", "t": "Temporary works (collapse of excavations, structures)", "def": "\"Temporary works\" provide an engineered temporary solution. These can include; excavation shoring, falsework, formwork, scaffolds, haul roads, outrigger & crane cribbing, earthworks, including stockpiles, site fencing, welfare and office units, etc.", "conds": ["Personnel working on or beneath scaffolds, formwork, or falsework.", "Personnel entering trenches or excavations ≥5 ft deep without an engineered protective system (trench box, shoring, or verified sloping/benching).", "Heavy equipment, or materials, including spoil piles are located near excavation edges without physical barriers preventing encroachment."]}, {"n": "6", "t": "Confined space entry (event in confined space)", "def": "A confined space is an enclosed or partially enclosed area not primarily designed for continuous human occupancy, featuring restricted entry or exit points. It poses heightened health and safety risks due to hazardous atmospheres, engulfment hazards, or restricted movement complicating emergency rescues.", "conds": ["Confined space entry being considered without first exploring elimination through design or alternative procedures (cameras, drones, etc.)", "Where entry cannot be avoided, is a safe system of work absent (no permit, no atmospheric monitoring, no PPE, no rescue arrangement)", "A rescue system (tripod/winch/harness) rigged and ready at the entry point."]}];
+
+// ---------- Lifesaving control assessments (Safety Team) ----------
+const ST_ACTIONS = ["Corrected on the spot", "Work stopped until corrected", "Corrective action assigned", "Escalated to management / safety"];
+const HS_LSC_RATINGS = [
+  ["MR", "Meets requirements (90%+)", "#1E7A34", "#E9F6EC"],
+  ["PMR", "Partially meets", "#93650A", "#FFF4DC"],
+  ["DNM", "Does not meet (50% or less)", "#C8102E", "#FCEFEF"],
+  ["NO", "Not observed", "#5B6168", "#EEE"],
+];
+const ST_CHECKLISTS = {
+  hs_lsc: { title: "H&S Minimum Standard - Lifesaving Control Assessment", short: "H&S Minimum Standard LSC", pdfTitle: "H&S MINIMUM STANDARD - LIFESAVING CONTROL ASSESSMENT",
+    intro: "This checklist is an extract of the Tier 1 (Preventive) and Tier 2 (Mitigating) control measures from the 20 parts of the H&S Minimum Standard. Items marked Enhanced are additional elements." },
+  hipo_lsc: { title: "HiPo Scenario - Lifesaving Control Assessment", short: "HiPo Scenario LSC", pdfTitle: "HIPO SCENARIO - LIFESAVING CONTROL ASSESSMENT",
+    intro: "For each HiPo scenario: (1) decide if the condition exists or is foreseeable; (2) if YES, confirm whether a Lifesaving Control Measure (LSC) is present and effective." },
+};
+const ST_REMINDER = "A missing lifesaving control is a systemic gap, not necessarily an individual failure. Use findings to improve the system. Workers have the absolute right to STOP UNSAFE WORK.";
+
+function stcNew(kind, user) {
+  const now = new Date();
+  return { subcontractor: "", supervisor: "", location: "", task: "", assessor: (user && user.name) || "",
+    date: now.toLocaleDateString("en-CA"), startedAt: now.toISOString(), items: {}, comments: "" };
+}
+function stcAllIds(kind) { return kind === "hs_lsc" ? HS_LSC_SECTIONS.flatMap((s) => s.items.map((i) => i.id)) : HIPO_SCENARIOS.map((s) => s.n); }
+// the gaps that need follow-up on each kind
+function stcIsGap(kind, it) {
+  if (!it) return false;
+  return kind === "hs_lsc" ? it.r === "PMR" || it.r === "DNM" : it.exists === "yes" && it.lsc === "no";
+}
+function stcStats(kind, data) {
+  const ids = stcAllIds(kind); const c = { MR: 0, PMR: 0, DNM: 0, NO: 0 }; let answered = 0, gaps = 0, exists = 0, present = 0;
+  ids.forEach((id) => {
+    const it = data.items[id] || {};
+    if (kind === "hs_lsc") { if (it.r) { answered++; c[it.r]++; } if (stcIsGap(kind, it)) gaps++; }
+    else {
+      if (it.exists === "no" || (it.exists === "yes" && it.lsc)) answered++;
+      if (it.exists === "yes") exists++;
+      if (it.exists === "yes" && it.lsc === "yes") present++;
+      if (stcIsGap(kind, it)) gaps++;
+    }
+  });
+  return { total: ids.length, answered, gaps, counts: c, exists, present };
+}
+function stcProblems(kind, data) {
+  const out = [];
+  ["subcontractor", "supervisor", "location", "task"].forEach((k) => { if (!String(data[k] || "").trim()) out.push({ subcontractor: "Subcontractor name", supervisor: "Supervisor", location: "Location", task: "Task" }[k]); });
+  const label = (id) => (kind === "hs_lsc" ? (HS_LSC_SECTIONS.flatMap((s) => s.items).find((i) => i.id === id) || {}).ref || "that question" : "scenario " + id);
+  stcAllIds(kind).forEach((id) => {
+    const it = data.items[id] || {};
+    const nm = kind === "hs_lsc" ? `question ${label(id) || id}` : `scenario ${id}`;
+    if (kind === "hs_lsc") {
+      if (!it.r) { out.push(`Rating for ${nm}`); return; }
+      if (stcIsGap(kind, it)) { if (!String(it.note || "").trim()) out.push(`What was found (${nm})`); if (!it.action) out.push(`Action taken (${nm})`); }
+    } else {
+      if (!it.exists) { out.push(`Condition exists? (${nm})`); return; }
+      if (it.exists === "yes") {
+        if (!(it.conds || []).length) out.push(`Which conditions were seen (${nm})`);
+        if (!it.lsc) { out.push(`Lifesaving control present? (${nm})`); return; }
+        if (it.lsc === "no") {
+          if (!String(it.note || "").trim()) out.push(`What control is missing (${nm})`);
+          if (!it.stopped) out.push(`Was work stopped? (${nm})`);
+          if (!it.action) out.push(`Action taken (${nm})`);
+        }
+      }
+    }
+  });
+  const seen = new Set(); return out.filter((x) => (seen.has(x) ? false : seen.add(x)));
+}
+
+async function buildChecklistPdf({ kind, data, projectName }) {
+  const cfg = ST_CHECKLISTS[kind];
+  const { StandardFonts, rgb } = await import("pdf-lib");
+  const doc = await PDFDocument.create();
+  const sans = await doc.embedFont(StandardFonts.Helvetica);
+  const sansB = await doc.embedFont(StandardFonts.HelveticaBold);
+  const clean = (t) => String(t == null ? "" : t).replace(/[–—]/g, "-").replace(/[“”]/g, '"').replace(/[‘’]/g, "'").replace(/[≥]/g, ">=").replace(/[≤]/g, "<=").replace(/[^\x20-\xFF\n]/g, "?");
+  const ink = rgb(0.1, 0.1, 0.1), gold = rgb(0.98, 0.78, 0.02), grey = rgb(0.4, 0.42, 0.45), line = rgb(0.85, 0.84, 0.8), red = rgb(0.78, 0.07, 0.18), green = rgb(0.12, 0.48, 0.2), amber = rgb(0.58, 0.4, 0.04), white = rgb(1, 1, 1);
+  const W = 612, H = 792, M = 36, CW = W - 2 * M, colW = (CW - 16) / 2;
+  const wrap = (text, font, size, max) => {
+    const out = [];
+    clean(text).split("\n").forEach((para) => {
+      let cur = "";
+      (para.trim() ? para.split(/\s+/) : [""]).forEach((word) => {
+        const t = cur ? cur + " " + word : word;
+        if (font.widthOfTextAtSize(t, size) <= max) { cur = t; return; }
+        if (cur) out.push(cur);
+        let w = word;
+        while (font.widthOfTextAtSize(w, size) > max && w.length > 1) { let k = w.length - 1; while (k > 1 && font.widthOfTextAtSize(w.slice(0, k), size) > max) k--; out.push(w.slice(0, k)); w = w.slice(k); }
+        cur = w;
+      });
+      out.push(cur);
+    });
+    return out;
+  };
+  let page, y;
+  const header = (first) => {
+    page = doc.addPage([W, H]);
+    page.drawRectangle({ x: 0, y: H - 54, width: W, height: 54, color: ink });
+    const t = first ? cfg.pdfTitle : cfg.pdfTitle.length > 60 ? cfg.pdfTitle.slice(0, 57) + "..." : cfg.pdfTitle;
+    let sz = first ? 12 : 9; while (sansB.widthOfTextAtSize(t, sz) > CW - 90 && sz > 7) sz -= 0.5;
+    page.drawText(t, { x: M, y: H - 33, size: sz, font: sansB, color: gold });
+    const pn = clean(String(projectName || "").split(/\s+-\s+/).pop()).toUpperCase();
+    page.drawText(pn, { x: W - M - sansB.widthOfTextAtSize(pn, 8), y: H - 33, size: 8, font: sansB, color: white });
+    y = H - 54 - 16;
+  };
+  const need = (h) => { if (y - h < 50) header(false); };
+  header(true);
+  const kvH = (label, value, width) => 21 + (wrap(String(label).toUpperCase(), sansB, 6.5, width).length - 1) * 8 + wrap(value || "-", sansB, 12, width).length * 15 + 4;
+  const kv = (label, value, x, width) => {
+    const ll = wrap(String(label).toUpperCase(), sansB, 6.5, width);
+    ll.forEach((ln, j) => page.drawText(ln, { x, y: y - 8 - j * 8, size: 6.5, font: sansB, color: grey }));
+    wrap(value || "-", sansB, 12, width).forEach((ln, i) => page.drawText(ln, { x, y: y - 21 - (ll.length - 1) * 8 - i * 15, size: 12, font: sansB, color: ink }));
+  };
+  const pair = (a, b) => { const h = Math.max(kvH(a[0], a[1], colW), b ? kvH(b[0], b[1], colW) : 0); need(h); kv(a[0], a[1], M, colW); if (b) kv(b[0], b[1], M + colW + 16, colW); y -= h; };
+  const bar = (title, right, color) => {
+    need(40);
+    page.drawRectangle({ x: M, y: y - 16, width: CW, height: 16, color: color || gold });
+    { let tt = clean(title).toUpperCase(), sz = 8.5; const maxW = CW - 16 - (right ? sansB.widthOfTextAtSize(clean(right), 8.5) + 8 : 0);
+      while (sansB.widthOfTextAtSize(tt, sz) > maxW && sz > 6.5) sz -= 0.5;
+      while (sansB.widthOfTextAtSize(tt, sz) > maxW && tt.length > 4) tt = tt.slice(0, -4) + "...";
+      page.drawText(tt, { x: M + 4, y: y - 12, size: sz, font: sansB, color: color ? white : ink }); }
+    if (right) page.drawText(clean(right), { x: W - M - 4 - sansB.widthOfTextAtSize(clean(right), 8.5), y: y - 12, size: 8.5, font: sansB, color: color ? white : ink });
+    y -= 22;
+  };
+  const para = (text, opts = {}) => {
+    const { x = M + 4, size = 12, font = sans, color = ink, indent = 0 } = opts;
+    wrap(text, font, size, CW - 8 - indent).forEach((ln) => { need(size + 5); page.drawText(ln, { x: x + indent, y: y - size, size, font, color }); y -= size + 3.5; });
+  };
+  const embedPhoto = async (it) => {
+    try {
+      const bytes = new Uint8Array(await (await fetch(it.url)).arrayBuffer());
+      const png = /png/i.test(it.type || "") || /\.png$/i.test(it.name || "");
+      try { return png ? await doc.embedPng(bytes) : await doc.embedJpg(bytes); }
+      catch (e0) {
+        const bmp = await createImageBitmap(new Blob([bytes]));
+        const cv = document.createElement("canvas"); cv.width = bmp.width; cv.height = bmp.height;
+        const cx2 = cv.getContext("2d"); cx2.fillStyle = "#fff"; cx2.fillRect(0, 0, cv.width, cv.height); cx2.drawImage(bmp, 0, 0);
+        const jb = await new Promise((r) => cv.toBlob(r, "image/jpeg", 0.85));
+        return await doc.embedJpg(new Uint8Array(await jb.arrayBuffer()));
+      }
+    } catch (e) { return null; }
+  };
+  const photosBlock = async (photos) => {
+    if (!photos || !photos.length) return;
+    const imgs = []; for (const ph of photos) { const im = await embedPhoto(ph); if (im) imgs.push(im); }
+    const cellW = (CW - 24 - 16) / 3, cellH = 150;
+    for (let i = 0; i < imgs.length; i += 3) {
+      const row = imgs.slice(i, i + 3).map((im) => { const sc = Math.min(cellW / im.width, cellH / im.height, 1); return { im, w: im.width * sc, h: im.height * sc }; });
+      const rh = Math.max(...row.map((q) => q.h)); need(rh + 8);
+      row.forEach((q, k) => page.drawImage(q.im, { x: M + 20 + k * (cellW + 8), y: y - q.h, width: q.w, height: q.h }));
+      y -= rh + 8;
+    }
+    if (!imgs.length) para("Photos attached but could not be shown here.", { size: 9, color: grey, indent: 16 });
+  };
+  const detail = async (it, fields) => {
+    const lines = [];
+    fields.forEach(([label, v]) => { if (v) lines.push(`${label}: ${v}`); });
+    lines.forEach((l) => para(l, { indent: 16, color: red }));
+    await photosBlock(it.photos);
+  };
+  const st = stcStats(kind, data);
+  pair(["Subcontractor", data.subcontractor], ["Supervisor", data.supervisor]);
+  pair(["Location", data.location], ["Task", data.task]);
+  pair(["Assessor / observer", data.assessor], ["Date", data.date ? fmtD(data.date) : ""]);
+  if (kind === "hs_lsc") {
+    const c = st.counts;
+    bar("Summary", st.gaps ? `${st.gaps} gap${st.gaps === 1 ? "" : "s"}` : "No gaps", st.gaps ? red : null);
+    para(`MR (meets, 90%+): ${c.MR}     PMR (partially meets): ${c.PMR}     DNM (does not meet, 50% or less): ${c.DNM}     NO (not observed): ${c.NO}`);
+    y -= 6;
+    for (const s of HS_LSC_SECTIONS) {
+      const sg = s.items.filter((i) => stcIsGap(kind, data.items[i.id])).length;
+      bar(`${s.n}. ${s.t}`, sg ? `${sg} gap${sg === 1 ? "" : "s"}` : "", sg ? red : null);
+      for (const q of s.items) {
+        const it = data.items[q.id] || {};
+        const rating = HS_LSC_RATINGS.find((r) => r[0] === it.r);
+        const lines = wrap(`${q.ref ? q.ref + "  " : ""}[${q.tier}]${q.enh ? " [Enhanced]" : ""}  ${q.q}`, sans, 11, CW - 8 - 60);
+        need(lines.length * 14 + 8);
+        lines.forEach((t, i) => page.drawText(t, { x: M + 4, y: y - 11 - i * 14, size: 11, font: it.r === "DNM" || it.r === "PMR" ? sansB : sans, color: ink }));
+        const lbl = rating ? rating[0] : "-";
+        page.drawText(lbl, { x: W - M - 4 - sansB.widthOfTextAtSize(lbl, 12), y: y - 12, size: 12, font: sansB, color: it.r === "MR" ? green : it.r === "PMR" ? amber : it.r === "DNM" ? red : grey });
+        y -= lines.length * 14 + 2;
+        if (stcIsGap(kind, it) || (it.note && it.r === "NO")) await detail(it, [["Found", it.note], ["Action", it.action], ["Responsible", it.who], ["Due", it.due ? fmtD(it.due) : ""]]);
+        page.drawLine({ start: { x: M, y: y - 2 }, end: { x: W - M, y: y - 2 }, thickness: 0.4, color: line });
+        y -= 5;
+      }
+      y -= 6;
+    }
+  } else {
+    bar("Summary", st.gaps ? `${st.gaps} missing lifesaving control${st.gaps === 1 ? "" : "s"}` : "No missing controls", st.gaps ? red : null);
+    para(`Scenarios where the condition exists or is foreseeable: ${st.exists} of ${st.total}.   Lifesaving control present and effective: ${st.present} of ${st.exists}.`);
+    y -= 6;
+    for (const s of HIPO_SCENARIOS) {
+      const it = data.items[s.n] || {};
+      bar(`${s.n}. ${s.t}`, it.exists === "yes" ? (it.lsc === "no" ? "LSC MISSING" : it.lsc === "yes" ? "LSC PRESENT" : "") : it.exists === "no" ? "NOT PRESENT" : "", it.exists === "yes" && it.lsc === "no" ? red : null);
+      if (s.def) para(s.def, { size: 10, color: grey });
+      s.conds.forEach((c) => para("- " + c, { size: 10, indent: 8 }));
+      y -= 2;
+      para(`Condition exists or is foreseeable: ${it.exists ? it.exists.toUpperCase() : "-"}`, { font: sansB });
+      if (it.exists === "yes") {
+        const seen = (it.conds || []).map((i) => s.conds[i]).filter(Boolean);
+        if (seen.length) { para("Conditions seen:", { font: sansB, indent: 8 }); seen.forEach((c) => para("- " + c, { size: 11, indent: 16 })); }
+        para(`Lifesaving control present and effective: ${it.lsc ? it.lsc.toUpperCase() : "-"}`, { font: sansB, color: it.lsc === "no" ? red : ink });
+        if (it.lsc === "no") await detail(it, [["Missing / inadequate", it.note], ["Work stopped", it.stopped === "yes" ? "Yes" : it.stopped === "no" ? "No" : ""], ["Action", it.action], ["Responsible", it.who], ["Due", it.due ? fmtD(it.due) : ""]]);
+        else if (it.note) para("Control observed: " + it.note, { indent: 16 });
+      } else if (it.note) para("Notes: " + it.note, { indent: 8 });
+      y -= 8;
+    }
+  }
+  if ((data.comments || "").trim()) { bar("Comments"); para(data.comments); y -= 6; }
+  bar("Reminder"); para(ST_REMINDER, { size: 11, color: grey });
+  doc.getPages().forEach((p, i, a) => p.drawText(`${cfg.short} - ${clean(data.subcontractor || "")} - Page ${i + 1} of ${a.length}`, { x: M, y: 22, size: 7.5, font: sans, color: grey }));
+  return await doc.save();
+}
+
+function ChecklistForm({ kind, user, projectSlug, projectName, report, onBack, onChanged }) {
+  const cfg = ST_CHECKLISTS[kind];
+  const token = user && user.sessionToken;
+  const [data, setData] = useState(() => (report && report.data && Object.keys(report.data).length ? { ...stcNew(kind, user), ...report.data } : stcNew(kind, user)));
+  const [reportId, setReportId] = useState(report ? report.id : null);
+  const [status, setStatus] = useState(report ? report.status : "draft");
+  const [pdfUrl, setPdfUrl] = useState(report ? report.pdf_url : null);
+  const [open, setOpen] = useState({});
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [err, setErr] = useState("");
+  const readOnly = status === "submitted";
+  const st = stcStats(kind, data);
+  const lab = { color: STEEL, ...SR_MONO };
+  const inp = "w-full rounded-md border px-3 py-2 text-[13px] bg-white";
+  const bd = { borderColor: "#C9C6BC" };
+  const set = (k, v) => setData((d) => ({ ...d, [k]: v }));
+  const setItem = (id, patch) => setData((d) => ({ ...d, items: { ...d.items, [id]: { ...(d.items[id] || {}), ...patch } } }));
+  const pill = (active, c, bg, label, onClick, wide) => (
+    <button key={label} disabled={readOnly} onClick={onClick} className={`${wide ? "flex-1" : ""} min-w-[44px] px-2.5 py-2 rounded-sm text-[11px] font-bold`}
+      style={active ? { background: c, color: "white", ...SR_MONO } : { background: bg, color: c, border: `1px solid ${c}33`, ...SR_MONO }}>{label}</button>
+  );
+  const followUp = (id, it, labels) => (
+    <div className="mt-2 p-2 rounded-md" style={{ background: "#FCEFEF", border: `1px solid ${ALERT}33` }}>
+      <label className="text-[10px] uppercase font-bold" style={{ color: ALERT, ...SR_MONO }}>{labels.note} *</label>
+      <textarea disabled={readOnly} rows={2} value={it.note || ""} onChange={(e) => setItem(id, { note: e.target.value })} className="w-full rounded-md border px-2.5 py-1.5 text-[12px] bg-white" style={{ borderColor: ALERT }} />
+      {labels.stopped && (
+        <div className="mt-2">
+          <div className="text-[10px] uppercase font-bold mb-1" style={lab}>Was the work stopped? *</div>
+          <div className="flex gap-1.5">{pill(it.stopped === "yes", "#1E7A34", "#E9F6EC", "Yes", () => setItem(id, { stopped: "yes" }))}{pill(it.stopped === "no", ALERT, "#FCEFEF", "No", () => setItem(id, { stopped: "no" }))}</div>
+        </div>
+      )}
+      <div className="mt-2"><div className="text-[10px] uppercase font-bold mb-1" style={lab}>Action taken *</div>
+        <div className="flex flex-wrap gap-1.5">{ST_ACTIONS.map((a) => (
+          <button key={a} disabled={readOnly} onClick={() => setItem(id, { action: a })} className="text-[11px] px-2 py-1 rounded-sm border"
+            style={it.action === a ? { background: INK, color: GOLD, borderColor: INK, fontWeight: 600 } : { background: "white", color: INK, borderColor: "#C9C6BC" }}>{a}</button>
+        ))}</div></div>
+      {it.action === "Corrective action assigned" && (
+        <div className="grid grid-cols-2 gap-2 mt-2">
+          <div><label className="text-[10px] uppercase font-bold" style={lab}>Responsible</label><input disabled={readOnly} value={it.who || ""} onChange={(e) => setItem(id, { who: e.target.value })} className={inp} style={bd} /></div>
+          <div><label className="text-[10px] uppercase font-bold" style={lab}>Due date</label><input disabled={readOnly} type="date" value={it.due || ""} onChange={(e) => setItem(id, { due: e.target.value })} className={inp} style={bd} /></div>
+        </div>
+      )}
+      <div className="mt-2"><SrFilesField f={{ accept: "image" }} value={it.photos} readOnly={readOnly} onChange={(v) => setItem(id, { photos: v })} Lbl={DsaPhotoLbl} /></div>
+    </div>
+  );
+
+  const hsRow = (q) => {
+    const it = data.items[q.id] || {};
+    const gap = stcIsGap(kind, it);
+    return (
+      <div key={q.id} className="py-2.5 border-t" style={{ borderColor: "#ECEAE3" }}>
+        <div className="flex gap-2 items-start">
+          <div className="text-[11px] font-bold flex-shrink-0 w-9" style={{ color: STEEL, ...SR_MONO }}>{q.ref || "·"}</div>
+          <div className="flex-1 text-[13px]">{q.q}
+            <span className="ml-1.5 text-[9px] font-bold uppercase px-1 py-0.5 rounded-sm align-middle" style={{ background: "#EEE", color: STEEL, ...SR_MONO }}>{q.tier === "T1" ? "Tier 1" : "Tier 2"}</span>
+            {q.enh && <span className="ml-1 text-[9px] font-bold uppercase px-1 py-0.5 rounded-sm align-middle" style={{ background: "#F3E7CF", color: "#7A5B00", ...SR_MONO }}>Enhanced</span>}
+          </div>
+        </div>
+        <div className="flex gap-1.5 mt-1.5 ml-11">
+          {HS_LSC_RATINGS.map(([k, l, c, bg]) => pill(it.r === k, c, bg, k, () => setItem(q.id, { r: it.r === k ? "" : k }), true))}
+        </div>
+        {gap && <div className="ml-11">{followUp(q.id, it, { note: it.r === "DNM" ? "What was found (does not meet)" : "What was found (partially meets)" })}</div>}
+        {it.r === "NO" && <div className="ml-11 mt-1.5"><input disabled={readOnly} value={it.note || ""} onChange={(e) => setItem(q.id, { note: e.target.value })} placeholder="Why not observed? (optional)" className={inp} style={bd} /></div>}
+      </div>
+    );
+  };
+  const hsSection = (s) => {
+    const sg = s.items.filter((i) => stcIsGap(kind, data.items[i.id])).length;
+    const done = s.items.filter((i) => (data.items[i.id] || {}).r).length;
+    const isOpen = !!open[s.n];
+    return (
+      <div key={s.n} className="bg-white rounded-md border overflow-hidden mb-2" style={{ borderColor: sg ? ALERT : "#E4E2DA" }}>
+        <button onClick={() => setOpen((o) => ({ ...o, [s.n]: !o[s.n] }))} className="w-full flex items-center gap-2 p-2.5 text-left">
+          <div className="flex-1 min-w-0">
+            <div className="text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{s.n}. {s.t}</div>
+            <div className="text-[10px]" style={{ color: STEEL }}>{done} of {s.items.length} rated{sg ? ` · ${sg} gap${sg === 1 ? "" : "s"}` : ""}</div>
+          </div>
+          <span className="text-[12px]" style={{ color: STEEL }}>{isOpen ? "▲" : "▼"}</span>
+        </button>
+        {isOpen && <div className="px-2.5 pb-2.5">{s.items.map(hsRow)}</div>}
+      </div>
+    );
+  };
+  const hipoCard = (s) => {
+    const it = data.items[s.n] || {};
+    const gap = stcIsGap(kind, it);
+    const isOpen = !!open[s.n];
+    const tag = it.exists === "no" ? "Not present" : it.exists === "yes" ? (it.lsc === "yes" ? "LSC present" : it.lsc === "no" ? "LSC missing" : "Exists") : "";
+    return (
+      <div key={s.n} className="bg-white rounded-md border overflow-hidden mb-2" style={{ borderColor: gap ? ALERT : "#E4E2DA" }}>
+        <button onClick={() => setOpen((o) => ({ ...o, [s.n]: !o[s.n] }))} className="w-full flex items-center gap-2 p-2.5 text-left">
+          <div className="flex-1 min-w-0 text-[13px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{s.n}. {s.t}</div>
+          {tag && <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-sm flex-shrink-0" style={{ background: gap ? "#FCEFEF" : "#EEE", color: gap ? ALERT : STEEL, ...SR_MONO }}>{tag}</span>}
+          <span className="text-[12px]" style={{ color: STEEL }}>{isOpen ? "▲" : "▼"}</span>
+        </button>
+        {isOpen && (
+          <div className="px-3 pb-3">
+            {s.def && <div className="text-[11px] mb-2 italic" style={{ color: STEEL }}>{s.def}</div>}
+            <div className="text-[10px] uppercase font-bold mb-1" style={lab}>Conditions to look for</div>
+            <ul className="text-[12px] mb-3 space-y-1">{s.conds.map((c, i) => <li key={i} className="flex gap-1.5"><span>•</span><span>{c}</span></li>)}</ul>
+            <div className="text-[10px] uppercase font-bold mb-1" style={lab}>Does the condition exist or is it foreseeable? *</div>
+            <div className="flex gap-1.5">{pill(it.exists === "yes", ALERT, "#FCEFEF", "YES", () => setItem(s.n, { exists: "yes" }), true)}{pill(it.exists === "no", "#1E7A34", "#E9F6EC", "NO", () => setItem(s.n, { exists: "no" }), true)}</div>
+            {it.exists === "no" && <input disabled={readOnly} value={it.note || ""} onChange={(e) => setItem(s.n, { note: e.target.value })} placeholder="Notes (optional)" className={inp + " mt-2"} style={bd} />}
+            {it.exists === "yes" && (
+              <div className="mt-3">
+                <div className="text-[10px] uppercase font-bold mb-1" style={lab}>Which conditions did you see? *</div>
+                {s.conds.map((c, i) => {
+                  const on = (it.conds || []).includes(i);
+                  return (
+                    <label key={i} className="flex gap-2 items-start text-[12px] py-1">
+                      <input type="checkbox" disabled={readOnly} checked={on} onChange={() => setItem(s.n, { conds: on ? (it.conds || []).filter((x) => x !== i) : [...(it.conds || []), i] })} className="mt-0.5" />
+                      <span>{c}</span>
+                    </label>
+                  );
+                })}
+                <div className="text-[10px] uppercase font-bold mt-3 mb-1" style={lab}>Is a lifesaving control (LSC) present and effective? *</div>
+                <div className="flex gap-1.5">{pill(it.lsc === "yes", "#1E7A34", "#E9F6EC", "LSC YES", () => setItem(s.n, { lsc: "yes" }), true)}{pill(it.lsc === "no", ALERT, "#FCEFEF", "LSC NO", () => setItem(s.n, { lsc: "no" }), true)}</div>
+                {it.lsc === "yes" && <input disabled={readOnly} value={it.note || ""} onChange={(e) => setItem(s.n, { note: e.target.value })} placeholder="What control did you see? (optional)" className={inp + " mt-2"} style={bd} />}
+                {it.lsc === "no" && followUp(s.n, it, { note: "What control is missing or inadequate", stopped: true })}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const persist = async (submit) => {
+    setBusy(true); setErr(""); setMsg("");
+    try {
+      let url = null;
+      if (submit) {
+        try {
+          const bytes = await buildChecklistPdf({ kind, data, projectName });
+          const path = `safety-team/${projectSlug}/${kind}-${Date.now()}.pdf`;
+          const up = await supabase.storage.from("documents").upload(path, new Blob([bytes], { type: "application/pdf" }), { contentType: "application/pdf" });
+          if (!up.error) url = (supabase.storage.from("documents").getPublicUrl(path).data || {}).publicUrl || null;
+        } catch (e) { /* still saves without the filed PDF */ }
+      }
+      const { data: res, error } = await supabase.rpc("save_safety_team_report", {
+        p_token: token, p_id: reportId, p_form_type: kind === "hs_lsc" ? "hs_minimum_standard_lsc" : "hipo_scenario_lsc",
+        p_subject: `${data.subcontractor} - ${data.task}`, p_report_date: data.date || null,
+        p_data: data, p_summary: { deficiencies: st.gaps, answered: st.answered, total: st.total, counts: st.counts }, p_submit: !!submit, p_pdf_url: url,
+      });
+      if (error || !res) throw new Error("save");
+      setReportId(res.id); setStatus(res.status); if (res.pdf_url) setPdfUrl(res.pdf_url);
+      setMsg(submit ? "Submitted and filed." : "Draft saved.");
+      onChanged && onChanged();
+    } catch (e) { setErr("Couldn't save. Check your connection and try again."); }
+    setBusy(false);
+  };
+  const submit = () => { const p = stcProblems(kind, data); if (p.length) { setErr("Still needed: " + p.slice(0, 8).join(", ") + (p.length > 8 ? ` and ${p.length - 8} more` : "")); return; } persist(true); };
+  const download = async () => {
+    setBusy(true); setErr("");
+    try { saveBlobAs(new Blob([await buildChecklistPdf({ kind, data, projectName })], { type: "application/pdf" }), `${cfg.short} - ${safeFile(data.subcontractor)} - ${data.date}.pdf`); } catch (e) { setErr("Couldn't build the PDF."); }
+    setBusy(false);
+  };
+  const reopen = async () => {
+    await supabase.rpc("reopen_safety_team_report", { p_token: token, p_id: reportId });
+    setStatus("draft"); setMsg("Reopened. Make your changes, then submit again."); onChanged && onChanged();
+  };
+  const sections = kind === "hs_lsc" ? HS_LSC_SECTIONS : HIPO_SCENARIOS;
+  return (
+    <div className="px-4 pt-4 pb-10" style={{ background: "#F4F3EF", minHeight: "100%" }}>
+      <button onClick={onBack} className="text-[11px] font-bold uppercase mb-3" style={lab}>← Back to Safety Team</button>
+      <div className="flex items-start justify-between gap-2 mb-1">
+        <div className="text-[16px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{cfg.title}</div>
+        <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-sm flex-shrink-0" style={{ background: status === "submitted" ? "#E7F4E4" : "#FFF3CD", color: status === "submitted" ? "#2F6B2A" : "#7A5B00", ...SR_MONO }}>{status === "submitted" ? "Submitted" : "Draft"}</span>
+      </div>
+      <div className="text-[11px] mb-3" style={{ color: STEEL }}>{projectName}. {cfg.intro}</div>
+      <div className="bg-white rounded-md border p-3 mb-3" style={{ borderColor: "#E4E2DA" }}>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="col-span-2"><label className="text-[10px] uppercase font-bold" style={lab}>Subcontractor name *</label><input disabled={readOnly} value={data.subcontractor} onChange={(e) => set("subcontractor", e.target.value)} className={inp} style={bd} /></div>
+          <div><label className="text-[10px] uppercase font-bold" style={lab}>Supervisor *</label><input disabled={readOnly} value={data.supervisor} onChange={(e) => set("supervisor", e.target.value)} className={inp} style={bd} /></div>
+          <div><label className="text-[10px] uppercase font-bold" style={lab}>Date (automatic)</label><div className={inp} style={{ ...bd, background: "#F4F3EF", color: STEEL }}>{data.date ? fmtD(data.date) : ""}</div></div>
+          <div className="col-span-2"><label className="text-[10px] uppercase font-bold" style={lab}>Location *</label><input disabled={readOnly} value={data.location} onChange={(e) => set("location", e.target.value)} className={inp} style={bd} /></div>
+          <div className="col-span-2"><label className="text-[10px] uppercase font-bold" style={lab}>Task *</label><input disabled={readOnly} value={data.task} onChange={(e) => set("task", e.target.value)} placeholder="e.g. Drilled shaft excavation at Bent 4" className={inp} style={bd} /></div>
+          <div className="col-span-2"><label className="text-[10px] uppercase font-bold" style={lab}>Assessor / observer</label><input disabled={readOnly} value={data.assessor} onChange={(e) => set("assessor", e.target.value)} className={inp} style={bd} /></div>
+        </div>
+      </div>
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-[11px] uppercase font-bold" style={lab}>{kind === "hs_lsc" ? "Checklist" : "Scenarios"} · {st.answered} of {st.total} answered</div>
+        <div className="text-[11px] font-bold" style={{ color: st.gaps ? ALERT : "#1E7A34", ...SR_MONO }}>{st.gaps ? `${st.gaps} gap${st.gaps === 1 ? "" : "s"}` : "No gaps"}</div>
+      </div>
+      {kind === "hs_lsc" && <div className="text-[11px] mb-2" style={{ color: STEEL }}>MR = meets requirements (90%+) · PMR = partially meets · DNM = does not meet (50% or less) · NO = not observed. PMR and DNM ask what you found and what was done.</div>}
+      {!readOnly && <div className="flex gap-2 mb-2">
+        <button onClick={() => setOpen(Object.fromEntries(sections.map((s) => [s.n, true])))} className="text-[10px] font-bold uppercase px-2.5 py-1.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, ...SR_MONO }}>Expand all</button>
+        <button onClick={() => setOpen({})} className="text-[10px] font-bold uppercase px-2.5 py-1.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, ...SR_MONO }}>Collapse</button>
+      </div>}
+      {kind === "hs_lsc" ? HS_LSC_SECTIONS.map(hsSection) : HIPO_SCENARIOS.map(hipoCard)}
+      <label className="text-[10px] uppercase font-bold block mt-3 mb-1" style={lab}>Comments / system context</label>
+      <textarea disabled={readOnly} rows={4} value={data.comments} onChange={(e) => set("comments", e.target.value)} className={inp} style={bd} />
+      <div className="text-[11px] mt-3 p-2.5 rounded-md" style={{ background: "#FFF8E1", color: "#6B5200" }}>{ST_REMINDER}</div>
+      {err && <div className="text-[12px] mt-3" style={{ color: ALERT }}>{err}</div>}
+      {msg && <div className="text-[12px] mt-3" style={{ color: "#2F6B2A" }}>{msg}</div>}
+      <div className="flex flex-wrap gap-2 mt-4">
+        {!readOnly && <button disabled={busy} onClick={() => persist(false)} className="flex-1 text-[11px] font-bold uppercase py-2.5 rounded-sm border disabled:opacity-50" style={{ borderColor: "#C9C6BC", color: STEEL, ...SR_MONO }}>{busy ? "Saving…" : "Save draft"}</button>}
+        {!readOnly && <button disabled={busy} onClick={submit} className="flex-1 text-[11px] font-bold uppercase py-2.5 rounded-sm disabled:opacity-50" style={{ background: GOLD, color: INK, ...SR_MONO }}>Submit</button>}
+        {readOnly && <button onClick={reopen} className="flex-1 text-[11px] font-bold uppercase py-2.5 rounded-sm border" style={{ borderColor: "#C9C6BC", color: STEEL, ...SR_MONO }}>Reopen to edit</button>}
+        <button disabled={busy} onClick={download} className="flex-1 flex items-center justify-center gap-1 text-[11px] font-bold uppercase py-2.5 rounded-sm disabled:opacity-50" style={{ background: INK, color: "white", ...SR_MONO }}><Download size={13} /> PDF</button>
+      </div>
+      {pdfUrl && <a href={pdfUrl} target="_blank" rel="noreferrer" className="block text-center text-[11px] mt-3 underline" style={{ color: STEEL }}>Open the filed copy</a>}
+    </div>
+  );
+}
+
 function SafetyTeamScreen({ user, activeProjectId }) {
   const allowed = useContext(SafetyTeamContext);
   const proj = useContext(ProjectContext) || {};
@@ -4007,7 +4431,7 @@ function SafetyTeamScreen({ user, activeProjectId }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
-  const [open, setOpen] = useState(null); // { report|null }
+  const [open, setOpen] = useState(null); // { report|null, kind }
   const [opening, setOpening] = useState(false);
   const load = async () => {
     setLoading(true);
@@ -4021,8 +4445,9 @@ function SafetyTeamScreen({ user, activeProjectId }) {
     setOpening(true);
     const { data } = await supabase.rpc("get_safety_team_report", { p_token: token, p_id: r.id });
     setOpening(false);
-    if (data) setOpen({ report: data });
+    if (data) setOpen({ report: data, kind: { hs_minimum_standard_lsc: "hs_lsc", hipo_scenario_lsc: "hipo_lsc" }[r.form_type] || "dsa" });
   };
+  if (open && open.kind !== "dsa") return <ChecklistForm key={(open.report ? open.report.id : "new") + open.kind} kind={open.kind} user={user} projectSlug={activeProjectId} projectName={proj.name || ""} report={open.report} onBack={() => { setOpen(null); load(); }} onChanged={load} />;
   if (open) return <DailySafetyAssessmentForm key={open.report ? open.report.id : "new"} user={user} projectSlug={activeProjectId} projectName={proj.name || ""} report={open.report} onBack={() => { setOpen(null); load(); }} onChanged={load} />;
   const term = q.trim().toLowerCase();
   const shown = rows.filter((r) => !term || [r.subject, r.created_by_name, r.report_date].some((v) => String(v || "").toLowerCase().includes(term)));
@@ -4035,21 +4460,21 @@ function SafetyTeamScreen({ user, activeProjectId }) {
           <div key={f.key} className="bg-white rounded-md border p-3" style={{ borderColor: "#E4E2DA" }}>
             <div className="text-[14px]" style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600 }}>{f.title}</div>
             <div className="text-[11px] mb-2" style={{ color: STEEL }}>{f.desc}</div>
-            <button onClick={() => setOpen({ report: null })} className="w-full text-[11px] font-bold uppercase py-2.5 rounded-sm" style={{ background: GOLD, color: INK, ...SR_MONO }}>+ New {f.title}</button>
+            <button onClick={() => setOpen({ report: null, kind: f.kind })} className="w-full text-[11px] font-bold uppercase py-2.5 rounded-sm" style={{ background: GOLD, color: INK, ...SR_MONO }}>+ New {f.title}</button>
           </div>
         ))}
         <div className="text-[11px] text-center" style={{ color: STEEL }}>More team reports will be added here.</div>
       </div>
       <div className="text-[11px] uppercase font-bold mb-1.5" style={lab}>Submitted and draft reports ({rows.length})</div>
-      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search operation, name or date" className="w-full rounded-md border px-3 py-2 text-[13px] bg-white mb-2" style={{ borderColor: "#C9C6BC" }} />
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search subcontractor, task, name or date" className="w-full rounded-md border px-3 py-2 text-[13px] bg-white mb-2" style={{ borderColor: "#C9C6BC" }} />
       {(loading || opening) && <div className="text-[12px]" style={{ color: STEEL }}>Loading…</div>}
       {!loading && shown.length === 0 && <div className="text-[12px] text-center py-4" style={{ color: STEEL }}>No reports yet.</div>}
       <div className="space-y-1.5">
         {shown.map((r) => (
           <button key={r.id} onClick={() => openRow(r)} className="w-full text-left bg-white rounded-md border p-2.5 flex items-center gap-2" style={{ borderColor: "#E4E2DA" }}>
             <div className="flex-1 min-w-0">
-              <div className="text-[13px] truncate">{r.subject || "(no operation named)"}</div>
-              <div className="text-[10px]" style={{ color: STEEL }}>Daily Safety Assessment · {r.report_date ? fmtD(r.report_date) : "-"} · {r.created_by_name || ""}</div>
+              <div className="text-[13px] truncate">{r.subject || "(untitled)"}</div>
+              <div className="text-[10px]" style={{ color: STEEL }}>{(SAFETY_TEAM_FORMS.find((f) => f.key === r.form_type) || {}).title || "Report"} · {r.report_date ? fmtD(r.report_date) : "-"} · {r.created_by_name || ""}</div>
             </div>
             {r.summary && r.summary.deficiencies > 0 && <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-sm flex-shrink-0" style={{ background: "#FCEFEF", color: ALERT, ...SR_MONO }}>{r.summary.deficiencies} deficient</span>}
             <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-sm flex-shrink-0" style={{ background: r.status === "submitted" ? "#E7F4E4" : "#FFF3CD", color: r.status === "submitted" ? "#2F6B2A" : "#7A5B00", ...SR_MONO }}>{r.status === "submitted" ? "Submitted" : "Draft"}</span>
