@@ -6147,7 +6147,7 @@ function ReportConcernScreen({ onSubmit }) {
 // H&S Minimum Standards is the same document company-wide, shared across every project.
 const HS_STANDARDS_DOCS = [
   { language: "English", title: "H&S Minimum Standards (US Ed. 6.0, Oct 2026)", pages: 40, link: "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/fc-hs-minimum-standards-eng-ed6.pdf" },
-  { language: "Spanish", title: "Estándares Mínimos de Seguridad y Salud", pages: 38, link: "https://drive.google.com/file/d/1uuTyfamCzU4GW2lvhGD6fmA8Q-_luEkH/preview" },
+  { language: "Spanish", title: "Estándares Mínimos de Seguridad y Salud (Ed. 6.0 US, Oct 2026)", pages: 40, link: "https://kzsmchyowjueksdivsaa.supabase.co/storage/v1/object/public/documents/fc-hs-minimum-standards-spa-ed6.pdf" },
 ];
 // The Safety Plan itself is project-specific — each project's fallback is set in PROJECTS below.
 const FCW24_SAFETY_PLAN = [{
@@ -16379,6 +16379,7 @@ function RosterRow({ person, user, onChanged }) {
   };
 
   const toggleActive = async () => {
+    if (person.active && !window.confirm(`Deactivate ${person.name}?\n\nThey will not be able to log in and will drop off the lookup lists. Nothing is erased, and you can turn them back on from this roster.`)) return;
     await supabase.rpc("set_personnel_active", {
       p_token: user.sessionToken,
       p_person_id: person.id,
@@ -16828,7 +16829,18 @@ function ManageRosterScreen({ user, onSwitchProject }) {
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, [user?.sessionToken]);
+  const [removed, setRemoved] = useState([]);
+  const [showRemoved, setShowRemoved] = useState(false);
+  const loadRemoved = async () => {
+    const { data } = await supabase.rpc("list_removed_personnel_admin", { p_token: user.sessionToken });
+    setRemoved(Array.isArray(data) ? data : []);
+  };
+  const restore = async (p) => {
+    if (!window.confirm(`Restore ${p.name}${p.badge_number ? ` (badge ${p.badge_number})` : ""}? They will show up on the roster again and can log in.`)) return;
+    await supabase.rpc("restore_personnel", { p_token: user.sessionToken, p_person_id: p.id });
+    await loadRemoved(); load();
+  };
+  useEffect(() => { load(); loadRemoved(); }, [user?.sessionToken]);
 
   const exportRoster = () => {
     exportToCsv(
@@ -16878,6 +16890,28 @@ function ManageRosterScreen({ user, onSwitchProject }) {
         {rosterQuery && <button onClick={() => setRosterQuery("")} className="absolute right-2 top-1/2 -translate-y-1/2"><X size={14} color={STEEL} /></button>}
       </div>
       {rosterQuery.trim() && <div className="text-[10px] mb-2" style={{ color: STEEL, fontFamily: "IBM Plex Mono, monospace" }}>{shownPeople.length} of {people.length} people</div>}
+      {removed.length > 0 && (
+        <div className="bg-white rounded-md border p-3 mb-3" style={{ borderColor: "#E4E2DA" }}>
+          <button onClick={() => setShowRemoved((v) => !v)} className="w-full flex items-center justify-between text-left">
+            <span className="text-[11px] uppercase font-bold" style={{ color: INK, fontFamily: "IBM Plex Mono, monospace" }}>Removed people ({removed.length})</span>
+            <span className="text-[11px]" style={{ color: STEEL }}>{showRemoved ? "Hide ▲" : "Show ▼"}</span>
+          </button>
+          <div className="text-[10px] mt-0.5" style={{ color: STEEL }}>Removed people are hidden, not erased. Their record, training and certificates are kept, and you can bring them back.</div>
+          {showRemoved && (
+            <div className="mt-2 space-y-1.5">
+              {removed.map((p) => (
+                <div key={p.id} className="flex items-center justify-between gap-2 text-[12px] border-t pt-1.5" style={{ borderColor: "#ECEAE3" }}>
+                  <div className="min-w-0">
+                    <div className="truncate">{p.name} <span style={{ color: STEEL }}>{p.badge_number ? `· ${p.badge_number}` : ""} {p.employer ? `· ${p.employer}` : ""}</span></div>
+                    <div className="text-[10px]" style={{ color: STEEL }}>Removed {p.deleted_at ? fmtD(p.deleted_at) : ""}{p.deleted_by ? ` by ${p.deleted_by}` : ""}</div>
+                  </div>
+                  <button onClick={() => restore(p)} className="flex-shrink-0 text-[10px] font-bold uppercase px-2.5 py-1.5 rounded-sm" style={{ background: GOLD, color: INK, fontFamily: "IBM Plex Mono, monospace" }}>Restore</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       {shownPeople.map((p) => <RosterRow key={p.id} person={p} user={user} onChanged={load} />)}
       {!loading && people.length === 0 && (
         <div className="text-[12px] text-center py-6" style={{ color: STEEL }}>Nobody on this roster yet.</div>
